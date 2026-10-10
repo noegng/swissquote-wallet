@@ -20,7 +20,15 @@ import {
   verifyRegistration,
   type Purpose,
 } from './auth';
-import { DAILY_LIMIT_SATS, decide, HIGH_VALUE_DELAY_SECONDS, outgoing, recordSpend, sanctionedAddresses } from './rules';
+import {
+  DAILY_LIMIT_SATS,
+  decide,
+  HIGH_VALUE_DELAY_SECONDS,
+  outgoing,
+  recordSpend,
+  sanctionedAddresses,
+  spentLast24h,
+} from './rules';
 import {
   btcAmount,
   cfg,
@@ -35,7 +43,7 @@ import {
   wallets,
   type WalletRecord,
 } from './context';
-import { registerRecoveryRoutes } from './recovery';
+import { registerRecoveryRoutes, rememberClientFreeze } from './recovery';
 
 interface CosignRequest {
   id: string;
@@ -242,6 +250,7 @@ app.post('/cosign', async (req, reply) => {
 app.get('/cosign/:id', async (req, reply) => {
   const request = requests()[(req.params as { id: string }).id];
   if (!request) return reply.code(404).send({ mock: true, error: 'Demande inconnue' });
+  if (!wallets()[request.walletId]) return reply.code(404).send({ mock: true, error: 'Wallet inconnu' });
   if (request.status === 'pending' && statusOf(wallets()[request.walletId]) !== 'active') {
     // Un gros paiement en attente ne part pas si le wallet a été gelé entre-temps (récupération).
     saveRequest({ ...request, status: 'cancelled' });
@@ -250,7 +259,15 @@ app.get('/cosign/:id', async (req, reply) => {
   }
   if (request.status === 'pending' && Date.now() >= request.executeAfter) {
     const wallet = wallets()[request.walletId];
-    const { psbt, summary } = cosign(wallet, request.psbt);
+    let analysed;
+    try {
+      analysed = cosign(wallet, request.psbt);
+    } catch (e) {
+      saveRequest({ ...request, status: 'cancelled' });
+      audit('cosign.cancelled', { requestId: request.id, reason: String(e) });
+      return { mock: true, status: 'cancelled', reason: (e as Error).message };
+    }
+    const { psbt, summary } = analysed;
     signWithRoot(psbt, getSigner().root);
     recordSpend(wallet.walletId, outgoing(summary));
     const signed = { ...request, status: 'signed' as const, psbt: psbt.toBase64() };
@@ -314,6 +331,8 @@ app.post('/wallets/:id/freeze', async (req, reply) => {
     return reply.code(401).send({ mock: true, status: 'unauthenticated', reason: (e as Error).message });
   }
   if (statusOf(wallet) === 'active') saveWallet({ ...wallet, status: 'frozen', frozenBy: 'client' });
+  // Déjà gelé par une récupération : le gel du client doit survivre à son annulation.
+  else rememberClientFreeze(wallet.walletId);
   const cancelled = cancelPendingRequests(wallet.walletId, 'gel par le client');
   audit('wallet.frozen', { walletId: wallet.walletId, via, cancelledPayments: cancelled });
   notify(
@@ -357,11 +376,20 @@ app.get('/rules', async () => ({
   sanctionedAddresses: sanctionedAddresses(),
 }));
 
+// Plafond restant d'un wallet (montants + frais des 24 dernières heures), pour que l'app annonce
+// correctement un éventuel délai avant la signature.
+app.get('/wallets/:id/limit', async (req, reply) => {
+  const w = wallets()[(req.params as { id: string }).id];
+  if (!w) return reply.code(404).send({ mock: true, error: 'Wallet inconnu' });
+  return { mock: true, dailyLimitSats: DAILY_LIMIT_SATS.toString(), spentLast24hSats: spentLast24h(w.walletId).toString() };
+});
+
 // Démo uniquement : ajoute une adresse à la liste de sanctions mockée.
 app.post('/admin/sanctions', async (req, reply) => {
   const address = (req.body as { address?: string })?.address;
   if (!address) return reply.code(400).send({ mock: true, error: 'address requis' });
-  writeJson('sanctions.json', [...new Set([...sanctionedAddresses(), address])]);
+  // Adresses bech32 : insensibles à la casse, stockées en minuscules (comme bitcoinjs les écrit).
+  writeJson('sanctions.json', [...new Set([...sanctionedAddresses(), address.trim().toLowerCase()])]);
   audit('sanctions.added', { address });
   return { mock: true, sanctionedAddresses: sanctionedAddresses() };
 });

@@ -9,7 +9,8 @@ import { Btn, Callout, Screen, Title } from '../ui';
 function download(filename: string, content: unknown) {
   const url = URL.createObjectURL(new Blob([JSON.stringify(content, null, 2)], { type: 'application/json' }));
   Object.assign(document.createElement('a'), { href: url, download: filename }).click();
-  URL.revokeObjectURL(url);
+  // Révoquer tout de suite peut interrompre le téléchargement (Safari, Firefox).
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 function pickTwo(max: number): [number, number] {

@@ -2,8 +2,9 @@
 // → délai de sécurité → part du client (papier ou copie cloud) → transfert → nouvelle sauvegarde.
 import { useEffect, useRef, useState } from 'react';
 import { sq, type Session } from '../api';
-import { loadRecovery, saveRecovery, type RecoveryState, type StoredWallet } from '../keystore';
+import { clearRecovery, loadRecovery, saveRecovery, type RecoveryState, type StoredWallet } from '../keystore';
 import {
+  cancelPartnerRelease,
   prepareNewWallet,
   recoveryProgress,
   startRecovery,
@@ -98,6 +99,8 @@ export function Recover({
     setError('');
     try {
       await sq(`/recovery/${recoveryId}/cancel`, {}, session.token);
+      // La part du partenaire ne doit pas partir vers l'appareil qui avait lancé cette récupération.
+      await cancelPartnerRelease(remote.walletId, session.clientId).catch(() => {});
       setNotice('Recovery cancelled. If your phone was stolen, freeze the wallet, then start your own recovery.');
       refreshRemote();
     } catch (e) {
@@ -123,7 +126,17 @@ export function Recover({
         const p = await recoveryProgress(state!);
         if (stop) return;
         setProgress(p);
-        if (p.swissquote.status === 'cancelled') return setStep('cancelled');
+        if (p.swissquote.status === 'cancelled' || p.partner.status === 'cancelled') {
+          // Récupération annulée (d'un côté ou de l'autre) : on referme les deux et on oublie son état
+          // local, pour pouvoir en recommencer une.
+          if (p.swissquote.status === 'pending') {
+            await sq(`/recovery/${state!.recoveryId}/cancel`, {}, session.token).catch(() => {});
+          }
+          await clearRecovery(session.clientId);
+          refreshRemote();
+          started.current = false;
+          return setStep('cancelled');
+        }
         if (p.swissquote.secondsLeft === 0 && p.partner.status === 'released') return setStep('share');
       } catch (e) {
         if (!stop) setError((e as Error).message);
@@ -233,7 +246,7 @@ export function Recover({
         <Title
           center
           title="Recovery cancelled"
-          lead="The recovery was cancelled from the phone linked to this wallet. If that was not you, your wallet is protected: nothing was moved."
+          lead="The recovery was cancelled, from the phone linked to this wallet, from your client area or by our partner. Nothing was moved. You can start a new recovery."
         />
       </Screen>
     );

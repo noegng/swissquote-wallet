@@ -6,8 +6,9 @@ import { deriveAddress, descriptorString, type WalletTx } from '@sqw/core';
 import { sq, type Session } from '../api';
 import { btc } from '../config';
 import { formatBtc, formatChf } from '../format';
-import { loadPending, type PendingPayment as Pending, type StoredWallet } from '../keystore';
+import { deleteWallet, loadPending, type PendingPayment as Pending, type StoredWallet } from '../keystore';
 import { approve, esplora } from '../payments';
+import { cancelPartnerRelease } from '../recovery';
 import { useChfRate } from '../price';
 import { QrCode } from '../qr';
 import { Brand, Btn, Callout, Group, Icon, Row, Screen, Timeline, Title, formatClock, type TabName } from '../ui';
@@ -28,7 +29,8 @@ function downloadExitKit(wallet: StoredWallet) {
   };
   const url = URL.createObjectURL(new Blob([JSON.stringify(kit, null, 2)], { type: 'application/json' }));
   Object.assign(document.createElement('a'), { href: url, download: 'swissquote-wallet-kit-de-sortie.json' }).click();
-  URL.revokeObjectURL(url);
+  // Révoquer tout de suite peut interrompre le téléchargement (Safari, Firefox).
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 interface Notification {
@@ -46,6 +48,10 @@ type ActivityItem = { at: number; key: string } & ({ tx: WalletTx } | { text: st
 const shortTx = (txid: string) => `${txid.slice(0, 6)}…${txid.slice(-6)}`;
 
 const NETWORK_DOWN = 'Bitcoin network unreachable (is regtest running? `npm run regtest:up`)';
+
+// Rafraîchissement : chaque passage interroge des dizaines d'adresses. Sur signet, l'API publique
+// limite le débit : on espace les passages.
+const REFRESH_MS = btc.name === 'regtest' ? 5_000 : 20_000;
 
 const clock = (at: number) => new Date(at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 
@@ -101,12 +107,15 @@ export function Home({
   onSend,
   onTrustee,
   onLogout,
+  onDiscard,
 }: {
   wallet: StoredWallet;
   session: Session;
   onSend: () => void;
   onTrustee: () => void;
   onLogout: () => void;
+  /** Wallet vide jamais sauvegardé abandonné : l'app propose d'en créer un nouveau. */
+  onDiscard: () => void;
 }) {
   const [balance, setBalance] = useState<bigint | null>(null);
   const [address, setAddress] = useState(() => deriveAddress(wallet.policy, 0, 0, btc.network).address);
@@ -158,7 +167,7 @@ export function Home({
     sq<{ dailyLimitSats: string }>('/rules')
       .then((r) => setLimit(r.dailyLimitSats))
       .catch(() => setLimit(null));
-    const timer = setInterval(refresh, 5000);
+    const timer = setInterval(refresh, REFRESH_MS);
     return () => clearInterval(timer);
   }, [refresh, wallet.walletId]);
 
@@ -214,7 +223,9 @@ export function Home({
     try {
       const authentication = await approve(wallet.walletId, 'cancel', recoveryId);
       await sq(`/recovery/${recoveryId}/cancel`, { authentication });
-      setMessage('Recovery cancelled. Your wallet is unfrozen.');
+      // La part du partenaire ne doit pas partir vers l'appareil qui avait lancé cette récupération.
+      await cancelPartnerRelease(wallet.walletId, wallet.clientId).catch(() => {});
+      setMessage('Recovery cancelled.');
       refresh();
     } catch (e) {
       setMessage((e as Error).name === 'NotAllowedError' ? 'Cancellation interrupted on the device.' : (e as Error).message);
@@ -270,11 +281,16 @@ export function Home({
 
   async function faucet() {
     setMessage('Requesting test bitcoin from the regtest faucet…');
-    await fetch(`${btc.esploraUrl}/faucet`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ address }),
-    });
+    try {
+      const res = await fetch(`${btc.esploraUrl}/faucet`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address }),
+      });
+      if (!res.ok) throw new Error(String(res.status));
+    } catch {
+      return setMessage('The regtest faucet did not answer (is regtest running? `npm run regtest:up`).');
+    }
     setTimeout(async () => {
       await refresh();
       setMessage('');
@@ -331,6 +347,20 @@ export function Home({
         <Callout key="backup" tone="danger" title="Backup incomplete">
           Wallet creation stopped before your backup words were checked. If you did not write them down, this wallet
           cannot be recovered if you lose your phone. Do not fund it: create a new one.
+          {balance === 0n && !pending && (
+            <Btn
+              kind="secondary"
+              onClick={async () => {
+                await deleteWallet(wallet.clientId);
+                onDiscard();
+              }}
+            >
+              Create a new wallet
+            </Btn>
+          )}
+          {balance !== null && balance > 0n && (
+            <strong>This wallet holds bitcoin: send it out first, then you can replace it with a new wallet.</strong>
+          )}
         </Callout>
       )}
 

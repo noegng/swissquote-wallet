@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { config } from '../config';
 import { exitWithoutSwissquote, partnerStatus, requestPartnerShare, walletBalance } from '../exit';
 import { formatBtc, formatChf } from '../format';
-import { listLocalWallets, loadExit, type ExitState, type StoredWallet } from '../keystore';
+import { clearExit, listLocalWallets, loadExit, type ExitState, type StoredWallet } from '../keystore';
 import { useChfRate } from '../price';
 import { Btn, Callout, Checklist, Countdown, Group, Hero, Row, Screen, Title } from '../ui';
 import { useClientShareInput } from './ClientShareInput';
@@ -56,7 +56,13 @@ export function Exit({ onBack }: { onBack: () => void }) {
         const s = await partnerStatus(state!);
         if (stop) return;
         if (s.status === 'released') return setStep('share');
-        if (s.status === 'cancelled') return setError('The release was cancelled by our partner.');
+        if (s.status === 'cancelled') {
+          // Demande annulée : on l'oublie pour pouvoir en faire une nouvelle.
+          if (wallet) await clearExit(wallet.clientId);
+          setState(null);
+          setStep('intro');
+          return setError('The release was cancelled. You can request our partner’s share again.');
+        }
         setSecondsLeft(s.secondsLeft);
         setAwaiting(s.trusteeName);
       } catch (e) {

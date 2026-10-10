@@ -41,8 +41,8 @@ export type Decision =
   | { kind: 'refuse'; reason: string };
 
 export function decide(walletId: string, summary: SpendSummary): Decision {
-  const sanctioned = new Set(sanctionedAddresses());
-  const hit = summary.external.find((o) => sanctioned.has(o.address));
+  const sanctioned = new Set(sanctionedAddresses().map((a) => a.toLowerCase()));
+  const hit = summary.external.find((o) => sanctioned.has(o.address.toLowerCase()));
   if (hit) return { kind: 'refuse', reason: `Recipient on the sanctions list: ${hit.address}` };
 
   // Les frais comptent dans le plafond : sinon un voleur pourrait détruire les fonds en payant des

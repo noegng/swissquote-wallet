@@ -148,6 +148,10 @@ export function App() {
         onSend={() => setView('send')}
         onTrustee={() => setView('trustee')}
         onLogout={() => updateSession(null)}
+        onDiscard={() => {
+          setCreateInstead(true);
+          setWallet(null);
+        }}
       />
     );
   }

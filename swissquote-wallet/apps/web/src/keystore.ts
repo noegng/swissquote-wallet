@@ -74,6 +74,10 @@ export async function markBackupConfirmed(clientId: string): Promise<StoredWalle
   return updated;
 }
 
+/** Oublie le wallet de ce client sur cet appareil (graine téléphone comprise). Réservé à un wallet
+ *  vide dont la sauvegarde n'a jamais été faite. */
+export const deleteWallet = (clientId: string) => tx('readwrite', (s) => s.delete(`wallet:${clientId}`));
+
 export function loadWallet(clientId: string): Promise<StoredWallet | undefined> {
   return get<StoredWallet>(`wallet:${clientId}`);
 }

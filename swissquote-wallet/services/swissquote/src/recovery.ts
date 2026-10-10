@@ -60,6 +60,17 @@ function addressesOf(wallet: WalletRecord, count = 20): Set<string> {
   return out;
 }
 
+/**
+ * Gel demandé par le client pendant une récupération déjà en cours (le wallet est déjà gelé par
+ * celle-ci) : on le retient, pour que l'annulation de la récupération laisse le wallet gelé.
+ */
+export function rememberClientFreeze(walletId: string): boolean {
+  const t = Object.values(tickets()).find((x) => x.walletId === walletId && x.status === 'pending');
+  if (!t || t.wasFrozenByClient) return false;
+  saveTicket({ ...t, wasFrozenByClient: true });
+  return true;
+}
+
 export function registerRecoveryRoutes(app: FastifyInstance): void {
   // Wallets du client connecté : un nouvel appareil retrouve ainsi son wallet à récupérer.
   app.get('/clients/me/wallets', async (req, reply) => {

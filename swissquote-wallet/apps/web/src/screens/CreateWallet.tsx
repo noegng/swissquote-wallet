@@ -1,8 +1,8 @@
 // Création du wallet (skills slip39-backup et custody-invariants).
 // Tout est généré sur l'appareil. La part TIERS part scellée chez le partenaire, la part CLIENT est
 // montrée (C1) puis chiffrée par phrase de passe (C2), et les deux sont oubliées à la fin.
-import { useState } from 'react';
-import { createWalletMaterial, sealFor, type WalletPolicy } from '@sqw/core';
+import { useRef, useState } from 'react';
+import { createWalletMaterial, sealFor, type NewWalletMaterial, type WalletPolicy } from '@sqw/core';
 import { partner, sq, type Session } from '../api';
 import { btc } from '../config';
 import { markBackupConfirmed, saveWallet, type StoredWallet } from '../keystore';
@@ -25,6 +25,9 @@ export function CreateWallet({
   const [walletId, setWalletId] = useState('');
   // Part CLIENT : gardée en mémoire uniquement le temps de la sauvegarde, puis oubliée.
   const [clientShare, setClientShare] = useState<string | null>(null);
+  // Étapes déjà réussies : « Try again » reprend où l'erreur s'est produite, au lieu de tout recréer
+  // (sinon chaque essai laisserait chez Swissquote un wallet orphelin, sans part chez le partenaire).
+  const done = useRef<{ m?: NewWalletMaterial; created?: { walletId: string; policy: WalletPolicy }; deposited?: boolean }>({});
 
   async function create() {
     setStep('working');
@@ -32,22 +35,25 @@ export function CreateWallet({
     setProgress([]);
     const log = (line: string) => setProgress((p) => [...p, line]);
     try {
-      const m = createWalletMaterial(btc.network);
+      const m = (done.current.m ??= createWalletMaterial(btc.network));
       log('Phone key and backup key created on this device');
 
-      const created = await sq<{ walletId: string; policy: WalletPolicy }>(
+      const created = (done.current.created ??= await sq<{ walletId: string; policy: WalletPolicy }>(
         '/wallets',
         { phoneKey: m.phoneKey, backupKey: m.backupKey },
         session.token,
-      );
+      ));
       log('Swissquote added its key and registered your wallet');
 
-      const { publicKey } = await partner<{ publicKey: JsonWebKey }>('/public-key');
-      await partner('/shares', {
-        walletId: created.walletId,
-        clientId: session.clientId,
-        sealedShare: await sealFor(publicKey, m.shares.tiers),
-      });
+      if (!done.current.deposited) {
+        const { publicKey } = await partner<{ publicKey: JsonWebKey }>('/public-key');
+        await partner('/shares', {
+          walletId: created.walletId,
+          clientId: session.clientId,
+          sealedShare: await sealFor(publicKey, m.shares.tiers),
+        });
+        done.current.deposited = true;
+      }
       log('Backup share encrypted and handed to our independent partner');
 
       await saveWallet(
@@ -61,6 +67,7 @@ export function CreateWallet({
         m.phoneSeed,
       );
       m.phoneSeed.fill(0);
+      done.current = {};
       log('Phone key encrypted in this device’s vault');
 
       setWalletId(created.walletId);

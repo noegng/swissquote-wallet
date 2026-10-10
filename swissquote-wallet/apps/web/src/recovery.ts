@@ -26,7 +26,7 @@ import {
   type SealedBox,
   type WalletPolicy,
 } from '@sqw/core';
-import { partner, sq, type Session } from './api';
+import { ApiError, partner, sq, type Session } from './api';
 import { btc } from './config';
 import { clearRecovery, putWallet, saveRecovery, sealWallet, type RecoveryState, type StoredWallet } from './keystore';
 import { currentFeeRate, esplora } from './payments';
@@ -42,14 +42,32 @@ export async function remoteWallets(session: Session): Promise<RemoteWallet[]> {
   return (await sq<{ wallets: RemoteWallet[] }>('/clients/me/wallets', undefined, session.token)).wallets;
 }
 
+/** Annule chez le partenaire toute libération en cours pour ce wallet (annulation d'une récupération). */
+export const cancelPartnerRelease = (walletId: string, clientId: string) =>
+  partner('/releases/cancel', { walletId, clientId });
+
 export async function startRecovery(session: Session, wallet: RemoteWallet, credentialId: string): Promise<RecoveryState> {
   const device = await generateSealingKeyPair(false);
+  const devicePublicKey = await exportPublicJwk(device.publicKey);
   const r = await sq('/recovery', { walletId: wallet.walletId, deviceCredentialId: credentialId }, session.token);
-  const rel = await partner('/release', {
-    walletId: wallet.walletId,
-    clientId: session.clientId,
-    devicePublicKey: await exportPublicJwk(device.publicKey),
-  });
+  const request = () => partner('/release', { walletId: wallet.walletId, clientId: session.clientId, devicePublicKey });
+  let rel;
+  try {
+    try {
+      rel = await request();
+    } catch (e) {
+      // Une ancienne demande (récupération abandonnée ou annulée) bloque la nouvelle : elle était
+      // scellée pour une autre clé d'appareil, inutilisable ici. On l'annule et on redemande.
+      if (!(e instanceof ApiError && e.status === 409)) throw e;
+      await cancelPartnerRelease(wallet.walletId, session.clientId);
+      rel = await request();
+    }
+  } catch (e) {
+    // Sans la part du partenaire, la récupération ne peut pas aboutir : on la referme chez Swissquote
+    // pour ne pas laisser le wallet gelé par une demande orpheline.
+    await sq(`/recovery/${r.recoveryId}/cancel`, {}, session.token).catch(() => {});
+    throw e;
+  }
   const state: RecoveryState = {
     oldWalletId: wallet.walletId,
     oldPolicy: wallet.policy,
@@ -157,9 +175,10 @@ export async function sweepToNewWallet(
   const utxos = await esplora.scanWallet(state.oldPolicy, btc.network, 20);
   let txUrl: string | null = null;
   if (utxos.length === 0) {
+    // Déjà transféré (reprise après coupure), ou ancien wallet vide : rien à déplacer. L'ancien wallet
+    // reste gelé chez Swissquote, sans fonds ; le nouveau wallet est prêt.
     const ticket = await sq<{ status: string }>(`/recovery/${state.recoveryId}`);
-    if (ticket.status !== 'completed') throw new Error('Your old wallet holds no bitcoin to move');
-    log('Funds already moved to your new wallet');
+    log(ticket.status === 'completed' ? 'Funds already moved to your new wallet' : 'Your old wallet was empty: nothing to move');
   } else {
     const { psbt } = buildSweep({
       policy: state.oldPolicy,

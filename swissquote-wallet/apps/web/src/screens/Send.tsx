@@ -19,6 +19,10 @@ type Outcome =
 function explain(e: unknown): string {
   const err = e as Error;
   if (err.name === 'NotAllowedError') return 'Approval cancelled on the device.';
+  // Messages du core (en français, partagés avec les scripts) traduits pour l'interface.
+  const funds = /Fonds insuffisants : (\d+) sats/.exec(err.message);
+  if (funds) return `Insufficient funds: ${formatBtc(funds[1])} available, fees included.`;
+  if (/seuil de poussière/.test(err.message)) return 'Amount too small: the minimum is 0.0000033 BTC (330 sats).';
   return err.message;
 }
 
@@ -68,6 +72,8 @@ export function Send({ wallet, onBack }: { wallet: StoredWallet; onBack: () => v
   const [prepared, setPrepared] = useState<PreparedPayment | null>(null);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [limit, setLimit] = useState<string | null>(null);
+  // Déjà dépensé sur 24 h (montants + frais) : le plafond restant décide du délai de sécurité.
+  const [spent, setSpent] = useState<bigint>(0n);
   const [sanctioned, setSanctioned] = useState<string[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -81,7 +87,10 @@ export function Send({ wallet, onBack }: { wallet: StoredWallet; onBack: () => v
         setSanctioned(r.sanctionedAddresses ?? []);
       })
       .catch(() => setLimit(null));
-  }, []);
+    sq<{ spentLast24hSats: string }>(`/wallets/${wallet.walletId}/limit`)
+      .then((r) => setSpent(BigInt(r.spentLast24hSats)))
+      .catch(() => setSpent(0n));
+  }, [wallet.walletId]);
 
   async function review(e: FormEvent) {
     e.preventDefault();
@@ -223,8 +232,8 @@ export function Send({ wallet, onBack }: { wallet: StoredWallet; onBack: () => v
 
   if (prepared) {
     const s = prepared.summary;
-    const overLimit = limit !== null && s.sentExternal + s.fee > BigInt(limit);
-    const flagged = sanctioned.includes(prepared.to);
+    const overLimit = limit !== null && spent + s.sentExternal + s.fee > BigInt(limit);
+    const flagged = sanctioned.some((a) => a.toLowerCase() === prepared.to.toLowerCase());
     return (
       <Screen
         title="Confirm payment"
@@ -261,8 +270,9 @@ export function Send({ wallet, onBack }: { wallet: StoredWallet; onBack: () => v
         </Group>
         {overLimit && limit && (
           <p className="note">
-            This payment is above your daily limit of {formatBtc(limit)}. Swissquote will hold it for a security
-            delay before signing, and will alert you.
+            This payment is above your daily limit of {formatBtc(limit)}
+            {spent > 0n && <> ({formatBtc(spent)} already spent in the last 24 hours, fees included)</>}. Swissquote
+            will hold it for a security delay before signing, and will alert you.
           </p>
         )}
         {error && <p className="error">{error}</p>}
@@ -332,6 +342,12 @@ export function Send({ wallet, onBack }: { wallet: StoredWallet; onBack: () => v
           <strong>Daily limit</strong>
           <span>{limit === null ? '…' : formatBtc(limit)}</span>
         </div>
+        {limit !== null && spent > 0n && (
+          <p className="note">
+            {formatBtc(BigInt(limit) > spent ? BigInt(limit) - spent : 0n)} left today ({formatBtc(spent)} spent in
+            the last 24 hours, fees included).
+          </p>
+        )}
         <p className="note">Payments above your daily limit are held for a security delay.</p>
       </div>
       {error && <p className="error">{error}</p>}

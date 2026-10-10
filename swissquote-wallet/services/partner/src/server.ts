@@ -303,6 +303,11 @@ app.post('/release', async (req, reply) => {
   if (!share || share.clientId !== body.clientId || !body.devicePublicKey) {
     return reply.code(404).send({ mock: true, error: 'Aucune part pour ce wallet et ce client' });
   }
+  try {
+    await sealFor(body.devicePublicKey, 'check');
+  } catch {
+    return reply.code(400).send({ mock: true, error: 'Clé publique P-256 de l’appareil requise' });
+  }
   const active = Object.values(releases()).find((r) => r.walletId === share.walletId && r.status === 'pending');
   if (active) return reply.code(409).send({ mock: true, error: 'Une libération est déjà en cours', releaseId: active.id });
   const ticket: ReleaseTicket = {
@@ -331,6 +336,7 @@ app.get('/release/:id', async (req, reply) => {
   if (!t) return reply.code(404).send({ mock: true, error: 'Demande inconnue' });
   if (t.status === 'cancelled') return { mock: true, status: 'cancelled' };
   const record = shares()[t.walletId];
+  if (!record) return reply.code(404).send({ mock: true, error: 'Part introuvable pour ce wallet' });
   // Part détenue par une personne de confiance : le partenaire n'a rien à ouvrir, il attend qu'elle
   // approuve la demande et fournisse la part scellée pour l'appareil. Son délai s'applique quand même.
   if (record.trustee && !t.sealedForDevice) {
@@ -381,6 +387,24 @@ app.post('/release/:id/cancel', async (req, reply) => {
   audit('release.cancelled', { walletId: t.walletId, releaseId: t.id });
   notify(t.walletId, 'Libération de votre part de secours annulée.');
   return { mock: true, status: 'cancelled' };
+});
+
+// Annulation de toute libération en cours pour un wallet : appelée par l'app quand le client annule
+// une récupération chez Swissquote (sinon l'appareil qui l'avait lancée recevrait quand même la part,
+// et toute nouvelle demande serait refusée). MOCK : même niveau de confiance que l'annulation par lien.
+app.post('/releases/cancel', async (req, reply) => {
+  const body = req.body as { walletId?: string; clientId?: string };
+  const share = body?.walletId ? shares()[body.walletId] : undefined;
+  if (!share || share.clientId !== body.clientId) {
+    return reply.code(404).send({ mock: true, error: 'Aucune part pour ce wallet et ce client' });
+  }
+  const pending = Object.values(releases()).filter((r) => r.walletId === share.walletId && r.status === 'pending');
+  for (const t of pending) {
+    saveRelease({ ...t, status: 'cancelled' });
+    audit('release.cancelled', { walletId: t.walletId, releaseId: t.id, via: 'client' });
+  }
+  if (pending.length) notify(share.walletId, 'Libération de votre part de secours annulée.');
+  return { mock: true, cancelled: pending.length };
 });
 
 app.get('/notifications/:walletId', async (req) => {
