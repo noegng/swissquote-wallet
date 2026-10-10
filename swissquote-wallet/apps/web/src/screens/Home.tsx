@@ -90,6 +90,7 @@ export function Home({
   const [busyFreeze, setBusyFreeze] = useState(false);
   const [tab, setTab] = useState<TabName>('wallet');
   const [showLost, setShowLost] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -207,7 +208,14 @@ export function Home({
       {tab === 'wallet' ? (
         <div className="home-head" key="head">
           <Brand />
-          <button type="button" className="avatar" onClick={onLogout} title="Log out" aria-label="Log out">
+          <button
+            type="button"
+            className="avatar"
+            onClick={() => setShowProfile((v) => !v)}
+            title="Account"
+            aria-label="Account"
+            aria-expanded={showProfile}
+          >
             {initials(wallet.clientId)}
           </button>
         </div>
@@ -221,6 +229,15 @@ export function Home({
               : 'What protects your wallet, and what to do if something goes wrong.'
           }
         />
+      )}
+
+      {tab === 'wallet' && showProfile && (
+        <Group key="profile" label="Account">
+          <Row icon="bank" title={wallet.clientId} sub="Swissquote client (mock login)" />
+          <Row icon="wallet" title="Wallet" sub={`${wallet.walletId.slice(0, 8)}… · ${wallet.network}`} />
+          <Row icon="lifebuoy" title="Recovery and protection" trail="chevR" onClick={() => (setShowProfile(false), setTab('recovery'))} />
+          <Row icon="logout" title="Log out" sub="Your wallet stays on this device" trail="chevR" onClick={onLogout} />
+        </Group>
       )}
 
       {!wallet.backupConfirmed && (
