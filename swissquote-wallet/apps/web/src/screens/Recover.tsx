@@ -1,7 +1,7 @@
 // Récupération sur un nouvel appareil : passkey de l'appareil → demandes (Swissquote + partenaire)
 // → délai de sécurité → part du client (papier ou copie cloud) → transfert → nouvelle sauvegarde.
 import { useEffect, useRef, useState } from 'react';
-import type { Session } from '../api';
+import { sq, type Session } from '../api';
 import { loadRecovery, markBackupConfirmed, type RecoveryState, type StoredWallet } from '../keystore';
 import {
   clientShareFromFile,
@@ -40,6 +40,47 @@ export function Recover({
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ wallet: StoredWallet; newClientShare: string; txUrl: string } | null>(null);
   const started = useRef(false);
+  // État du wallet chez Swissquote : gel, récupération en cours lancée ailleurs.
+  const [remoteState, setRemoteState] = useState<{
+    status: string;
+    recovery: { recoveryId: string; secondsLeft: number } | null;
+  } | null>(null);
+  const [notice, setNotice] = useState('');
+
+  async function refreshRemote() {
+    try {
+      setRemoteState(await sq(`/wallets/${remote.walletId}/recovery`));
+    } catch {
+      setRemoteState(null);
+    }
+  }
+
+  useEffect(() => {
+    refreshRemote();
+  }, [remote.walletId]);
+
+  // Actions de protection : la session de l'espace client suffit (le téléphone a pu être volé).
+  async function freeze() {
+    setError('');
+    try {
+      const r = await sq(`/wallets/${remote.walletId}/freeze`, {}, session.token);
+      setNotice(`Wallet gelé. ${r.cancelledPayments} paiement(s) en attente annulé(s).`);
+      refreshRemote();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  async function cancelForeignRecovery(recoveryId: string) {
+    setError('');
+    try {
+      await sq(`/recovery/${recoveryId}/cancel`, {}, session.token);
+      setNotice('Récupération annulée. Si votre téléphone a été volé, gelez le wallet puis lancez votre propre récupération.');
+      refreshRemote();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
 
   // Une récupération déjà lancée sur cet appareil reprend après un rechargement.
   useEffect(() => {
@@ -238,8 +279,30 @@ export function Recover({
         Sans votre part papier ou sa copie, personne ne peut récupérer ce wallet : ni Swissquote, ni le
         partenaire, ni un voleur de votre téléphone.
       </p>
+      {remoteState?.recovery && (
+        <div className="card warning">
+          <strong>Une récupération est déjà en cours, lancée depuis un autre appareil</strong>
+          <span>Si ce n’est pas vous, annulez-la depuis votre espace client : pas besoin de votre téléphone.</span>
+          <button className="primary" onClick={() => cancelForeignRecovery(remoteState.recovery!.recoveryId)}>
+            Ce n’est pas moi : annuler
+          </button>
+        </div>
+      )}
+      {remoteState?.status === 'active' && (
+        <div className="card">
+          <strong>Téléphone volé ?</strong>
+          <span className="label">
+            Gelez le wallet tout de suite depuis votre espace client : plus aucun paiement, et les paiements en
+            attente sont annulés. Le dégel exigera votre passkey ; la récupération reste possible.
+          </span>
+          <button className="secondary" onClick={freeze}>
+            Geler mon wallet
+          </button>
+        </div>
+      )}
+      {notice && <p className="note">{notice}</p>}
       {error && <p className="error">{error}</p>}
-      <button className="primary" onClick={() => setStep('passkey')}>
+      <button className="primary" disabled={!!remoteState?.recovery} onClick={() => setStep('passkey')}>
         Commencer la récupération
       </button>
       <button className="secondary" onClick={onCreateInstead}>

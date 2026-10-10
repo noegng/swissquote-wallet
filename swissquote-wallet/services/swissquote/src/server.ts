@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { psbtFromBase64, signWithRoot, summarizeSpend, deriveAddress } from '@sqw/core';
 import { audit, readJson, resetData, SERVICE, writeJson } from './store';
 import {
+  authorizeProtective,
   clientFromAuthHeader,
   hasPasskey,
   login,
@@ -17,7 +18,7 @@ import {
   verifyRegistration,
   type Purpose,
 } from './auth';
-import { DAILY_LIMIT_SATS, decide, HIGH_VALUE_DELAY_SECONDS, recordSpend, sanctionedAddresses } from './rules';
+import { DAILY_LIMIT_SATS, decide, HIGH_VALUE_DELAY_SECONDS, outgoing, recordSpend, sanctionedAddresses } from './rules';
 import {
   cfg,
   createWalletRecord,
@@ -26,6 +27,7 @@ import {
   notify,
   plain,
   resetSigner,
+  saveWallet,
   statusOf,
   wallets,
   type WalletRecord,
@@ -54,9 +56,21 @@ function cosign(wallet: WalletRecord, psbtBase64: string) {
 }
 
 const frozenReason = (w: WalletRecord) =>
-  statusOf(w) === 'frozen'
-    ? 'Wallet gelé : une récupération est en cours (annulable depuis votre téléphone)'
-    : 'Wallet récupéré : les fonds ont été transférés vers un nouveau wallet';
+  statusOf(w) === 'recovered'
+    ? 'Wallet récupéré : les fonds ont été transférés vers un nouveau wallet'
+    : w.frozenBy === 'client'
+      ? 'Wallet gelé par le client (téléphone perdu ou volé) : dégel avec la passkey, ou récupération'
+      : 'Wallet gelé : une récupération est en cours (annulable par le client)';
+
+/** Annule tous les gros paiements en attente d'un wallet (gel). Renvoie leur nombre. */
+function cancelPendingRequests(walletId: string, reason: string): number {
+  const all = requests();
+  const pending = Object.values(all).filter((r) => r.walletId === walletId && r.status === 'pending');
+  for (const r of pending) all[r.id] = { ...r, status: 'cancelled' };
+  writeJson('requests.json', all);
+  for (const r of pending) audit('cosign.cancelled', { walletId, requestId: r.id, reason });
+  return pending.length;
+}
 
 const app = Fastify();
 await app.register(cors, { origin: process.env.ORIGIN ?? 'http://localhost:5173' });
@@ -94,8 +108,8 @@ app.post('/webauthn/register/verify', async (req, reply) => {
 app.post('/webauthn/operation/options', async (req, reply) => {
   const body = req.body as { walletId?: string; purpose?: Purpose; payload?: string };
   const wallet = body?.walletId ? wallets()[body.walletId] : undefined;
-  if (!wallet || !body.payload || !['cosign', 'cancel'].includes(body.purpose ?? '')) {
-    return reply.code(400).send({ mock: true, error: 'walletId, purpose (cosign|cancel) et payload requis' });
+  if (!wallet || !body.payload || !['cosign', 'cancel', 'unfreeze'].includes(body.purpose ?? '')) {
+    return reply.code(400).send({ mock: true, error: 'walletId, purpose (cosign|cancel|unfreeze) et payload requis' });
   }
   return operationOptions(wallet.clientId, body.purpose!, body.payload);
 });
@@ -174,8 +188,9 @@ app.post('/cosign', async (req, reply) => {
     audit('cosign.held', { walletId: wallet.walletId, requestId: request.id, reason: decision.reason, summary });
     notify(
       wallet.walletId,
-      `Gros paiement de ${summary.sentExternal} sats en attente. Il partira dans ${HIGH_VALUE_DELAY_SECONDS} s ` +
-        `sauf annulation. Si ce n'est pas vous, annulez maintenant.`,
+      `Gros paiement en attente : ${summary.sentExternal} sats envoyés + ${summary.fee} sats de frais. ` +
+        `Il partira dans ${HIGH_VALUE_DELAY_SECONDS} s sauf annulation. Si ce n'est pas vous, annulez ` +
+        `maintenant (depuis l'app ou votre espace client Swissquote).`,
     );
     return reply.code(202).send({
       mock: true,
@@ -189,7 +204,7 @@ app.post('/cosign', async (req, reply) => {
   }
 
   signWithRoot(analysed.psbt, getSigner().root);
-  recordSpend(wallet.walletId, analysed.summary.sentExternal);
+  recordSpend(wallet.walletId, outgoing(analysed.summary));
   audit('cosign.signed', { walletId: wallet.walletId, tier: 1, summary });
   return {
     mock: true,
@@ -214,7 +229,7 @@ app.get('/cosign/:id', async (req, reply) => {
     const wallet = wallets()[request.walletId];
     const { psbt, summary } = cosign(wallet, request.psbt);
     signWithRoot(psbt, getSigner().root);
-    recordSpend(wallet.walletId, summary.sentExternal);
+    recordSpend(wallet.walletId, outgoing(summary));
     const signed = { ...request, status: 'signed' as const, psbt: psbt.toBase64() };
     saveRequest(signed);
     audit('cosign.signed', { walletId: wallet.walletId, tier: 2, requestId: request.id });
@@ -230,13 +245,20 @@ app.get('/cosign/:id', async (req, reply) => {
   };
 });
 
-// Annulation d'un gros paiement : exige la passkey du client (défi lié à l'identifiant de la demande).
+// Annulation d'un gros paiement : action de protection, acceptée avec la passkey (défi lié à la
+// demande) OU avec la session de l'espace client (client dont le téléphone a été volé).
 app.post('/cosign/:id/cancel', async (req, reply) => {
   const request = requests()[(req.params as { id: string }).id];
   if (!request) return reply.code(404).send({ mock: true, error: 'Demande inconnue' });
+  let via: 'session' | 'passkey';
   try {
     const clientId = wallets()[request.walletId].clientId;
-    await verifyOperation(clientId, 'cancel', request.id, (req.body as { authentication?: never })?.authentication);
+    via = await authorizeProtective(
+      clientId,
+      req.headers.authorization,
+      request.id,
+      (req.body as { authentication?: never })?.authentication,
+    );
   } catch (e) {
     audit('cancel.unauthenticated', { requestId: request.id, reason: String(e) });
     return reply.code(401).send({ mock: true, status: 'unauthenticated', reason: (e as Error).message });
@@ -245,9 +267,57 @@ app.post('/cosign/:id/cancel', async (req, reply) => {
     return reply.code(409).send({ mock: true, error: `Demande déjà ${request.status}` });
   }
   saveRequest({ ...request, status: 'cancelled' });
-  audit('cosign.cancelled', { walletId: request.walletId, requestId: request.id });
-  notify(request.walletId, `Paiement de ${request.summary.sentExternal} sats annulé.`);
-  return { mock: true, status: 'cancelled', requestId: request.id };
+  audit('cosign.cancelled', { walletId: request.walletId, requestId: request.id, via });
+  notify(request.walletId, `Paiement de ${request.summary.sentExternal} sats annulé (${via === 'session' ? 'espace client' : 'passkey'}).`);
+  return { mock: true, status: 'cancelled', requestId: request.id, via };
+});
+
+// Gel d'urgence (téléphone perdu ou volé) : action de protection, session OU passkey. Bloque toute
+// cosignature et annule les gros paiements en attente. N'empêche pas une récupération.
+app.post('/wallets/:id/freeze', async (req, reply) => {
+  const wallet = wallets()[(req.params as { id: string }).id];
+  if (!wallet) return reply.code(404).send({ mock: true, error: 'Wallet inconnu' });
+  if (statusOf(wallet) === 'recovered') return reply.code(409).send({ mock: true, error: frozenReason(wallet) });
+  let via: 'session' | 'passkey';
+  try {
+    via = await authorizeProtective(
+      wallet.clientId,
+      req.headers.authorization,
+      `freeze:${wallet.walletId}`,
+      (req.body as { authentication?: never })?.authentication,
+    );
+  } catch (e) {
+    audit('freeze.unauthenticated', { walletId: wallet.walletId, reason: String(e) });
+    return reply.code(401).send({ mock: true, status: 'unauthenticated', reason: (e as Error).message });
+  }
+  if (statusOf(wallet) === 'active') saveWallet({ ...wallet, status: 'frozen', frozenBy: 'client' });
+  const cancelled = cancelPendingRequests(wallet.walletId, 'gel par le client');
+  audit('wallet.frozen', { walletId: wallet.walletId, via, cancelledPayments: cancelled });
+  notify(
+    wallet.walletId,
+    `Wallet gelé depuis ${via === 'session' ? 'votre espace client' : 'votre téléphone'}. ` +
+      `${cancelled} paiement(s) en attente annulé(s). Aucun paiement possible jusqu'au dégel ou à la récupération.`,
+  );
+  return { mock: true, status: 'frozen', cancelledPayments: cancelled, via };
+});
+
+// Dégel : ASSOUPLIT la protection, donc passkey obligatoire (la session seule ne suffit pas).
+app.post('/wallets/:id/unfreeze', async (req, reply) => {
+  const wallet = wallets()[(req.params as { id: string }).id];
+  if (!wallet) return reply.code(404).send({ mock: true, error: 'Wallet inconnu' });
+  if (wallet.frozenBy !== 'client' || statusOf(wallet) !== 'frozen') {
+    return reply.code(409).send({ mock: true, error: 'Seul un gel demandé par le client se lève ici' });
+  }
+  try {
+    await verifyOperation(wallet.clientId, 'unfreeze', wallet.walletId, (req.body as { authentication?: never })?.authentication);
+  } catch (e) {
+    audit('unfreeze.unauthenticated', { walletId: wallet.walletId, reason: String(e) });
+    return reply.code(401).send({ mock: true, status: 'unauthenticated', reason: (e as Error).message });
+  }
+  saveWallet({ ...wallet, status: 'active', frozenBy: undefined });
+  audit('wallet.unfrozen', { walletId: wallet.walletId });
+  notify(wallet.walletId, 'Wallet dégelé avec votre passkey.');
+  return { mock: true, status: 'active' };
 });
 
 // Boîte de notifications « hors bande » (mock des SMS, e-mails et alertes de l'espace client).

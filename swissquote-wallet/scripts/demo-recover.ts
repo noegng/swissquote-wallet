@@ -116,9 +116,15 @@ step('Le vrai client annule depuis son téléphone (passkey de l’ancien appare
   console.log(`Annulation : ${r.json.status} ; fonds intacts : ${await balanceOf(oldPolicy)} sats`);
 }
 
-// --- Récupération légitime : le téléphone est vraiment perdu.
-step('Récupération légitime depuis un nouvel appareil');
+step('Le client constate le vol : gel depuis son espace client, sans téléphone (session seule)');
 const newDevice = await loginWithNewPasskey(clientId);
+{
+  const f = await call('POST', `${SQ}/wallets/${oldWalletId}/freeze`, {}, newDevice.token);
+  console.log(`Gel : ${f.code} ${f.json.status} via ${f.json.via}`);
+}
+
+// --- Récupération légitime : le téléphone est vraiment perdu (wallet déjà gelé par le client).
+step('Récupération légitime depuis un nouvel appareil');
 const deviceKey = await generateSealingKeyPair();
 const recovery = await call('POST', `${SQ}/recovery`, { walletId: oldWalletId, deviceCredentialId: newDevice.credentialId }, newDevice.token);
 const release = await call('POST', `${PARTNER}/release`, { walletId: oldWalletId, clientId, devicePublicKey: await exportPublicJwk(deviceKey.publicKey) });

@@ -32,6 +32,8 @@ export interface WalletRecord {
   descriptor: string;
   createdAt: string;
   status?: WalletStatus;
+  /** Qui a gelé : une récupération en cours, ou le client lui-même (téléphone volé). */
+  frozenBy?: 'recovery' | 'client';
   recoveredTo?: string;
 }
 

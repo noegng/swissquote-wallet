@@ -38,7 +38,7 @@ async function call(method: string, path: string, body?: unknown) {
 // Authentificateur logiciel : joue le rôle de Windows Hello / Face ID pour ce script.
 const passkey = await SoftAuthenticator.create(process.env.ORIGIN?.split(',')[0], process.env.RP_ID);
 let walletId = '';
-async function approve(purpose: 'cosign' | 'cancel', payload: string) {
+async function approve(purpose: 'cosign' | 'cancel' | 'unfreeze', payload: string) {
   const options = await call('POST', '/webauthn/operation/options', { walletId, purpose, payload });
   return passkey.authenticate(options.json);
 }
@@ -89,9 +89,9 @@ for (let i = 0; i < 30 && utxos.length === 0; i++) {
 console.log(`solde    ${utxos.reduce((s, u) => s + u.value, 0n)} sats`);
 
 let changeIndex = 0;
-async function prepare(amount: bigint, to = externalAddress()) {
+async function prepare(amount: bigint, to = externalAddress(), feeRate = 2) {
   utxos = await esplora.scanWallet(policy, cfg.network, 20);
-  const { psbt } = buildSpend({ policy, network: cfg.network, utxos, to, amount, feeRate: 2, changeIndex: changeIndex++ });
+  const { psbt } = buildSpend({ policy, network: cfg.network, utxos, to, amount, feeRate, changeIndex: changeIndex++ });
   return { psbt, appSigned: signWithRoot(psbt.clone(), phone).toBase64() };
 }
 async function finishAndBroadcast(appSigned: string, sqSigned: string) {
@@ -237,4 +237,42 @@ step('Attaque : faire signer les fonds d’un autre wallet');
   console.log(`Swissquote : ${r.code} ${r.json.status} — ${r.json.reason}`);
 }
 
+// --- Bug corrigé : les frais comptent dans le plafond.
+step('Attaque : 1 000 sats envoyés, environ 900 000 sats de frais (détruire les fonds)');
+let feeAttackId = '';
+{
+  const { psbt } = await prepare(1_000n, externalAddress(), 4_500);
+  const r = await call('POST', '/cosign', {
+    walletId,
+    psbt: psbt.toBase64(),
+    authentication: await approve('cosign', psbt.toBase64()),
+  });
+  feeAttackId = r.json.requestId;
+  console.log(`Swissquote : ${r.code} ${r.json.status} — ${r.json.reason}`);
+  console.log(`Frais vus par Swissquote : ${r.json.summary?.fee} sats`);
+}
+
+// --- Bug corrigé : le client dont le téléphone est volé réagit depuis son espace client.
+step('Victime sans téléphone : annulation depuis l’espace client (session, sans passkey)');
+{
+  const r = await call('POST', `/cosign/${feeAttackId}/cancel`, {});
+  console.log(`Annulation : ${r.code} ${r.json.status} via ${r.json.via}`);
+}
+
+step('Gel d’urgence depuis l’espace client, dégel seulement avec la passkey');
+{
+  const f = await call('POST', `/wallets/${walletId}/freeze`, {});
+  console.log(`Gel : ${f.code} ${f.json.status} via ${f.json.via}`);
+  const { psbt } = await prepare(1_000n);
+  const r = await call('POST', '/cosign', {
+    walletId,
+    psbt: psbt.toBase64(),
+    authentication: await approve('cosign', psbt.toBase64()),
+  });
+  console.log(`Paiement pendant le gel : ${r.code} ${r.json.reason}`);
+  const u1 = await call('POST', `/wallets/${walletId}/unfreeze`, {});
+  console.log(`Dégel avec la seule session : ${u1.code} ${u1.json.reason}`);
+  const u2 = await call('POST', `/wallets/${walletId}/unfreeze`, { authentication: await approve('unfreeze', walletId) });
+  console.log(`Dégel avec la passkey : ${u2.code} ${u2.json.status}`);
+}
 console.log('\nScénarios terminés.');

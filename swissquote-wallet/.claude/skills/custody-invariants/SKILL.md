@@ -26,6 +26,12 @@ Le modèle : multisig Bitcoin 2 sur 3 (clé téléphone, clé Swissquote, clé d
 3. Vérifier que les combinaisons légitimes restent suffisantes : {téléphone, SQ} (quotidien), {secours, SQ} (téléphone perdu), {téléphone, secours} (SQ disparu).
 4. Lancer `npm test` (tests d'invariants dans `packages/core/test/`) et `npm run demo:cosign` (services lancés).
 
+## Principe d'asymétrie
+
+- **Protéger** (annuler un paiement, annuler une récupération, geler) : passkey **ou** session de l'espace client (`authorizeProtective` dans `services/swissquote/src/auth.ts`). Le client au téléphone volé n'a plus sa passkey.
+- **Assouplir** (dégeler, signer) : passkey obligatoire.
+- Le plafond se calcule sur **montant + frais** (`outgoing()` dans `rules.ts`).
+
 ## Erreurs interdites
 
 - Donner une part SLIP-39 à Swissquote (même chiffrée).
@@ -33,6 +39,8 @@ Le modèle : multisig Bitcoin 2 sur 3 (clé téléphone, clé Swissquote, clé d
 - Persister la clé de secours reconstituée, l'envoyer à un service ou la logger.
 - Laisser le cosignataire signer sans assertion passkey valide ou hors des règles (palier, délai, sanctions). Le défi WebAuthn doit être à usage unique et lié à l'opération (empreinte de la PSBT pour `/cosign`, identifiant de la demande pour une annulation).
 - Utiliser l'authentificateur logiciel de test (`scripts/lib/soft-authenticator.ts`) ailleurs que dans les scripts.
+- Compter un plafond sans les frais.
+- Exiger la passkey pour une action de protection (le client au téléphone volé serait bloqué).
 - Écrire une primitive cryptographique (hash, courbe, partage de secret, chiffrement) à la main.
 - Mocker sans l'étiqueter.
 

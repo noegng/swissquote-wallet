@@ -18,7 +18,7 @@ const RP_NAME = process.env.RP_NAME ?? 'Swissquote Wallet (MOCK)';
 const ORIGINS = (process.env.ORIGIN ?? 'http://localhost:5173').split(',').map((o) => o.trim());
 const CHALLENGE_TTL_MS = 2 * 60 * 1000;
 
-export type Purpose = 'cosign' | 'cancel';
+export type Purpose = 'cosign' | 'cancel' | 'unfreeze';
 
 interface StoredCredential {
   id: string;
@@ -140,6 +140,26 @@ export function revokeCredentialsExcept(clientId: string, keepId: string): numbe
   const revoked = before.length - all[clientId].length;
   if (revoked) audit('passkey.revoked', { clientId, revoked });
   return revoked;
+}
+
+// --- Actions de protection ------------------------------------------------------------------
+
+/**
+ * Annuler un paiement, annuler une récupération ou geler le wallet sont des actions qui PROTÈGENT
+ * les fonds : on les accepte avec la passkey OU avec la session de l'espace client Swissquote. Un
+ * client dont le téléphone (donc la passkey) a été volé doit pouvoir réagir depuis un ordinateur.
+ * Au pire, un attaquant qui a la session retarde ou gèle : il ne peut rien déplacer.
+ * Ce qui ASSOUPLIT (dégeler) exige la passkey.
+ */
+export async function authorizeProtective(
+  walletClientId: string,
+  authorizationHeader: string | undefined,
+  passkeyPayload: string,
+  authentication: AuthenticationResponseJSON | undefined,
+): Promise<'session' | 'passkey'> {
+  if (clientFromAuthHeader(authorizationHeader) === walletClientId) return 'session';
+  await verifyOperation(walletClientId, 'cancel', passkeyPayload, authentication);
+  return 'passkey';
 }
 
 // --- Authentification liée à une opération -------------------------------------------------

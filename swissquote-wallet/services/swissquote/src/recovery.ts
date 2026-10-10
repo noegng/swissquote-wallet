@@ -1,7 +1,8 @@
 // [MOCK] Récupération après perte du téléphone, côté Swissquote (skill custody-invariants).
 //   1. Le client, sur un nouvel appareil, ouvre une récupération : vérification d'identité renforcée
 //      (MOCK), le wallet est GELÉ (plus aucun paiement), notification, délai.
-//   2. Pendant le délai, le vrai client peut annuler avec la passkey de son ancien appareil.
+//   2. Pendant le délai, le vrai client peut annuler : passkey de l'ancien appareil OU session de
+//      l'espace client (s'il n'a plus son téléphone). Annuler protège : la session suffit.
 //   3. Après le délai : Swissquote crée le nouveau wallet (nouvelle clé SQ), puis cosigne UNE
 //      transaction de transfert, seulement si elle est déjà signée par la CLÉ DE SECOURS (pas par
 //      le téléphone perdu, qu'un voleur pourrait avoir) et si toutes les sorties vont au nouveau wallet.
@@ -11,7 +12,7 @@
 import type { FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import { deriveAddress, everyInputSignedBy, psbtFromBase64, signWithRoot, summarizeSpend } from '@sqw/core';
-import { clientFromAuthHeader, credentialBelongsTo, revokeCredentialsExcept, verifyOperation } from './auth';
+import { authorizeProtective, clientFromAuthHeader, credentialBelongsTo, revokeCredentialsExcept } from './auth';
 import {
   cfg,
   createWalletRecord,
@@ -39,6 +40,8 @@ interface RecoveryTicket {
   executeAfter: number;
   /** Passkey du nouvel appareil : la seule conservée à la fin de la récupération. */
   deviceCredentialId: string;
+  /** Le wallet était-il déjà gelé par le client à l'ouverture (rétabli si la récupération est annulée) ? */
+  wasFrozenByClient: boolean;
   newWalletId?: string;
 }
 
@@ -75,7 +78,8 @@ export function registerRecoveryRoutes(app: FastifyInstance): void {
     if (!deviceCredentialId || !credentialBelongsTo(clientId, deviceCredentialId)) {
       return reply.code(400).send({ mock: true, error: 'Passkey du nouvel appareil requise (deviceCredentialId)' });
     }
-    if (statusOf(wallet) === 'frozen') {
+    const frozenByClient = statusOf(wallet) === 'frozen' && wallet.frozenBy === 'client';
+    if (statusOf(wallet) === 'frozen' && !frozenByClient) {
       return reply.code(409).send({
         mock: true,
         error:
@@ -95,14 +99,16 @@ export function registerRecoveryRoutes(app: FastifyInstance): void {
       createdAt: new Date().toISOString(),
       executeAfter: Date.now() + RECOVERY_DELAY_SECONDS * 1000,
       deviceCredentialId,
+      wasFrozenByClient: frozenByClient,
     };
     saveTicket(ticket);
-    saveWallet({ ...wallet, status: 'frozen' });
+    saveWallet({ ...wallet, status: 'frozen', frozenBy: 'recovery' });
     audit('recovery.opened', { walletId: wallet.walletId, recoveryId: ticket.id, identityCheck: ticket.identityCheck });
     notify(
       wallet.walletId,
       `Récupération de votre wallet demandée depuis un nouvel appareil. Paiements gelés. Elle aboutira dans ` +
-        `${RECOVERY_DELAY_SECONDS} s (${PRODUCTION_DELAY} en production). Si ce n'est pas vous, annulez depuis votre téléphone.`,
+        `${RECOVERY_DELAY_SECONDS} s (${PRODUCTION_DELAY} en production). Si ce n'est pas vous, annulez depuis votre téléphone ` +
+        `ou votre espace client Swissquote.`,
     );
     return {
       mock: true,
@@ -132,22 +138,38 @@ export function registerRecoveryRoutes(app: FastifyInstance): void {
     return { mock: true, status: t.status, secondsLeft: secondsLeft(t), walletId: t.walletId, newWalletId: t.newWalletId };
   });
 
-  // Annulation par le vrai client, avec la passkey de son ancien appareil (défi lié à cette récupération).
+  // Annulation par le vrai client : passkey de l'ancien appareil (défi lié à cette récupération) OU
+  // session de l'espace client (téléphone volé). Le wallet revient à son état d'avant.
   app.post('/recovery/:id/cancel', async (req, reply) => {
     const t = tickets()[(req.params as { id: string }).id];
     if (!t) return reply.code(404).send({ mock: true, error: 'Récupération inconnue' });
     if (t.status !== 'pending') return reply.code(409).send({ mock: true, error: `Récupération déjà ${t.status}` });
+    let via: 'session' | 'passkey';
     try {
-      await verifyOperation(t.clientId, 'cancel', t.id, (req.body as { authentication?: never })?.authentication);
+      via = await authorizeProtective(
+        t.clientId,
+        req.headers.authorization,
+        t.id,
+        (req.body as { authentication?: never })?.authentication,
+      );
     } catch (e) {
       audit('recovery.cancel.unauthenticated', { recoveryId: t.id, reason: String(e) });
       return reply.code(401).send({ mock: true, status: 'unauthenticated', reason: (e as Error).message });
     }
     saveTicket({ ...t, status: 'cancelled' });
-    saveWallet({ ...wallets()[t.walletId], status: 'active' });
-    audit('recovery.cancelled', { walletId: t.walletId, recoveryId: t.id });
-    notify(t.walletId, 'Récupération annulée depuis votre téléphone. Paiements dégelés.');
-    return { mock: true, status: 'cancelled' };
+    const wallet = wallets()[t.walletId];
+    saveWallet(
+      t.wasFrozenByClient
+        ? { ...wallet, status: 'frozen', frozenBy: 'client' }
+        : { ...wallet, status: 'active', frozenBy: undefined },
+    );
+    audit('recovery.cancelled', { walletId: t.walletId, recoveryId: t.id, via });
+    notify(
+      t.walletId,
+      `Récupération annulée (${via === 'session' ? 'espace client' : 'passkey'}). ` +
+        (t.wasFrozenByClient ? 'Le wallet reste gelé à votre demande.' : 'Paiements dégelés.'),
+    );
+    return { mock: true, status: 'cancelled', via };
   });
 
   // Après le délai : nouveau wallet avec les nouvelles clés de l'appareil et une nouvelle clé Swissquote.

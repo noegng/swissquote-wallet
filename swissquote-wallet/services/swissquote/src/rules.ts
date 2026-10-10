@@ -1,7 +1,7 @@
 // [MOCK] Règles du cosignataire Swissquote, appliquées dans cet ordre (skill mock-service) :
 //   1. la PSBT n'utilise que des fonds du wallet et le change revient au wallet (summarizeSpend)
 //   2. aucun destinataire sur la liste de sanctions (mock : liste de démonstration)
-//   3. palier 1 : cumul des 24 dernières heures sous le plafond → signature immédiate
+//   3. palier 1 : cumul des 24 dernières heures (montants + frais) sous le plafond → signature immédiate
 //      palier 2 : au-dessus → mise en attente, notification, signature après délai sauf annulation
 // Swissquote peut refuser ou retarder, jamais signer seul : il n'a qu'une clé sur trois.
 import type { SpendSummary } from '@sqw/core';
@@ -44,11 +44,19 @@ export function decide(walletId: string, summary: SpendSummary): Decision {
   const hit = summary.external.find((o) => sanctioned.has(o.address));
   if (hit) return { kind: 'refuse', reason: `Destinataire sur la liste de sanctions : ${hit.address}` };
 
+  // Les frais comptent dans le plafond : sinon un voleur pourrait détruire les fonds en payant des
+  // frais énormes (ex. 1 000 sats envoyés, 900 000 sats de frais) sans passer par le délai.
   const already = spentLast24h(walletId);
-  if (already + summary.sentExternal <= DAILY_LIMIT_SATS) return { kind: 'sign', tier: 1 };
+  const total = already + outgoing(summary);
+  if (total <= DAILY_LIMIT_SATS) return { kind: 'sign', tier: 1 };
   return {
     kind: 'hold',
     tier: 2,
-    reason: `Au-dessus du plafond quotidien (${already + summary.sentExternal} > ${DAILY_LIMIT_SATS} sats)`,
+    reason: `Au-dessus du plafond quotidien, frais compris (${total} > ${DAILY_LIMIT_SATS} sats)`,
   };
+}
+
+/** Ce qui quitte réellement le wallet : montant envoyé + frais du réseau. */
+export function outgoing(summary: SpendSummary): bigint {
+  return summary.sentExternal + summary.fee;
 }

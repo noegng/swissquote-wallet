@@ -171,7 +171,8 @@ Clé de secours = groupe CLIENT  ET  groupe TIERS        (seuil de groupes = 2)
 | Menace | Ce que l'attaquant obtient | Ce qui l'arrête |
 |---|---|---|
 | Téléphone volé (verrouillé) | Rien d'utilisable | Clé chiffrée, déverrouillage par passkey biométrique |
-| Téléphone volé et déverrouillé, ou malware | Clé téléphone | Swissquote cosigne seulement sous le plafond ; au-dessus, délai + notification ; le client fait geler le cosignataire |
+| Téléphone volé et déverrouillé, ou malware | Clé téléphone | Swissquote cosigne seulement sous le plafond (montant **+ frais**) ; au-dessus, délai + notification ; le client annule ou **gèle depuis son espace client**, sans téléphone |
+| Voleur qui paie des frais énormes pour détruire les fonds | Clé téléphone | Les frais comptent dans le plafond : 1 000 sats + 900 000 sats de frais passent en palier 2 (délai, alerte, annulation) |
 | E-mail piraté | Notifications | Aucune clé ; notifications sur plusieurs canaux |
 | **Téléphone + e-mail** | Clé téléphone, accès au compte | Il peut ouvrir une récupération, mais : le wallet est gelé, le vrai client est alerté et peut annuler ; sans part CLIENT la clé de secours ne se reconstitue pas ; un transfert signé avec la clé du téléphone volé est refusé (Swissquote exige la clé de secours). Démontré par `npm run demo:recover` |
 | Vol du papier C1 | Part CLIENT | Il faut aussi le partenaire (identité + délai + notification) et Swissquote |
