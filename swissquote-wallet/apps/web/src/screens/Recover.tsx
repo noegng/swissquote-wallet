@@ -150,7 +150,14 @@ export function Recover({
   }
 
   if (step === 'passkey') {
-    return <Passkey session={session} title="Passkey de ce nouvel appareil" onDone={(info) => begin(info.credentialId)} />;
+    return (
+      <Passkey
+        session={session}
+        title="Passkey de ce nouvel appareil"
+        allowExisting
+        onDone={(info) => begin(info.credentialId)}
+      />
+    );
   }
 
   if (step === 'cancelled') {

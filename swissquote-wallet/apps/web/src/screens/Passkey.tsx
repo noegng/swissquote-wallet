@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   browserSupportsWebAuthn,
   platformAuthenticatorIsAvailable,
+  startAuthentication,
   startRegistration,
   WebAuthnError,
 } from '@simplewebauthn/browser';
@@ -20,7 +21,7 @@ function explain(err: unknown): string {
     return 'Création annulée ou délai dépassé. Réessayez et validez avec Windows Hello, Touch ID ou Face ID.';
   }
   if (err instanceof WebAuthnError && err.code === 'ERROR_AUTHENTICATOR_PREVIOUSLY_REGISTERED') {
-    return 'Une passkey existe déjà sur cet appareil pour ce compte.';
+    return 'Une passkey de votre compte existe déjà sur cet appareil (par exemple synchronisée par iCloud ou Google).';
   }
   return (err as Error).message;
 }
@@ -29,14 +30,33 @@ export function Passkey({
   session,
   onDone,
   title = 'Créez votre passkey',
+  allowExisting = false,
 }: {
   session: Session;
   onDone: (info: PasskeyInfo) => void;
   title?: string;
+  /** Récupération : si l'appareil a déjà une passkey du client, proposer de l'utiliser. */
+  allowExisting?: boolean;
 }) {
   const [platform, setPlatform] = useState<boolean | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [existing, setExisting] = useState(false);
+
+  async function useExisting() {
+    setBusy(true);
+    setError('');
+    try {
+      const optionsJSON = await sq('/webauthn/device/options', {}, session.token);
+      const response = await startAuthentication({ optionsJSON });
+      const r = await sq<{ credentialId: string }>('/webauthn/device/verify', { response }, session.token);
+      onDone({ credentialDeviceType: 'multiDevice', synced: true, credentialId: r.credentialId });
+    } catch (err) {
+      setError(explain(err));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   useEffect(() => {
     platformAuthenticatorIsAvailable().then(setPlatform).catch(() => setPlatform(false));
@@ -51,6 +71,7 @@ export function Passkey({
       const info = await sq<Omit<PasskeyInfo, 'credentialId'>>('/webauthn/register/verify', { response }, session.token);
       onDone({ ...info, credentialId: response.id });
     } catch (err) {
+      if (err instanceof WebAuthnError && err.code === 'ERROR_AUTHENTICATOR_PREVIOUSLY_REGISTERED') setExisting(true);
       setError(explain(err));
     } finally {
       setBusy(false);
@@ -86,9 +107,15 @@ export function Passkey({
         </p>
       )}
       {error && <p className="error">{error}</p>}
-      <button className="primary" onClick={create} disabled={busy}>
-        {busy ? 'Validation sur l’appareil…' : 'Créer ma passkey'}
-      </button>
+      {existing && allowExisting ? (
+        <button className="primary" onClick={useExisting} disabled={busy}>
+          {busy ? 'Validation sur l’appareil…' : 'Utiliser la passkey déjà présente sur cet appareil'}
+        </button>
+      ) : (
+        <button className="primary" onClick={create} disabled={busy}>
+          {busy ? 'Validation sur l’appareil…' : 'Créer ma passkey'}
+        </button>
+      )}
     </div>
   );
 }

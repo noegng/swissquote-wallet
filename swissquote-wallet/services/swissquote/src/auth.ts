@@ -16,9 +16,11 @@ import { audit, readJson, writeJson } from './store';
 const RP_ID = process.env.RP_ID ?? 'localhost';
 const RP_NAME = process.env.RP_NAME ?? 'Swissquote Wallet (MOCK)';
 const ORIGINS = (process.env.ORIGIN ?? 'http://localhost:5173').split(',').map((o) => o.trim());
-const CHALLENGE_TTL_MS = 2 * 60 * 1000;
+// L'invite Windows Hello / Face ID peut mettre du temps à apparaître : 120 s pour l'invite, 3 min pour le défi.
+const WEBAUTHN_TIMEOUT_MS = 120_000;
+const CHALLENGE_TTL_MS = 3 * 60 * 1000;
 
-export type Purpose = 'cosign' | 'cancel' | 'unfreeze';
+export type Purpose = 'cosign' | 'cancel' | 'unfreeze' | 'device';
 
 interface StoredCredential {
   id: string;
@@ -92,6 +94,7 @@ export async function registrationOptions(clientId: string) {
     userName: clientId,
     userDisplayName: `Client Swissquote ${clientId}`,
     attestationType: 'none',
+    timeout: WEBAUTHN_TIMEOUT_MS,
     authenticatorSelection: { residentKey: 'preferred', userVerification: 'required' },
     excludeCredentials: (credentials()[clientId] ?? []).map((c) => ({ id: c.id, transports: c.transports })),
   });
@@ -169,6 +172,7 @@ export async function operationOptions(clientId: string, purpose: Purpose, paylo
     rpID: RP_ID,
     allowCredentials: (credentials()[clientId] ?? []).map((c) => ({ id: c.id, transports: c.transports })),
     userVerification: 'required',
+    timeout: WEBAUTHN_TIMEOUT_MS,
   });
   saveChallenge(options.challenge, {
     clientId,
@@ -220,4 +224,25 @@ export async function verifyOperation(
   if (!result.verified) throw new Error('Assertion passkey invalide');
   credential.counter = result.authenticationInfo.newCounter;
   writeJson('credentials.json', all);
+}
+
+// --- Passkey déjà présente sur l'appareil -----------------------------------------------------
+
+/**
+ * Un appareil qui possède déjà une passkey du client (passkey synchronisée par iCloud ou Google, ou
+ * même authentificateur) ne peut pas en créer une deuxième : le navigateur refuse. Il prouve alors
+ * qu'il la détient par une assertion, et cette passkey devient « la passkey de l'appareil » pour la
+ * récupération. Limite documentée : une passkey synchronisée existe aussi sur l'ancien téléphone.
+ */
+export function deviceProofOptions(clientId: string) {
+  return operationOptions(clientId, 'device', `device:${clientId}`);
+}
+
+export async function verifyDeviceProof(
+  clientId: string,
+  response: AuthenticationResponseJSON | undefined,
+): Promise<string> {
+  await verifyOperation(clientId, 'device', `device:${clientId}`, response);
+  audit('passkey.device-proof', { clientId });
+  return response!.id;
 }

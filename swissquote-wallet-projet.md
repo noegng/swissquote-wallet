@@ -188,6 +188,7 @@ Clé de secours = groupe CLIENT  ET  groupe TIERS        (seuil de groupes = 2)
 | Swissquote disparu | Plus de cosignataire | Téléphone + clé de secours, kit de sortie |
 | Voleur du téléphone qui annule une récupération légitime | Blocage temporaire | Récupération relancée en revue manuelle (identité renforcée) ; documenté. Côté partenaire, l'annulation n'est pas authentifiée dans le mock (simple retard, jamais de perte) |
 | Passkey du téléphone perdu après récupération | Tentative d'approuver ou d'annuler | Révoquée à la fin de la récupération : « Passkey inconnue » |
+| Passkey **synchronisée** (iCloud, Google) présente aussi sur le téléphone volé | Le nouvel appareil réutilise cette passkey (le navigateur refuse d'en créer une deuxième), elle reste donc valide | Elle n'approuve que la part de Swissquote : sans la clé du nouveau téléphone, aucun paiement ; au pire annuler ou geler (retard). En production : exiger une passkey liée à l'appareil pour la récupération |
 | Récupérations répétées (déni de service) | Notifications en boucle | Une récupération active à la fois, délai avant relance |
 | Client qui perd téléphone, C1 et C2 | — | Fonds perdus : c'est le prix pour que personne d'autre ne puisse les prendre. Rappels annuels de vérification de C1 |
 | Interface de signature compromise | Transaction malveillante présentée au client | Résumé clair, le cosignataire vérifie destinataire et montant indépendamment de l'app |

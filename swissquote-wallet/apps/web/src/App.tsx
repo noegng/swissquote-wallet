@@ -32,7 +32,12 @@ export function App() {
   useEffect(() => {
     if (!session || wallet !== null) return;
     remoteWallets(session)
-      .then((ws) => setRemote(ws.find((w) => w.status !== 'recovered') ?? null))
+      // Le plus récent des wallets non récupérés (un client peut en avoir plusieurs).
+      .then((ws) =>
+        setRemote(
+          [...ws].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).find((w) => w.status !== 'recovered') ?? null,
+        ),
+      )
       .catch(() => setRemote(null));
   }, [session, wallet]);
 

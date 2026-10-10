@@ -10,6 +10,8 @@ import { audit, readJson, resetData, SERVICE, writeJson } from './store';
 import {
   authorizeProtective,
   clientFromAuthHeader,
+  deviceProofOptions,
+  verifyDeviceProof,
   hasPasskey,
   login,
   operationOptions,
@@ -101,6 +103,26 @@ app.post('/webauthn/register/verify', async (req, reply) => {
   } catch (e) {
     audit('passkey.refused', { clientId, reason: String(e) });
     return reply.code(400).send({ mock: true, verified: false, error: (e as Error).message });
+  }
+});
+
+// Preuve qu'un appareil détient déjà une passkey du client (récupération sur un appareil où la passkey
+// est synchronisée : le navigateur refuse d'en créer une deuxième).
+app.post('/webauthn/device/options', async (req, reply) => {
+  const clientId = clientFromAuthHeader(req.headers.authorization);
+  if (!clientId) return reply.code(401).send({ mock: true, error: 'Session requise' });
+  if (!hasPasskey(clientId)) return reply.code(404).send({ mock: true, error: 'Aucune passkey pour ce client' });
+  return deviceProofOptions(clientId);
+});
+
+app.post('/webauthn/device/verify', async (req, reply) => {
+  const clientId = clientFromAuthHeader(req.headers.authorization);
+  if (!clientId) return reply.code(401).send({ mock: true, error: 'Session requise' });
+  try {
+    const credentialId = await verifyDeviceProof(clientId, (req.body as { response?: never })?.response);
+    return { mock: true, verified: true, credentialId };
+  } catch (e) {
+    return reply.code(401).send({ mock: true, verified: false, error: (e as Error).message });
   }
 });
 
