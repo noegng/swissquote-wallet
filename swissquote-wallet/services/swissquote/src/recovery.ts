@@ -29,7 +29,7 @@ import {
 } from './context';
 import { audit, readJson, writeJson } from './store';
 
-export const RECOVERY_DELAY_SECONDS = Number(process.env.RECOVERY_DELAY_SECONDS ?? 120);
+export const RECOVERY_DELAY_SECONDS = Number(process.env.RECOVERY_DELAY_SECONDS ?? 30);
 const PRODUCTION_DELAY = process.env.PRODUCTION_RECOVERY_DELAY_LABEL ?? '7 days';
 
 interface RecoveryTicket {

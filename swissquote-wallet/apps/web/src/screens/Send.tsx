@@ -7,6 +7,7 @@ import type { PendingPayment as Pending, StoredWallet } from '../keystore';
 import { preparePayment, submitPayment, type PreparedPayment } from '../payments';
 import { parsePaymentCode, QrScanner } from '../qr';
 import { Btn, Group, Hero, KV, Row, Screen, Title } from '../ui';
+import { delayLabel, InstantLimit, useInstantLimit } from './InstantLimit';
 import { PendingPaymentPanel, usePendingPayment } from './PendingPayment';
 
 type Outcome =
@@ -71,9 +72,8 @@ export function Send({ wallet, onBack }: { wallet: StoredWallet; onBack: () => v
   const [amount, setAmount] = useState('');
   const [prepared, setPrepared] = useState<PreparedPayment | null>(null);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
-  const [limit, setLimit] = useState<string | null>(null);
-  // Déjà dépensé sur 24 h (montants + frais) : le plafond restant décide du délai de sécurité.
-  const [spent, setSpent] = useState<bigint>(0n);
+  // Seuil de signature immédiate et déjà dépensé sur 24 h : décident du délai de sécurité.
+  const instant = useInstantLimit(wallet.walletId);
   const [sanctioned, setSanctioned] = useState<string[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -82,15 +82,9 @@ export function Send({ wallet, onBack }: { wallet: StoredWallet; onBack: () => v
 
   useEffect(() => {
     sq('/rules')
-      .then((r) => {
-        setLimit(r.dailyLimitSats);
-        setSanctioned(r.sanctionedAddresses ?? []);
-      })
-      .catch(() => setLimit(null));
-    sq<{ spentLast24hSats: string }>(`/wallets/${wallet.walletId}/limit`)
-      .then((r) => setSpent(BigInt(r.spentLast24hSats)))
-      .catch(() => setSpent(0n));
-  }, [wallet.walletId]);
+      .then((r) => setSanctioned(r.sanctionedAddresses ?? []))
+      .catch(() => setSanctioned([]));
+  }, []);
 
   async function review(e: FormEvent) {
     e.preventDefault();
@@ -232,7 +226,7 @@ export function Send({ wallet, onBack }: { wallet: StoredWallet; onBack: () => v
 
   if (prepared) {
     const s = prepared.summary;
-    const overLimit = limit !== null && spent + s.sentExternal + s.fee > BigInt(limit);
+    const overLimit = instant !== null && instant.spent + s.sentExternal + s.fee > instant.limit;
     const flagged = sanctioned.some((a) => a.toLowerCase() === prepared.to.toLowerCase());
     return (
       <Screen
@@ -266,13 +260,17 @@ export function Send({ wallet, onBack }: { wallet: StoredWallet; onBack: () => v
             title="Recipient address"
             chip={flagged ? ['On a sanctions list', 'danger'] : ['Not on the sanctions list', 'success']}
           />
-          <Row title="Daily limit" chip={overLimit ? ['Security delay', 'accent'] : ['Below the limit', 'success']} />
+          <Row
+            title="Swissquote signature"
+            chip={overLimit ? [`After a ${delayLabel(instant!.delaySeconds)} delay`, 'accent'] : ['Immediate', 'success']}
+          />
         </Group>
-        {overLimit && limit && (
+        {overLimit && instant && (
           <p className="note">
-            This payment is above your daily limit of {formatBtc(limit)}
-            {spent > 0n && <> ({formatBtc(spent)} already spent in the last 24 hours, fees included)</>}. Swissquote
-            will hold it for a security delay before signing, and will alert you.
+            This payment goes beyond what Swissquote signs at once today ({formatBtc(instant.limit)} a day, fees
+            included{instant.spent > 0n && <>, {formatBtc(instant.spent)} already used</>}). It is not blocked: it
+            leaves after a {delayLabel(instant.delaySeconds)} security delay, and you get an alert so you can cancel
+            it.
           </p>
         )}
         {error && <p className="error">{error}</p>}
@@ -337,19 +335,7 @@ export function Send({ wallet, onBack }: { wallet: StoredWallet; onBack: () => v
       <Btn kind="secondary" icon="qr" type="button" onClick={() => setScanning(true)}>
         Scan a QR code
       </Btn>
-      <div className="sheet padded">
-        <div className="limit-head">
-          <strong>Daily limit</strong>
-          <span>{limit === null ? '…' : formatBtc(limit)}</span>
-        </div>
-        {limit !== null && spent > 0n && (
-          <p className="note">
-            {formatBtc(BigInt(limit) > spent ? BigInt(limit) - spent : 0n)} left today ({formatBtc(spent)} spent in
-            the last 24 hours, fees included).
-          </p>
-        )}
-        <p className="note">Payments above your daily limit are held for a security delay.</p>
-      </div>
+      <InstantLimit limit={instant} rate={rate} />
       {error && <p className="error">{error}</p>}
     </Screen>
   );

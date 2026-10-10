@@ -21,7 +21,7 @@ import {
   type SealedBox,
 } from '@sqw/core';
 
-const RELEASE_DELAY_SECONDS = Number(process.env.RECOVERY_DELAY_SECONDS ?? 120);
+const RELEASE_DELAY_SECONDS = Number(process.env.RECOVERY_DELAY_SECONDS ?? 30);
 
 const NAME = 'partner';
 const DATA_DIR = join(import.meta.dirname, '../data');

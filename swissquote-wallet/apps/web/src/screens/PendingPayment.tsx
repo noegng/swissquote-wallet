@@ -89,8 +89,11 @@ export function PendingPaymentPanel({
         footnote={secondsLeft === 0 ? 'Sending now…' : 'before the payment is sent'}
       />
       <div className="why">
-        <strong>Above your daily limit</strong>
-        <p>Large payments wait before Swissquote signs them. Swissquote has also sent you an alert.</p>
+        <strong>Beyond your instant payments for today</strong>
+        <p>
+          The payment is not blocked: Swissquote signs it once the delay is over. It has also sent you an alert, so
+          you can cancel it if it is not you.
+        </p>
       </div>
       <Callout title="Didn’t make this payment?">
         Cancel it now. You can also freeze your wallet from your Swissquote account on any device.

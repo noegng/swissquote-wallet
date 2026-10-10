@@ -1059,6 +1059,21 @@ button.row:disabled .t {
   color: var(--grey-500);
 }
 
+.limit-bar {
+  height: 8px;
+  margin: 10px 0 2px;
+  border-radius: 999px;
+  background: var(--grey-200);
+  overflow: hidden;
+}
+
+.limit-bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--grad);
+}
+
 .address {
   font-size: 15px;
   line-height: 22px;

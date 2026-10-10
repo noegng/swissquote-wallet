@@ -9,7 +9,7 @@ import { btcAmount } from './context';
 import { readJson, writeJson } from './store';
 
 export const DAILY_LIMIT_SATS = BigInt(process.env.DAILY_LIMIT_SATS ?? 50_000);
-export const HIGH_VALUE_DELAY_SECONDS = Number(process.env.HIGH_VALUE_DELAY_SECONDS ?? 120);
+export const HIGH_VALUE_DELAY_SECONDS = Number(process.env.HIGH_VALUE_DELAY_SECONDS ?? 20);
 
 const DAY_MS = 24 * 3600 * 1000;
 

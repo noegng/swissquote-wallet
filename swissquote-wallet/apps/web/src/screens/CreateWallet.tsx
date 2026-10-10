@@ -122,7 +122,7 @@ export function CreateWallet({
         <Row
           icon="bank"
           title="Swissquote key"
-          sub="Signs with you up to your daily limit"
+          sub="Signs at once up to a daily amount, after a delay above it"
           chip={['Swissquote', 'neutral']}
         />
         <Row icon="key" title="Backup key" sub="For emergencies, shared with a partner" chip={['Shared', 'neutral']} />

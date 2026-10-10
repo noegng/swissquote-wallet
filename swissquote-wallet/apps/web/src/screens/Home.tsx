@@ -13,6 +13,7 @@ import { useChfRate } from '../price';
 import { QrCode } from '../qr';
 import { Brand, Btn, Callout, Group, Icon, Row, Screen, Timeline, Title, formatClock, type TabName } from '../ui';
 import { shareHolder, type ShareHolder } from '../trustee';
+import { InstantLimit, useInstantLimit } from './InstantLimit';
 import { PendingPaymentPanel, usePendingPayment, type Done } from './PendingPayment';
 
 function downloadExitKit(wallet: StoredWallet) {
@@ -127,7 +128,6 @@ export function Home({
   const [message, setMessage] = useState('');
   const [recoveryInfo, setRecoveryInfo] = useState<RecoveryInfo | null>(null);
   const [cancelling, setCancelling] = useState(false);
-  const [limit, setLimit] = useState<string | null>(null);
   const [showReceive, setShowReceive] = useState(false);
   const [busyFreeze, setBusyFreeze] = useState(false);
   const [tab, setTab] = useState<TabName>('wallet');
@@ -137,6 +137,8 @@ export function Home({
   const [historyError, setHistoryError] = useState(false);
   const [seen, setSeen] = useState(() => readSeen(wallet.walletId));
   const rate = useChfRate();
+  // Relu à chaque variation du solde ou du paiement en attente (un paiement vient d'être signé).
+  const instant = useInstantLimit(wallet.walletId, `${balance}/${pending?.requestId}`);
 
   const refresh = useCallback(async () => {
     try {
@@ -164,9 +166,6 @@ export function Home({
         setHolder(r);
       })
       .catch(() => setBackupDeposited(false));
-    sq<{ dailyLimitSats: string }>('/rules')
-      .then((r) => setLimit(r.dailyLimitSats))
-      .catch(() => setLimit(null));
     const timer = setInterval(refresh, REFRESH_MS);
     return () => clearInterval(timer);
   }, [refresh, wallet.walletId]);
@@ -478,16 +477,7 @@ export function Home({
       )}
 
       {(tab === 'wallet' || tab === 'transfers') && (
-        <div className="sheet padded" key="limit">
-          <div className="limit-head">
-            <strong>Daily limit</strong>
-            <span>
-              {limit === null ? '…' : formatBtc(limit)}
-              {limit !== null && rate !== null && ` (${formatChf(limit, rate)})`}
-            </span>
-          </div>
-          <p className="note">Payments above your daily limit are held for a security delay.</p>
-        </div>
+        <InstantLimit key="limit" limit={instant} rate={rate} />
       )}
 
       {tab === 'activity' &&
@@ -558,7 +548,7 @@ export function Home({
           <Row
             icon="bank"
             title="Swissquote key"
-            sub="Signs with you up to your daily limit"
+            sub="Signs at once up to a daily amount, after a delay above it"
             chip={frozen ? ['Frozen', 'accent'] : ['Active', 'success']}
           />
           <Row
