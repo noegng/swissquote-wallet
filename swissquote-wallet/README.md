@@ -8,6 +8,12 @@ Histoire démontrée : création → connexion et signature → perte du télép
 
 Multisig Bitcoin 2 sur 3 où le client détient deux clés (téléphone et clé de secours) et Swissquote une seule (cosignataire avec plafonds et délais). La clé de secours est sauvegardée en SLIP-39 de sorte que ni Swissquote, ni Swissquote avec le partenaire, ne puisse la reconstituer.
 
+## Architecture
+
+![Architecture : téléphone (réel), Swissquote et partenaire (mockés, processus séparés), réseau Bitcoin (réel)](docs/architecture.svg)
+
+Vert : réel. Jaune : mocké (processus séparé avec son propre stockage). Version éditable : [FigJam](https://www.figma.com/board/K9aqAWBiat2GuFXFnHhvN5).
+
 ## Ce qui est réel et ce qui est mocké
 
 | Composant | Statut |

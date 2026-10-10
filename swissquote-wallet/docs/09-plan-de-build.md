@@ -49,7 +49,7 @@ Règles : P0 et P1 terminés avant tout bonus. Points d'étape à **H10, H20, H2
 
 - [ ] **A** Scripts des 3 attaques et du scénario « Swissquote a disparu », preuves dans `preuves.md`
 - [ ] **B** Panneau Démo (scénarios et attaques, raisons des refus)
-- [ ] **C** Schéma d'architecture FigJam (parties mockées en couleur distincte), lien dans le README
+- [x] **C** Schéma d'architecture FigJam (parties mockées en couleur distincte), intégré au README (`docs/architecture.svg`) et lien FigJam
 - [ ] **C** Sections menaces, juridique, Travel Rule, business finalisées
 - [ ] **Point d'étape H20** : histoire complète rejouable sur signet
 
