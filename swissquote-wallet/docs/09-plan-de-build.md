@@ -9,8 +9,8 @@ Règles : P0 et P1 terminés avant tout bonus. Points d'étape à **H10, H20, H2
 - [x] Documents mis à jour pour le multisig 2 sur 3 + SLIP-39 (`03-decisions.md` fait foi)
 - [x] Skills de projet dans `.claude/skills/`
 - [x] Squelette du monorepo (`packages/core`, `apps/web`, `services/swissquote`, `services/partner`, `tools/`, `scripts/`) : `npm install`, `npm test`, `npm run typecheck`, `npm run dev:all` vérifiés le 10/10
-- [ ] Regtest Docker (`npm run regtest:up`, compose dans `tools/regtest/`) lancé et testé sur chaque machine (Docker Desktop doit être démarré)
-- [ ] Vérifier le règlement du hackathon : code écrit avant H0 autorisé ? (le squelette ne contient volontairement aucune logique métier)
+- [x] Regtest Docker testé chez Noé le 10/10 (bloc 101, faucet OK, explorateur sur :5000)
+- [ ] Regtest Docker lancé sur la machine de chaque coéquipier (guide : `docs/00-demarrage.md`)
 - [ ] Préfinancer 3 à 5 adresses signet via le faucet (limité à 5 demandes par 24 h)
 
 ## H0–H3 : spike

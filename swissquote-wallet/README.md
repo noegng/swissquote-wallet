@@ -48,4 +48,10 @@ Technique 35, sécurité et custody 20, juridique 15, business 15, UX et pitch 1
 
 ## Démarrage
 
-Voir la skill `demo-run` (`.claude/skills/demo-run/SKILL.md`) une fois le squelette en place.
+Guide pas à pas : `docs/00-demarrage.md`. En résumé, dans ce dossier :
+
+```bash
+npm install && cp .env.example .env
+npm run regtest:up     # Docker Desktop doit être ouvert
+npm run dev:all        # puis ouvrir http://localhost:5173
+```
