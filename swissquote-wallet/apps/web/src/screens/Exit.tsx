@@ -3,8 +3,9 @@
 import { useEffect, useState } from 'react';
 import { config } from '../config';
 import { exitWithoutSwissquote, partnerStatus, requestPartnerShare, walletBalance } from '../exit';
-import { formatBtc, formatSats } from '../format';
+import { formatBtc, formatChf } from '../format';
 import { listLocalWallets, loadExit, type ExitState, type StoredWallet } from '../keystore';
+import { useChfRate } from '../price';
 import { Btn, Callout, Checklist, Countdown, Group, Hero, Row, Screen, Title } from '../ui';
 import { useClientShareInput } from './ClientShareInput';
 
@@ -23,6 +24,7 @@ export function Exit({ onBack }: { onBack: () => void }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [swissquoteUp, setSwissquoteUp] = useState<boolean | null>(null);
+  const rate = useChfRate();
 
   useEffect(() => {
     listLocalWallets().then(setWallets).catch(() => setWallets([]));
@@ -226,7 +228,7 @@ export function Exit({ onBack }: { onBack: () => void }) {
           <Row
             title="Balance"
             value={balance === null ? '…' : formatBtc(balance)}
-            sub={balance === null ? undefined : formatSats(balance)}
+            sub={balance === null ? undefined : formatChf(balance, rate) || undefined}
           />
         </Group>
         {error && <p className="error">{error}</p>}

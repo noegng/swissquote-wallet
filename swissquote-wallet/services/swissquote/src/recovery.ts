@@ -28,7 +28,7 @@ import {
 import { audit, readJson, writeJson } from './store';
 
 export const RECOVERY_DELAY_SECONDS = Number(process.env.RECOVERY_DELAY_SECONDS ?? 120);
-const PRODUCTION_DELAY = process.env.PRODUCTION_RECOVERY_DELAY_LABEL ?? '7 jours';
+const PRODUCTION_DELAY = process.env.PRODUCTION_RECOVERY_DELAY_LABEL ?? '7 days';
 
 interface RecoveryTicket {
   id: string;
@@ -106,9 +106,9 @@ export function registerRecoveryRoutes(app: FastifyInstance): void {
     audit('recovery.opened', { walletId: wallet.walletId, recoveryId: ticket.id, identityCheck: ticket.identityCheck });
     notify(
       wallet.walletId,
-      `Récupération de votre wallet demandée depuis un nouvel appareil. Paiements gelés. Elle aboutira dans ` +
-        `${RECOVERY_DELAY_SECONDS} s (${PRODUCTION_DELAY} en production). Si ce n'est pas vous, annulez depuis votre téléphone ` +
-        `ou votre espace client Swissquote.`,
+      `Recovery of your wallet requested from a new device. Payments are frozen. It will complete in ` +
+        `${RECOVERY_DELAY_SECONDS} s (${PRODUCTION_DELAY} in production). If this is not you, cancel from your phone ` +
+        `or your Swissquote client area.`,
     );
     return {
       mock: true,
@@ -166,8 +166,8 @@ export function registerRecoveryRoutes(app: FastifyInstance): void {
     audit('recovery.cancelled', { walletId: t.walletId, recoveryId: t.id, via });
     notify(
       t.walletId,
-      `Récupération annulée (${via === 'session' ? 'espace client' : 'passkey'}). ` +
-        (t.wasFrozenByClient ? 'Le wallet reste gelé à votre demande.' : 'Paiements dégelés.'),
+      `Recovery cancelled (${via === 'session' ? 'client area' : 'passkey'}). ` +
+        (t.wasFrozenByClient ? 'The wallet stays frozen, as you asked.' : 'Payments unfrozen.'),
     );
     return { mock: true, status: 'cancelled', via };
   });
@@ -228,8 +228,8 @@ export function registerRecoveryRoutes(app: FastifyInstance): void {
     saveWallet({ ...oldWallet, status: 'recovered', recoveredTo: newWallet.walletId });
     const revoked = revokeCredentialsExcept(t.clientId, t.deviceCredentialId);
     audit('recovery.completed', { recoveryId: t.id, oldWalletId: oldWallet.walletId, newWalletId: newWallet.walletId, revokedPasskeys: revoked, summary: plain(summary) });
-    notify(oldWallet.walletId, `Récupération terminée : fonds transférés vers votre nouveau wallet. ${revoked} ancienne(s) passkey(s) révoquée(s).`);
-    notify(newWallet.walletId, 'Nouveau wallet actif après récupération. Pensez à ranger votre nouvelle part de secours.');
+    notify(oldWallet.walletId, `Recovery complete: funds moved to your new wallet. ${revoked} old passkey(s) revoked.`);
+    notify(newWallet.walletId, 'New wallet active after recovery. Remember to store your new backup share.');
     return { mock: true, status: 'signed', psbt: psbt.toBase64(), revokedPasskeys: revoked };
   });
 }

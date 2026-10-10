@@ -22,6 +22,7 @@ import {
 } from './auth';
 import { DAILY_LIMIT_SATS, decide, HIGH_VALUE_DELAY_SECONDS, outgoing, recordSpend, sanctionedAddresses } from './rules';
 import {
+  btcAmount,
   cfg,
   createWalletRecord,
   getSigner,
@@ -59,10 +60,10 @@ function cosign(wallet: WalletRecord, psbtBase64: string) {
 
 const frozenReason = (w: WalletRecord) =>
   statusOf(w) === 'recovered'
-    ? 'Wallet récupéré : les fonds ont été transférés vers un nouveau wallet'
+    ? 'Wallet recovered: the funds were moved to a new wallet'
     : w.frozenBy === 'client'
-      ? 'Wallet gelé par le client (téléphone perdu ou volé) : dégel avec la passkey, ou récupération'
-      : 'Wallet gelé : une récupération est en cours (annulable par le client)';
+      ? 'Wallet frozen by the client (phone lost or stolen): unfreeze with the passkey, or recover'
+      : 'Wallet frozen: a recovery is in progress (the client can cancel it)';
 
 /** Annule tous les gros paiements en attente d'un wallet (gel). Renvoie leur nombre. */
 function cancelPendingRequests(walletId: string, reason: string): number {
@@ -191,7 +192,7 @@ app.post('/cosign', async (req, reply) => {
 
   if (decision.kind === 'refuse') {
     audit('cosign.refused', { walletId: wallet.walletId, reason: decision.reason, summary });
-    notify(wallet.walletId, `Paiement refusé : ${decision.reason}`);
+    notify(wallet.walletId, `Payment refused: ${decision.reason}`);
     return reply.code(403).send({ mock: true, status: 'refused', reason: decision.reason, summary });
   }
 
@@ -210,9 +211,9 @@ app.post('/cosign', async (req, reply) => {
     audit('cosign.held', { walletId: wallet.walletId, requestId: request.id, reason: decision.reason, summary });
     notify(
       wallet.walletId,
-      `Gros paiement en attente : ${summary.sentExternal} sats envoyés + ${summary.fee} sats de frais. ` +
-        `Il partira dans ${HIGH_VALUE_DELAY_SECONDS} s sauf annulation. Si ce n'est pas vous, annulez ` +
-        `maintenant (depuis l'app ou votre espace client Swissquote).`,
+      `Large payment on hold: ${btcAmount(summary.sentExternal)} sent + ${btcAmount(summary.fee)} network fee. ` +
+        `It will leave in ${HIGH_VALUE_DELAY_SECONDS} s unless cancelled. If this is not you, cancel now ` +
+        `(from the app or your Swissquote client area).`,
     );
     return reply.code(202).send({
       mock: true,
@@ -255,7 +256,7 @@ app.get('/cosign/:id', async (req, reply) => {
     const signed = { ...request, status: 'signed' as const, psbt: psbt.toBase64() };
     saveRequest(signed);
     audit('cosign.signed', { walletId: wallet.walletId, tier: 2, requestId: request.id });
-    notify(wallet.walletId, `Gros paiement de ${request.summary.sentExternal} sats signé après le délai.`);
+    notify(wallet.walletId, `Large payment of ${btcAmount(request.summary.sentExternal)} signed after the security delay.`);
     return { mock: true, status: 'signed', tier: 2, psbt: signed.psbt, summary: request.summary };
   }
   const { psbt: _psbt, ...rest } = request;
@@ -290,7 +291,7 @@ app.post('/cosign/:id/cancel', async (req, reply) => {
   }
   saveRequest({ ...request, status: 'cancelled' });
   audit('cosign.cancelled', { walletId: request.walletId, requestId: request.id, via });
-  notify(request.walletId, `Paiement de ${request.summary.sentExternal} sats annulé (${via === 'session' ? 'espace client' : 'passkey'}).`);
+  notify(request.walletId, `Payment of ${btcAmount(request.summary.sentExternal)} cancelled (${via === 'session' ? 'client area' : 'passkey'}).`);
   return { mock: true, status: 'cancelled', requestId: request.id, via };
 });
 
@@ -317,8 +318,8 @@ app.post('/wallets/:id/freeze', async (req, reply) => {
   audit('wallet.frozen', { walletId: wallet.walletId, via, cancelledPayments: cancelled });
   notify(
     wallet.walletId,
-    `Wallet gelé depuis ${via === 'session' ? 'votre espace client' : 'votre téléphone'}. ` +
-      `${cancelled} paiement(s) en attente annulé(s). Aucun paiement possible jusqu'au dégel ou à la récupération.`,
+    `Wallet frozen from ${via === 'session' ? 'your client area' : 'your phone'}. ` +
+      `${cancelled} pending payment(s) cancelled. No payment can leave until it is unfrozen or recovered.`,
   );
   return { mock: true, status: 'frozen', cancelledPayments: cancelled, via };
 });
@@ -338,7 +339,7 @@ app.post('/wallets/:id/unfreeze', async (req, reply) => {
   }
   saveWallet({ ...wallet, status: 'active', frozenBy: undefined });
   audit('wallet.unfrozen', { walletId: wallet.walletId });
-  notify(wallet.walletId, 'Wallet dégelé avec votre passkey.');
+  notify(wallet.walletId, 'Wallet unfrozen with your passkey.');
   return { mock: true, status: 'active' };
 });
 
@@ -352,7 +353,7 @@ app.get('/rules', async () => ({
   mock: true,
   dailyLimitSats: DAILY_LIMIT_SATS.toString(),
   highValueDelaySeconds: HIGH_VALUE_DELAY_SECONDS,
-  productionDelay: process.env.PRODUCTION_RECOVERY_DELAY_LABEL ?? '7 jours',
+  productionDelay: process.env.PRODUCTION_RECOVERY_DELAY_LABEL ?? '7 days',
   sanctionedAddresses: sanctionedAddresses(),
 }));
 

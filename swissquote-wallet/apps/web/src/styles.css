@@ -239,8 +239,8 @@ span.nav-btn {
 
 .tabbar {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  padding: 6px 12px 0;
+  grid-template-columns: repeat(4, 1fr);
+  padding: 6px 8px 0;
   background: var(--white);
   border-top: 1px solid var(--grey-300);
 }
@@ -268,6 +268,24 @@ span.nav-btn {
 
 .tabbar .tab .icon {
   color: var(--grey-400);
+}
+
+.tabbar .tab-icon {
+  position: relative;
+  display: flex;
+}
+
+/* Pastille : des alertes sont arrivées depuis la dernière ouverture de l'onglet. */
+.tabbar .tab-icon.badge::after {
+  content: '';
+  position: absolute;
+  top: -1px;
+  right: -3px;
+  width: 9px;
+  height: 9px;
+  border: 2px solid var(--white);
+  border-radius: 50%;
+  background: var(--primary);
 }
 
 .tabbar .tab.on,
@@ -573,6 +591,25 @@ button.row:disabled .t {
   line-height: 20px;
   color: var(--grey-500);
   overflow-wrap: anywhere;
+}
+
+/* Identifiant de transaction : lien vers l'explorateur de blocs. */
+.row .s .txlink {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.row .val small {
+  display: block;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 18px;
+  color: var(--grey-500);
 }
 
 .row .val {

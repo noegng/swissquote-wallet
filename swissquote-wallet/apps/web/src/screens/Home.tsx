@@ -1,13 +1,14 @@
-// Accueil du wallet, en trois onglets qui correspondent à ce que l'app sait faire :
-//   Wallet (solde, alertes), Transfers (envoyer, recevoir), Recovery (clés, gel, téléphone perdu,
-//   kit de sortie).
-import { useCallback, useEffect, useState } from 'react';
-import { deriveAddress, descriptorString } from '@sqw/core';
+// Accueil du wallet, en quatre onglets qui correspondent à ce que l'app sait faire :
+//   Wallet (solde), Transfers (envoyer, recevoir), Activity (transactions lues sur la chaîne et
+//   alertes Swissquote), Recovery (clés, gel, téléphone perdu, kit de sortie).
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { deriveAddress, descriptorString, type WalletTx } from '@sqw/core';
 import { partner, sq, type Session } from '../api';
 import { btc } from '../config';
-import { formatBtc, formatSats } from '../format';
+import { formatBtc, formatChf } from '../format';
 import { loadPending, type PendingPayment as Pending, type StoredWallet } from '../keystore';
 import { approve, esplora } from '../payments';
+import { useChfRate } from '../price';
 import { Brand, Btn, Callout, Group, Icon, Row, Screen, Timeline, Title, formatClock, type TabName } from '../ui';
 import { PendingPaymentPanel, usePendingPayment } from './PendingPayment';
 
@@ -36,6 +37,32 @@ interface Notification {
 interface RecoveryInfo {
   status: 'active' | 'frozen' | 'recovered';
   recovery: { recoveryId: string; secondsLeft: number } | null;
+}
+
+type ActivityItem = { at: number; key: string } & ({ tx: WalletTx } | { text: string });
+
+const shortTx = (txid: string) => `${txid.slice(0, 6)}…${txid.slice(-6)}`;
+
+const NETWORK_DOWN = 'Bitcoin network unreachable (is regtest running? `npm run regtest:up`)';
+
+const clock = (at: number) => new Date(at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+
+function dayLabel(at: number): string {
+  const day = new Date(at).toDateString();
+  if (day === new Date().toDateString()) return 'Today';
+  if (day === new Date(Date.now() - 86_400_000).toDateString()) return 'Yesterday';
+  return new Date(at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' });
+}
+
+// Dernière alerte vue, par wallet : sert uniquement à la pastille de l'onglet Activity.
+const seenKey = (walletId: string) => `sqw.activity.seen.${walletId}`;
+
+function readSeen(walletId: string): string {
+  try {
+    return localStorage.getItem(seenKey(walletId)) ?? '';
+  } catch {
+    return '';
+  }
 }
 
 const initials = (clientId: string) =>
@@ -91,6 +118,10 @@ export function Home({
   const [tab, setTab] = useState<TabName>('wallet');
   const [showLost, setShowLost] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [history, setHistory] = useState<WalletTx[] | null>(null);
+  const [historyError, setHistoryError] = useState(false);
+  const [seen, setSeen] = useState(() => readSeen(wallet.walletId));
+  const rate = useChfRate();
 
   const refresh = useCallback(async () => {
     try {
@@ -100,15 +131,16 @@ export function Home({
       ]);
       setBalance(utxos.reduce((s, u) => s + u.value, 0n));
       setAddress(deriveAddress(wallet.policy, 0, index, btc.network).address);
+      setMessage((m) => (m === NETWORK_DOWN ? '' : m));
     } catch {
-      setMessage('Bitcoin network unreachable (is regtest running? `npm run regtest:up`)');
+      setMessage(NETWORK_DOWN);
     }
     loadPending(wallet.walletId).then((p) => setPending(p ?? null));
     sq<RecoveryInfo>(`/wallets/${wallet.walletId}/recovery`)
       .then(setRecoveryInfo)
       .catch(() => setRecoveryInfo(null));
     sq<{ notifications: Notification[] }>(`/notifications/${wallet.walletId}`)
-      .then((r) => setNotifications(r.notifications.slice(-3).reverse()))
+      .then((r) => setNotifications([...r.notifications].reverse()))
       .catch(() => setNotifications([]));
   }, [wallet]);
 
@@ -123,6 +155,52 @@ export function Home({
     const timer = setInterval(refresh, 5000);
     return () => clearInterval(timer);
   }, [refresh, wallet.walletId]);
+
+  // Historique lu sur la chaîne, à l'ouverture de l'onglet puis à chaque variation du solde.
+  useEffect(() => {
+    if (tab !== 'activity') return;
+    let stale = false;
+    esplora
+      .walletTxs(wallet.policy, btc.network, 20)
+      .then((txs) => {
+        if (stale) return;
+        setHistory(txs);
+        setHistoryError(false);
+      })
+      .catch(() => {
+        if (!stale) setHistoryError(true);
+      });
+    return () => {
+      stale = true;
+    };
+  }, [tab, balance, wallet]);
+
+  const latestAlert = notifications[0]?.at ?? '';
+  useEffect(() => {
+    if (tab !== 'activity' || !latestAlert || latestAlert <= seen) return;
+    setSeen(latestAlert);
+    try {
+      localStorage.setItem(seenKey(wallet.walletId), latestAlert);
+    } catch {
+      // Stockage indisponible : la pastille reviendra au prochain chargement, sans autre effet.
+    }
+  }, [tab, latestAlert, seen, wallet.walletId]);
+
+  // Transactions et alertes dans un seul fil, regroupé par jour, le plus récent d'abord.
+  const days = useMemo(() => {
+    const items: ActivityItem[] = [
+      ...(history ?? []).map((tx) => ({ at: tx.blockTime ? tx.blockTime * 1000 : Date.now(), key: tx.txid, tx })),
+      ...notifications.map((n) => ({ at: Date.parse(n.at), key: n.at + n.text, text: n.text })),
+    ].sort((a, b) => b.at - a.at);
+    const groups: { label: string; items: ActivityItem[] }[] = [];
+    for (const item of items) {
+      const label = dayLabel(item.at);
+      const last = groups[groups.length - 1];
+      if (last?.label === label) last.items.push(item);
+      else groups.push({ label, items: [item] });
+    }
+    return groups;
+  }, [history, notifications]);
 
   // Récupération lancée depuis un autre appareil : le vrai propriétaire l'annule avec sa passkey.
   async function cancelRecovery(recoveryId: string) {
@@ -204,7 +282,7 @@ export function Home({
     ok === null ? ['Checking', 'neutral'] : ok ? ['Active', 'success'] : ['Share missing', 'danger'];
 
   return (
-    <Screen tabs={{ value: tab, onChange: setTab }}>
+    <Screen tabs={{ value: tab, onChange: setTab, badge: latestAlert > seen ? 'activity' : null }}>
       {tab === 'wallet' ? (
         <div className="home-head" key="head">
           <Brand />
@@ -222,11 +300,13 @@ export function Home({
       ) : (
         <Title
           key="head"
-          title={tab === 'transfers' ? 'Transfers' : 'Recovery'}
+          title={tab === 'transfers' ? 'Transfers' : tab === 'activity' ? 'Activity' : 'Recovery'}
           lead={
             tab === 'transfers'
               ? 'Send and receive bitcoin.'
-              : 'What protects your wallet, and what to do if something goes wrong.'
+              : tab === 'activity'
+                ? 'Your transactions, read from the Bitcoin network, and the alerts Swissquote sent you.'
+                : 'What protects your wallet, and what to do if something goes wrong.'
           }
         />
       )}
@@ -277,7 +357,7 @@ export function Home({
             Bitcoin wallet, {wallet.network === 'signet' ? 'signet (public test network)' : 'regtest (local)'}
           </span>
           <strong>{balance === null ? '…' : formatBtc(balance)}</strong>
-          <span className="cap">{balance === null ? '' : formatSats(balance)}</span>
+          <span className="cap">{balance === null ? '' : formatChf(balance, rate)}</span>
         </div>
       )}
 
@@ -334,7 +414,7 @@ export function Home({
 
       {/* Toujours monté, quel que soit l'onglet : une seule boucle de suivi par paiement en attente. */}
       {pending && (
-        <div key="pending" className="stack" hidden={tab === 'recovery'}>
+        <div key="pending" className="stack" hidden={tab === 'recovery' || tab === 'activity'}>
           <HomePending
             wallet={wallet}
             pending={pending}
@@ -353,27 +433,79 @@ export function Home({
         </p>
       )}
 
-      {tab !== 'recovery' && (
+      {(tab === 'wallet' || tab === 'transfers') && (
         <div className="sheet padded" key="limit">
           <div className="limit-head">
             <strong>Daily limit</strong>
-            <span>{limit === null ? '…' : formatSats(limit)}</span>
+            <span>
+              {limit === null ? '…' : formatBtc(limit)}
+              {limit !== null && rate !== null && ` (${formatChf(limit, rate)})`}
+            </span>
           </div>
           <p className="note">Payments above your daily limit are held for a security delay.</p>
         </div>
       )}
 
-      {tab !== 'recovery' && notifications.length > 0 && (
-        <Group key="alerts" label="Swissquote alerts (mock SMS, email and client area)">
-          {notifications.map((n) => (
-            <Row
-              key={n.at + n.text}
-              icon="bell"
-              title={new Date(n.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
-              sub={n.text}
-            />
-          ))}
-        </Group>
+      {tab === 'activity' &&
+        days.map((day) => (
+          <Group key={day.label} label={day.label}>
+            {day.items.map((item) =>
+              'tx' in item ? (
+                <Row
+                  key={item.key}
+                  icon={item.tx.net < 0n ? 'up' : 'down'}
+                  title={item.tx.net < 0n ? 'Sent' : 'Received'}
+                  sub={
+                    <>
+                      {item.tx.confirmed ? clock(item.at) : 'Waiting for a block'}
+                      <br />
+                      <span className="txlink">
+                        Tx {shortTx(item.tx.txid)}
+                        <Icon name="external" size={14} />
+                      </span>
+                    </>
+                  }
+                  value={
+                    <>
+                      {item.tx.net < 0n ? `−${formatBtc(-item.tx.net)}` : `+${formatBtc(item.tx.net)}`}
+                      <small>{formatChf(item.tx.net < 0n ? -item.tx.net : item.tx.net, rate)}</small>
+                    </>
+                  }
+                  valueTone={item.tx.net < 0n ? undefined : 'success'}
+                  label={`${item.tx.net < 0n ? 'Sent' : 'Received'} ${formatBtc(item.tx.net < 0n ? -item.tx.net : item.tx.net)}, open the transaction in a block explorer`}
+                  onClick={() => window.open(btc.explorerTxUrl(item.tx.txid), '_blank', 'noopener,noreferrer')}
+                />
+              ) : (
+                <Row key={item.key} icon="bell" title={`Swissquote alert, ${clock(item.at)}`} sub={item.text} />
+              ),
+            )}
+          </Group>
+        ))}
+
+      {tab === 'activity' && history === null && !historyError && (
+        <p className="note" key="history-loading">
+          Reading your transactions from the Bitcoin network…
+        </p>
+      )}
+
+      {tab === 'activity' && historyError && (
+        <p className="note" key="history-error">
+          Bitcoin network unreachable: transactions cannot be listed right now.
+        </p>
+      )}
+
+      {tab === 'activity' && history !== null && days.length === 0 && (
+        <p className="note" key="history-empty">
+          Nothing yet. Your transactions and Swissquote alerts will be listed here.
+        </p>
+      )}
+
+      {tab === 'activity' && days.length > 0 && (
+        <p className="note" key="history-note">
+          Tap a transaction to check it in a block explorer: amounts come from the Bitcoin network, not from
+          Swissquote. Sent amounts include the network fee. Alerts come from the mock Swissquote service (SMS, email
+          and client area). CHF values use today’s Bitcoin rate; coins on this test network have no real value.
+        </p>
       )}
 
       {tab === 'recovery' && (

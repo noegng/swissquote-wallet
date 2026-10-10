@@ -1,7 +1,8 @@
 // Envoi : saisie → résumé en clair vérifié par l'app → approbation passkey → résultat.
 import { useEffect, useState, type FormEvent } from 'react';
 import { ApiError, sq } from '../api';
-import { formatBtc, formatSats, parseBtc, shortAddress, shortId } from '../format';
+import { formatBtc, formatChf, parseBtc, shortAddress, shortId } from '../format';
+import { useChfRate } from '../price';
 import type { PendingPayment as Pending, StoredWallet } from '../keystore';
 import { preparePayment, submitPayment, type PreparedPayment } from '../payments';
 import { Btn, Group, Hero, KV, Row, Screen, Title } from '../ui';
@@ -62,6 +63,7 @@ export function Send({ wallet, onBack }: { wallet: StoredWallet; onBack: () => v
   const [sanctioned, setSanctioned] = useState<string[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const rate = useChfRate();
 
   useEffect(() => {
     sq('/rules')
@@ -216,14 +218,15 @@ export function Send({ wallet, onBack }: { wallet: StoredWallet; onBack: () => v
       >
         <div className="amount static">
           <strong>{formatBtc(s.sentExternal)}</strong>
-          <span className="sub">{formatSats(s.sentExternal)}</span>
+          <span className="sub">{formatChf(s.sentExternal, rate)}</span>
         </div>
         <Group>
           <KV k="To">{prepared.to}</KV>
           <KV k="Network fee">
-            {formatSats(s.fee)} ({prepared.feeRate} sat/vB)
+            {formatBtc(s.fee)}
+            {rate !== null && ` (${formatChf(s.fee, rate)})`}
           </KV>
-          <KV k="Returned to your wallet">{formatSats(s.change)}</KV>
+          <KV k="Returned to your wallet">{formatBtc(s.change)}</KV>
         </Group>
         <Group label="Swissquote checks">
           <Row
@@ -234,7 +237,7 @@ export function Send({ wallet, onBack }: { wallet: StoredWallet; onBack: () => v
         </Group>
         {overLimit && limit && (
           <p className="note">
-            This payment is above your daily limit of {formatSats(limit)}. Swissquote will hold it for a security
+            This payment is above your daily limit of {formatBtc(limit)}. Swissquote will hold it for a security
             delay before signing, and will alert you.
           </p>
         )}
@@ -270,7 +273,7 @@ export function Send({ wallet, onBack }: { wallet: StoredWallet; onBack: () => v
           />
           <span className="unit">BTC</span>
         </label>
-        <span className="sub">{sats === null ? 'Enter an amount' : formatSats(sats)}</span>
+        <span className="sub">{sats === null ? 'Enter an amount' : formatChf(sats, rate)}</span>
       </div>
       <label className="field">
         <span>Recipient address</span>
@@ -279,7 +282,7 @@ export function Send({ wallet, onBack }: { wallet: StoredWallet; onBack: () => v
       <div className="sheet padded">
         <div className="limit-head">
           <strong>Daily limit</strong>
-          <span>{limit === null ? '…' : formatSats(limit)}</span>
+          <span>{limit === null ? '…' : formatBtc(limit)}</span>
         </div>
         <p className="note">Payments above your daily limit are held for a security delay.</p>
       </div>

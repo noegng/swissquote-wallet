@@ -62,6 +62,13 @@ export function createWalletRecord(clientId: string, phoneKey: KeyOrigin, backup
   return record;
 }
 
+/** Montant lisible dans une alerte : « 0.0008 BTC », zéros de fin retirés. */
+export function btcAmount(sats: bigint | string | number | unknown): string {
+  const v = BigInt(sats as bigint | string | number);
+  const frac = (v % 100_000_000n).toString().padStart(8, '0').replace(/0+$/, '');
+  return `${v / 100_000_000n}${frac ? `.${frac}` : ''} BTC`;
+}
+
 export function notify(walletId: string, text: string): void {
   const all = readJson<Record<string, { at: string; text: string }[]>>('notifications.json', {});
   (all[walletId] ??= []).push({ at: new Date().toISOString(), text });

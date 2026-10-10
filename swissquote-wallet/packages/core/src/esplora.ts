@@ -11,6 +11,25 @@ interface EsploraUtxo {
   status: { confirmed: boolean };
 }
 
+interface EsploraTx {
+  txid: string;
+  fee: number;
+  vin: { prevout: { scriptpubkey_address?: string; value: number } | null }[];
+  vout: { scriptpubkey_address?: string; value: number }[];
+  status: { confirmed: boolean; block_time?: number };
+}
+
+/** Transaction du wallet telle que la chaîne la donne (aucun service Swissquote interrogé). */
+export interface WalletTx {
+  txid: string;
+  /** Variation du solde du wallet : positive = reçu, négative = envoyé (frais compris). */
+  net: bigint;
+  fee: bigint;
+  confirmed: boolean;
+  /** Horodatage du bloc, en secondes. Absent tant que la transaction n'est pas confirmée. */
+  blockTime?: number;
+}
+
 export class Esplora {
   constructor(private readonly cfg: NetworkConfig) {}
 
@@ -95,5 +114,32 @@ export class Esplora {
       found.push(...batch.flat());
     }
     return found;
+  }
+
+  /** Historique du wallet lu sur la chaîne : transactions des `gap` premières adresses de réception
+   *  et de change, dédoublonnées, les plus récentes d'abord (non confirmées en tête). */
+  async walletTxs(policy: WalletPolicy, network: Network, gap = 10): Promise<WalletTx[]> {
+    const addresses = ([0, 1] as Chain[]).flatMap((chain) =>
+      Array.from({ length: gap }, (_, index) => deriveAddress(policy, chain, index, network).address),
+    );
+    const mine = new Set(addresses);
+    const byId = new Map<string, EsploraTx>();
+    for (let start = 0; start < addresses.length; start += 10) {
+      const batch = await Promise.all(
+        addresses.slice(start, start + 10).map((a) => this.get<EsploraTx[]>(`/address/${a}/txs`)),
+      );
+      for (const tx of batch.flat()) byId.set(tx.txid, tx);
+    }
+    const sum = (items: ({ scriptpubkey_address?: string; value: number } | null)[]) =>
+      items.reduce((s, o) => (o?.scriptpubkey_address && mine.has(o.scriptpubkey_address) ? s + BigInt(o.value) : s), 0n);
+    return [...byId.values()]
+      .map((tx) => ({
+        txid: tx.txid,
+        net: sum(tx.vout) - sum(tx.vin.map((i) => i.prevout)),
+        fee: BigInt(tx.fee),
+        confirmed: tx.status.confirmed,
+        blockTime: tx.status.block_time,
+      }))
+      .sort((a, b) => (b.blockTime ?? Number.MAX_SAFE_INTEGER) - (a.blockTime ?? Number.MAX_SAFE_INTEGER));
   }
 }

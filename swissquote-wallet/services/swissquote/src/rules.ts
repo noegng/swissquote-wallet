@@ -5,6 +5,7 @@
 //      palier 2 : au-dessus → mise en attente, notification, signature après délai sauf annulation
 // Swissquote peut refuser ou retarder, jamais signer seul : il n'a qu'une clé sur trois.
 import type { SpendSummary } from '@sqw/core';
+import { btcAmount } from './context';
 import { readJson, writeJson } from './store';
 
 export const DAILY_LIMIT_SATS = BigInt(process.env.DAILY_LIMIT_SATS ?? 50_000);
@@ -42,7 +43,7 @@ export type Decision =
 export function decide(walletId: string, summary: SpendSummary): Decision {
   const sanctioned = new Set(sanctionedAddresses());
   const hit = summary.external.find((o) => sanctioned.has(o.address));
-  if (hit) return { kind: 'refuse', reason: `Destinataire sur la liste de sanctions : ${hit.address}` };
+  if (hit) return { kind: 'refuse', reason: `Recipient on the sanctions list: ${hit.address}` };
 
   // Les frais comptent dans le plafond : sinon un voleur pourrait détruire les fonds en payant des
   // frais énormes (ex. 1 000 sats envoyés, 900 000 sats de frais) sans passer par le délai.
@@ -52,7 +53,7 @@ export function decide(walletId: string, summary: SpendSummary): Decision {
   return {
     kind: 'hold',
     tier: 2,
-    reason: `Au-dessus du plafond quotidien, frais compris (${total} > ${DAILY_LIMIT_SATS} sats)`,
+    reason: `Above the daily limit, fees included (${btcAmount(total)} > ${btcAmount(DAILY_LIMIT_SATS)})`,
   };
 }
 

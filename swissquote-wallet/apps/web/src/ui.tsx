@@ -127,6 +127,13 @@ const ICONS = {
       <path d="M16 14h.01" />
     </>
   ),
+  external: (
+    <>
+      <path d="M15 3h6v6" />
+      <path d="M10 14 21 3" />
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+    </>
+  ),
 };
 
 export type IconName = keyof typeof ICONS;
@@ -167,7 +174,7 @@ export function Screen({
   step?: [number, number];
   footer?: ReactNode;
   /** Barre d'onglets du wallet : uniquement les sections qui existent dans l'app. */
-  tabs?: { value: TabName; onChange: (tab: TabName) => void };
+  tabs?: { value: TabName; onChange: (tab: TabName) => void; badge?: TabName | null };
   /** Fourni : l'écran est un formulaire, le bouton principal du pied le soumet. */
   onSubmit?: FormEventHandler<HTMLFormElement>;
   children: ReactNode;
@@ -208,15 +215,24 @@ export function Screen({
   );
 }
 
-export type TabName = 'wallet' | 'transfers' | 'recovery';
+export type TabName = 'wallet' | 'transfers' | 'activity' | 'recovery';
 
 const TABS: [TabName, IconName, string][] = [
   ['wallet', 'wallet', 'Wallet'],
   ['transfers', 'swap', 'Transfers'],
+  ['activity', 'bell', 'Activity'],
   ['recovery', 'lifebuoy', 'Recovery'],
 ];
 
-function TabBar({ value, onChange }: { value: TabName; onChange: (tab: TabName) => void }) {
+function TabBar({
+  value,
+  onChange,
+  badge,
+}: {
+  value: TabName;
+  onChange: (tab: TabName) => void;
+  badge?: TabName | null;
+}) {
   return (
     <nav className="tabbar" aria-label="Wallet sections">
       {TABS.map(([tab, icon, label]) => (
@@ -225,9 +241,12 @@ function TabBar({ value, onChange }: { value: TabName; onChange: (tab: TabName) 
           type="button"
           className={tab === value ? 'tab on' : 'tab'}
           aria-current={tab === value ? 'page' : undefined}
+          aria-label={tab === badge ? `${label}, new alerts` : undefined}
           onClick={() => onChange(tab)}
         >
-          <Icon name={icon} size={24} />
+          <span className={tab === badge ? 'tab-icon badge' : 'tab-icon'}>
+            <Icon name={icon} size={24} />
+          </span>
           {label}
         </button>
       ))}
@@ -289,6 +308,7 @@ export function Row({
   trail,
   onClick,
   disabled,
+  label,
 }: {
   icon?: IconName;
   iconTone?: 'danger';
@@ -300,6 +320,8 @@ export function Row({
   trail?: IconName;
   onClick?: () => void;
   disabled?: boolean;
+  /** Nom lu par un lecteur d’écran quand le contenu visible ne dit pas ce que fait la ligne. */
+  label?: string;
 }) {
   const content = (
     <>
@@ -322,7 +344,7 @@ export function Row({
     </>
   );
   return onClick ? (
-    <button type="button" className="row" onClick={onClick} disabled={disabled}>
+    <button type="button" className="row" onClick={onClick} disabled={disabled} aria-label={label}>
       {content}
     </button>
   ) : (
