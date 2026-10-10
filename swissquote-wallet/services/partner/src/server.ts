@@ -2,17 +2,13 @@
 // après contrôle d'identité mocké et délai, chiffrée pour l'appareil du client.
 // Processus séparé avec son propre stockage (data/). Ne dépend pas de Swissquote.
 // Routes métier à écrire pendant le hackathon : voir la skill mock-service.
+import './env';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { appendFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
 const NAME = 'partner';
-try {
-  process.loadEnvFile(join(import.meta.dirname, '../../../.env'));
-} catch {
-  // pas de .env : valeurs par défaut
-}
 
 const DATA_DIR = join(import.meta.dirname, '../data');
 mkdirSync(DATA_DIR, { recursive: true });

@@ -16,7 +16,8 @@
     "regtest:faucet": "node scripts/regtest-faucet.mjs",
     "reset": "node scripts/reset.mjs",
     "spike": "tsx scripts/spike-multisig.ts",
-    "spike:signet": "tsx scripts/spike-multisig.ts signet"
+    "spike:signet": "tsx scripts/spike-multisig.ts signet",
+    "demo:cosign": "tsx scripts/demo-cosign.ts"
   },
   "devDependencies": {
     "@types/node": "22.20.4",

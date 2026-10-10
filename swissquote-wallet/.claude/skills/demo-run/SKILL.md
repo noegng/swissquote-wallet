@@ -20,6 +20,12 @@ Réseau choisi par `BTC_NETWORK=regtest|signet` dans `.env` (voir `.env.example`
 ## Tests
 
 ```bash
+HIGH_VALUE_DELAY_SECONDS=8 npm run start -w services/swissquote   # délai court pour tester (PowerShell : $env:HIGH_VALUE_DELAY_SECONDS=8)
+npm run demo:cosign      # paliers 1 et 2, annulation, sanctions, fonds d'un autre wallet, I1
+npm run spike:signet     # transaction publique 2 sur 3 sur signet
+```
+
+```bash
 npm test                  # unitaires + invariants I1–I5 (packages/core)
 npm run e2e:regtest       # création → envoi → perte du téléphone → récupération → Swissquote arrêté → sortie
 python tools/slip39-interop/check.py   # interop SLIP-39 avec la référence Trezor

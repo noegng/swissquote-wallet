@@ -20,6 +20,8 @@ Exigence du brief : un détenteur de part mocké tourne comme **processus sépar
 
 ## services/swissquote (cosignataire)
 
+État au 10/10 : `/wallets`, `/wallets/:id`, `/cosign`, `/cosign/:id`, `/cosign/:id/cancel`, `/notifications/:walletId`, `/rules`, `/admin/sanctions`, `/admin/reset` sont écrits (`src/server.ts`, règles dans `src/rules.ts`, clé dans `src/signer.ts`). Restent : KYC, passkeys (`TODO(passkey)`), récupération. Stockage : `data/master-key.json`, `wallets.json`, `requests.json`, `spends.json`, `notifications.json`, `sanctions.json`, `audit.jsonl`. Le `.env` est chargé par `src/env.ts` sans écraser l'environnement.
+
 | Route | Rôle |
 |---|---|
 | `POST /kyc/login` | Connexion mockée d'un client existant (KYC déjà fait) |

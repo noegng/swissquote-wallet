@@ -21,7 +21,7 @@ Règles : P0 et P1 terminés avant tout bonus. Points d'étape à **H10, H20, H2
 - [x] **A** Interop avec la référence Python ; test I2 (Swissquote + partenaire ne restaurent pas)
 - [ ] **B** Squelette Vite + React, mise en page téléphone, bannière MOCK
 - [ ] **B** Passkey : enregistrement et authentification contre le service Swissquote ; test PRF
-- [ ] **C** Service Swissquote minimal : `/cosign` sans règles, stockage propre
+- [x] **C** Service Swissquote : `/wallets`, `/cosign` avec vérification indépendante de la PSBT, stockage propre (fait par Claude, 10/10)
 - [ ] **C** Service partenaire minimal : dépôt et libération d'une part, stockage propre
 
 ## H3–H10 : création et envoi
@@ -30,7 +30,8 @@ Règles : P0 et P1 terminés avant tout bonus. Points d'étape à **H10, H20, H2
 - [ ] **A** Tests des invariants I1 à I5
 - [ ] **B** Onboarding : connexion mockée → passkey → clés → cérémonie C1 / C2 → enregistrement
 - [ ] **B** Écran Envoyer : résumé clair, palier affiché, lien explorateur
-- [ ] **C** Règles du cosignataire : plafond quotidien, palier 2 (délai + notification annulable), sanctions
+- [x] **C** Règles du cosignataire : plafond quotidien, palier 2 (délai + notification annulable), sanctions (`npm run demo:cosign`)
+- [ ] **B + C** Brancher la passkey sur `/cosign` et `/cosign/:id/cancel` (marqué `TODO(passkey)`, la réponse indique `authEnforced: false`)
 - [ ] **C** Registre des wallets (Travel Rule), KYC mocké, journal d'audit
 - [ ] **Point d'étape H10** : création → envoi de bout en bout sur regtest
 
