@@ -18,4 +18,5 @@ Swissquote veut porter le projet gagnant en production. L'architecture vise la p
 | Authentificateur des scripts de test | Authentificateur WebAuthn logiciel (`scripts/lib/soft-authenticator.ts`) | **Test uniquement**, jamais dans l'app | — |
 | Copie C2 (cloud) | Fichier chiffré | **MOCK** : pas de vrai cloud | iCloud / Google Drive, chiffrement par passkey (PRF) |
 | Continuité bancaire | Écran et plafond | **MOCK** : pas de lien avec un compte | Intégration compte et carte, limites, conformité |
+| Sortie sans Swissquote | Écran dédié, sans session, téléphone + clé de secours, diffusion directe ; démontré service arrêté | Partenaire mocké | Partenaire réel indépendant ; kit de sortie testé avec Sparrow et Bitcoin Core |
 | Juridique | Hypothèse de non-garde | Aucune validation | Avis d'un avocat suisse (FINMA, LBA, Travel Rule) |

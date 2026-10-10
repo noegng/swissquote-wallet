@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { loadSession, saveSession, type Session } from './api';
 import { loadWallet, type StoredWallet } from './keystore';
 import { CreateWallet } from './screens/CreateWallet';
+import { Exit } from './screens/Exit';
 import { Home } from './screens/Home';
 import { Login } from './screens/Login';
 import { Passkey } from './screens/Passkey';
@@ -11,11 +12,12 @@ import { remoteWallets, type RemoteWallet } from './recovery';
 
 // Parcours : connexion Swissquote (mock) → passkey → création du wallet → accueil ⇄ envoi.
 // Nouvel appareil (wallet existant chez Swissquote, absent ici) → récupération.
+// Depuis la connexion, sans session : « Swissquote a disparu » → sortie avec téléphone + secours.
 
 export function App() {
   const [session, setSession] = useState<Session | null>(loadSession);
   const [wallet, setWallet] = useState<StoredWallet | null | undefined>(undefined);
-  const [view, setView] = useState<'home' | 'send'>('home');
+  const [view, setView] = useState<'home' | 'send' | 'exit'>('home');
   // Wallet du client connu de Swissquote mais absent de cet appareil (téléphone perdu ?).
   const [remote, setRemote] = useState<RemoteWallet | null | undefined>(undefined);
   const [createInstead, setCreateInstead] = useState(false);
@@ -40,8 +42,11 @@ export function App() {
   }
 
   let screen;
-  if (!session) {
-    screen = <Login onLogin={updateSession} />;
+  if (!session && view === 'exit') {
+    // Sortie sans Swissquote : aucune session, aucun appel au service Swissquote.
+    screen = <Exit onBack={() => setView('home')} />;
+  } else if (!session) {
+    screen = <Login onLogin={updateSession} onExit={() => setView('exit')} />;
   } else if (!session.hasPasskey) {
     screen = <Passkey session={session} onDone={() => updateSession({ ...session, hasPasskey: true })} />;
   } else if (wallet === undefined) {

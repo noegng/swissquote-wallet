@@ -24,6 +24,8 @@ HIGH_VALUE_DELAY_SECONDS=8 npm run start -w services/swissquote   # délai court
 npm run demo:create      # création complète : passkey, wallet, part TIERS chez le partenaire, C2
 npm run demo:cosign      # paliers 1 et 2, annulation, sanctions, fonds d'un autre wallet, attaques passkey, I1
 npm run demo:recover     # attaque téléphone + e-mail refusée, annulation, récupération complète (RECOVERY_DELAY_SECONDS=6 conseillé)
+npm run demo:exit -- create   # puis arrêter le service Swissquote (port 4001), puis :
+npm run demo:exit -- exit     # sortie téléphone + secours, vérifie que Swissquote est injoignable
 npm run spike:signet     # transaction publique 2 sur 3 sur signet
 ```
 
@@ -48,7 +50,7 @@ npm run reset             # vide services/*/data et le stockage local de l'app (
 5. Attaque : téléphone + e-mail lance une récupération → refusée (pas de part CLIENT).
 6. Attaque : Swissquote + partenaire tentent de restaurer → combinaison rejetée.
 7. Téléphone perdu → récupération, transfert vers un nouveau jeu de clés.
-8. Swissquote a disparu → on arrête `services/swissquote`, sortie avec téléphone + clé de secours.
+8. Swissquote a disparu → on arrête `services/swissquote` (fermer son terminal ou tuer le port 4001), écran de connexion → « Swissquote est indisponible ? Sortir mes fonds ».
 
 Chaque scénario est aussi un script : `npm run demo:<nom>` (`demo:all` enchaîne tout).
 

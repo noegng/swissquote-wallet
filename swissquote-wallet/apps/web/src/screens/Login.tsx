@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { sq, type Session } from '../api';
 
-export function Login({ onLogin }: { onLogin: (s: Session) => void }) {
+export function Login({ onLogin, onExit }: { onLogin: (s: Session) => void; onExit: () => void }) {
   const [clientId, setClientId] = useState('client-demo');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -36,6 +36,9 @@ export function Login({ onLogin }: { onLogin: (s: Session) => void }) {
       <p className="note">
         MOCK : connexion simulée. Votre identité est supposée déjà vérifiée par Swissquote (KYC).
       </p>
+      <button type="button" className="secondary" onClick={onExit}>
+        Swissquote est indisponible ? Sortir mes fonds
+      </button>
     </form>
   );
 }

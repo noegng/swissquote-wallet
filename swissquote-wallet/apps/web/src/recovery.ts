@@ -17,11 +17,8 @@ import {
   finalizeSpend,
   generateSealingKeyPair,
   openSealed,
-  openWithPassphrase,
   sealFor,
-  shareGroup,
   signWithRoot,
-  type PassphraseBox,
   type SealedBox,
   type WalletPolicy,
 } from '@sqw/core';
@@ -72,26 +69,6 @@ export async function recoveryProgress(state: RecoveryState): Promise<RecoveryPr
     swissquote: { status: s.status, secondsLeft: s.secondsLeft ?? 0 },
     partner: { status: p.status, secondsLeft: p.secondsLeft ?? 0 },
   };
-}
-
-/** Part CLIENT depuis le papier (20 mots) : vérifie la somme de contrôle et le groupe. */
-export function clientShareFromWords(words: string): string {
-  const normalized = words.trim().toLowerCase().split(/\s+/).join(' ');
-  if (shareGroup(normalized) !== 'client') throw new Error('Ces mots sont une part du partenaire, pas votre part');
-  return normalized;
-}
-
-/** Part CLIENT depuis la copie cloud (fichier C2 + phrase de passe). */
-export async function clientShareFromFile(file: File, passphrase: string): Promise<string> {
-  const json = JSON.parse(await file.text()) as { type?: string; box?: PassphraseBox };
-  if (json.type !== 'swissquote-wallet/backup-c2' || !json.box) throw new Error('Fichier de sauvegarde C2 non reconnu');
-  let words: string;
-  try {
-    words = await openWithPassphrase(json.box, passphrase);
-  } catch {
-    throw new Error('Phrase de passe incorrecte');
-  }
-  return clientShareFromWords(words);
 }
 
 export async function completeRecovery(

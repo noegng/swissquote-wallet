@@ -33,16 +33,16 @@ Règles : P0 et P1 terminés avant tout bonus. Points d'étape à **H10, H20, H2
 - [x] **C** Règles du cosignataire : plafond quotidien, palier 2 (délai + notification annulable), sanctions (`npm run demo:cosign`)
 - [x] **B + C** Passkey exigée sur `/cosign` et `/cosign/:id/cancel` ; attaques sans passkey, PSBT échangée et rejeu refusées (`npm run demo:cosign`)
 - [x] **C** Registre des wallets (Travel Rule), KYC mocké, journal d'audit ; service partenaire : clé publique, dépôt de la part TIERS (`npm run demo:create`)
-- [ ] **Point d'étape H10** : création → envoi de bout en bout sur regtest
+- [x] **Point d'étape H10** : création → envoi de bout en bout sur regtest (scripts et app ; passkey réelle à valider sur la machine de démo)
 
 ## H10–H18 : récupération
 
 - [x] **A** Récupération : reconstitution de la clé de secours sur l'appareil, transfert vers un nouveau jeu de clés (`npm run demo:recover`)
 - [ ] **A** Sortie sans Swissquote : téléphone + clé de secours, diffusion directe
 - [x] **B** Écran Récupération (nouvel appareil) et alerte d'annulation sur l'ancien ; kit de sortie téléchargeable sur l'accueil. Testé dans Chrome jusqu'à la passkey
-- [ ] **B** Écran « Swissquote a disparu » (sortie avec téléphone + clé de secours)
+- [x] **B** Écran « Swissquote a disparu » (sortie avec téléphone + clé de secours, sans session) : testé de bout en bout dans Chrome avec le service Swissquote arrêté (10/10)
 - [x] **C** `/recovery` Swissquote (ouvrir avec gel, annuler par passkey, nouveau wallet, transfert exigeant la clé de secours, révocation des passkeys) et `/release` partenaire (identité, délai, re-scellement pour l'appareil, annulation)
-- [ ] **Test e2e regtest** : création → envoi → perte du téléphone → récupération → Swissquote arrêté → sortie
+- [x] **Tests e2e regtest** (scripts séparés) : `demo:create`, `demo:cosign`, `demo:recover`, `demo:exit` (Swissquote réellement arrêté)
 
 ## H18–H22 : démo
 

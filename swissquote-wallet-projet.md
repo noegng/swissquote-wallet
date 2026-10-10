@@ -137,10 +137,12 @@ Clé de secours = groupe CLIENT  ET  groupe TIERS        (seuil de groupes = 2)
 6. Toutes les anciennes passkeys sont **révoquées** (seule celle du nouvel appareil, déclarée à l'ouverture, est conservée). Nouvelle part TIERS chez le partenaire, nouvelle cérémonie C1 / C2.
 7. **Continuité bancaire** (mockée) : pendant le délai, le client garde un accès plafonné via son compte Swissquote.
 
-**Swissquote a disparu**
-1. Le client a toujours son téléphone, C1 ou C2, et le partenaire.
-2. Clé téléphone + clé de secours signent seules ; la transaction est diffusée directement sur le réseau.
-3. **Kit de sortie** : le descripteur standard, importable dans un wallet du marché.
+**Swissquote a disparu** (implémenté : `npm run demo:exit`, bouton « Swissquote est indisponible ? Sortir mes fonds » sur l'écran de connexion ; démontré avec le service Swissquote réellement arrêté)
+1. Accessible **sans session** : l'app liste les wallets présents sur le téléphone (coffre local).
+2. Le client demande la part TIERS au partenaire, qui applique son propre délai et ne dépend pas de Swissquote ; la part arrive scellée pour une clé non exportable de l'appareil.
+3. Il saisit sa part papier C1 (ou ouvre C2) et l'adresse d'un autre wallet à lui ; la clé de secours est reconstituée en mémoire.
+4. Clé téléphone + clé de secours signent un transfert de tous les fonds (2 sur 3, sans Swissquote) ; la transaction est diffusée directement sur le réseau Bitcoin. Le module de sortie n'importe même pas le client HTTP de Swissquote.
+5. **Kit de sortie** : le descripteur standard, importable dans un wallet du marché (Sparrow, Bitcoin Core), pour faire la même chose sans notre app.
 
 ### 3.5 Scénarios de démo
 

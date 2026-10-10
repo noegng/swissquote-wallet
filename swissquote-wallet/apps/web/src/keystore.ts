@@ -101,6 +101,27 @@ export const saveRecovery = (clientId: string, r: RecoveryState) => put(`recover
 export const loadRecovery = (clientId: string) => get<RecoveryState>(`recovery:${clientId}`);
 export const clearRecovery = (clientId: string) => tx('readwrite', (s) => s.delete(`recovery:${clientId}`));
 
+/** Sortie sans Swissquote en cours (libération demandée au partenaire). */
+export interface ExitState {
+  walletId: string;
+  releaseId: string;
+  /** Clé privée ECDH de l'appareil (non exportable). */
+  deviceKey: CryptoKey;
+}
+
+export const saveExit = (clientId: string, e: ExitState) => put(`exit:${clientId}`, e);
+export const loadExit = (clientId: string) => get<ExitState>(`exit:${clientId}`);
+export const clearExit = (clientId: string) => tx('readwrite', (s) => s.delete(`exit:${clientId}`));
+
+/** Wallets présents sur cet appareil (accessibles sans aucun service Swissquote). */
+export async function listLocalWallets(): Promise<StoredWallet[]> {
+  const keys = await tx<IDBValidKey[]>('readonly', (s) => s.getAllKeys());
+  const wallets = await Promise.all(
+    keys.filter((k) => String(k).startsWith('wallet:')).map((k) => get<StoredWallet>(String(k))),
+  );
+  return wallets.filter((w): w is StoredWallet => !!w);
+}
+
 /** Déchiffre la graine de la clé téléphone, juste le temps de signer. */
 export async function unlockPhoneSeed(wallet: StoredWallet): Promise<Uint8Array> {
   const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: wallet.phoneSeed.iv }, await deviceKey(), wallet.phoneSeed.ct);

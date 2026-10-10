@@ -15,3 +15,4 @@ __pycache__/
 
 # Graines de test du spike (réseaux de test uniquement)
 scripts/.spike/
+scripts/.demo-exit.json

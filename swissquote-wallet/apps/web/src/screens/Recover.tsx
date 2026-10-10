@@ -4,8 +4,6 @@ import { useEffect, useRef, useState } from 'react';
 import { sq, type Session } from '../api';
 import { loadRecovery, markBackupConfirmed, type RecoveryState, type StoredWallet } from '../keystore';
 import {
-  clientShareFromFile,
-  clientShareFromWords,
   completeRecovery,
   recoveryProgress,
   startRecovery,
@@ -13,6 +11,7 @@ import {
   type RemoteWallet,
 } from '../recovery';
 import { BackupCeremony } from './BackupCeremony';
+import { ClientShareInput } from './ClientShareInput';
 import { Passkey } from './Passkey';
 
 type Step = 'intro' | 'passkey' | 'waiting' | 'share' | 'finishing' | 'backup' | 'cancelled';
@@ -31,10 +30,6 @@ export function Recover({
   const [step, setStep] = useState<Step>('intro');
   const [state, setState] = useState<RecoveryState | null>(null);
   const [progress, setProgress] = useState<RecoveryProgress | null>(null);
-  const [mode, setMode] = useState<'paper' | 'cloud'>('paper');
-  const [words, setWords] = useState('');
-  const [file, setFile] = useState<File | null>(null);
-  const [passphrase, setPassphrase] = useState('');
   const [log, setLog] = useState<string[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -127,13 +122,10 @@ export function Recover({
     }
   }
 
-  async function finish() {
+  async function finish(share: string) {
     setBusy(true);
     setError('');
     try {
-      const share = mode === 'paper' ? clientShareFromWords(words) : await clientShareFromFile(file!, passphrase);
-      setWords('');
-      setPassphrase('');
       setStep('finishing');
       setLog([]);
       setResult(await completeRecovery(session, state!, share, (l) => setLog((x) => [...x, l])));
@@ -209,39 +201,8 @@ export function Recover({
         {step === 'share' ? (
           <>
             <p>La part du partenaire est arrivée, chiffrée pour cet appareil. Il manque la vôtre.</p>
-            <div className="tabs">
-              <button className={mode === 'paper' ? 'tab active' : 'tab'} onClick={() => setMode('paper')}>
-                Papier (20 mots)
-              </button>
-              <button className={mode === 'cloud' ? 'tab active' : 'tab'} onClick={() => setMode('cloud')}>
-                Copie cloud
-              </button>
-            </div>
-            {mode === 'paper' ? (
-              <label className="field">
-                <span>Les 20 mots, dans l’ordre</span>
-                <textarea rows={4} value={words} onChange={(e) => setWords(e.target.value)} autoComplete="off" />
-              </label>
-            ) : (
-              <>
-                <label className="field">
-                  <span>Fichier de sauvegarde C2</span>
-                  <input type="file" accept="application/json" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-                </label>
-                <label className="field">
-                  <span>Phrase de passe</span>
-                  <input type="password" value={passphrase} onChange={(e) => setPassphrase(e.target.value)} />
-                </label>
-              </>
-            )}
             {error && <p className="error">{error}</p>}
-            <button
-              className="primary"
-              disabled={busy || (mode === 'paper' ? words.trim().split(/\s+/).length < 20 : !file || !passphrase)}
-              onClick={finish}
-            >
-              Récupérer mon wallet
-            </button>
+            <ClientShareInput busy={busy} submitLabel="Récupérer mon wallet" onShare={finish} />
           </>
         ) : (
           <>

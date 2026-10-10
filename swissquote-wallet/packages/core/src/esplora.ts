@@ -60,24 +60,39 @@ export class Esplora {
     return a.chain_stats.tx_count + a.mempool_stats.tx_count > 0;
   }
 
-  /** Premier index jamais utilisé sur une chaîne (réception 0 ou change 1), pour ne pas réutiliser d'adresse. */
+  /** Premier index jamais utilisé sur une chaîne (réception 0 ou change 1), pour ne pas réutiliser d'adresse.
+   *  Interroge les adresses par lots parallèles de 10. */
   async firstUnusedIndex(policy: WalletPolicy, network: Network, chain: Chain, max = 50): Promise<number> {
-    for (let index = 0; index < max; index++) {
-      if (!(await this.addressUsed(deriveAddress(policy, chain, index, network).address))) return index;
+    for (let start = 0; start < max; start += 10) {
+      const indexes = Array.from({ length: Math.min(10, max - start) }, (_, i) => start + i);
+      const used = await Promise.all(
+        indexes.map((i) => this.addressUsed(deriveAddress(policy, chain, i, network).address)),
+      );
+      const free = used.indexOf(false);
+      if (free !== -1) return indexes[free];
     }
     return max;
   }
 
-  /** Cherche les UTXO des `gap` premières adresses de réception et de change. */
+  /** Cherche les UTXO des `gap` premières adresses de réception et de change, par lots parallèles de 10
+   *  (assez rapide, sans dépasser les limites de débit des API publiques). */
   async scanWallet(policy: WalletPolicy, network: Network, gap = 10): Promise<WalletUtxo[]> {
+    const slots = ([0, 1] as Chain[]).flatMap((chain) => Array.from({ length: gap }, (_, index) => ({ chain, index })));
     const found: WalletUtxo[] = [];
-    for (const chain of [0, 1] as Chain[]) {
-      for (let index = 0; index < gap; index++) {
-        const { address } = deriveAddress(policy, chain, index, network);
-        for (const u of await this.addressUtxos(address)) {
-          found.push({ txid: u.txid, vout: u.vout, value: BigInt(u.value), chain, index });
-        }
-      }
+    for (let start = 0; start < slots.length; start += 10) {
+      const batch = await Promise.all(
+        slots.slice(start, start + 10).map(async ({ chain, index }) => {
+          const { address } = deriveAddress(policy, chain, index, network);
+          return (await this.addressUtxos(address)).map((u) => ({
+            txid: u.txid,
+            vout: u.vout,
+            value: BigInt(u.value),
+            chain,
+            index,
+          }));
+        }),
+      );
+      found.push(...batch.flat());
     }
     return found;
   }
