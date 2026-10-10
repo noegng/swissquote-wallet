@@ -3,7 +3,7 @@
 //   alertes Swissquote), Recovery (clés, gel, téléphone perdu, kit de sortie).
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { deriveAddress, descriptorString, type WalletTx } from '@sqw/core';
-import { sq, type Session } from '../api';
+import { ApiError, sq, type Session } from '../api';
 import { btc } from '../config';
 import { formatBtc, formatChf } from '../format';
 import { deleteWallet, loadPending, type PendingPayment as Pending, type StoredWallet } from '../keystore';
@@ -127,6 +127,9 @@ export function Home({
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [message, setMessage] = useState('');
   const [recoveryInfo, setRecoveryInfo] = useState<RecoveryInfo | null>(null);
+  // Wallet présent sur l'appareil mais inconnu du service Swissquote (données du mock réinitialisées) :
+  // aucune cosignature possible, on le dit au lieu de laisser échouer chaque paiement.
+  const [unknownRemote, setUnknownRemote] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [showReceive, setShowReceive] = useState(false);
   const [busyFreeze, setBusyFreeze] = useState(false);
@@ -151,8 +154,14 @@ export function Home({
     }
     loadPending(wallet.walletId).then((p) => setPending(p ?? null));
     sq<RecoveryInfo>(`/wallets/${wallet.walletId}/recovery`)
-      .then(setRecoveryInfo)
-      .catch(() => setRecoveryInfo(null));
+      .then((r) => {
+        setRecoveryInfo(r);
+        setUnknownRemote(false);
+      })
+      .catch((e) => {
+        setRecoveryInfo(null);
+        setUnknownRemote(e instanceof ApiError && e.status === 404);
+      });
     sq<{ notifications: Notification[] }>(`/notifications/${wallet.walletId}`)
       .then((r) => setNotifications([...r.notifications].reverse()))
       .catch(() => setNotifications([]));
@@ -298,7 +307,15 @@ export function Home({
 
   const frozen = recoveryInfo?.status === 'frozen';
   const frozenByClient = frozen && !recoveryInfo?.recovery;
-  const sendBlocked = !balance ? 'No funds yet' : pending ? 'A payment is on hold' : frozen ? 'Wallet frozen' : null;
+  const sendBlocked = unknownRemote
+    ? 'Wallet unknown to Swissquote'
+    : !balance
+      ? 'No funds yet'
+      : pending
+        ? 'A payment is on hold'
+        : frozen
+          ? 'Wallet frozen'
+          : null;
   const keyChip = (ok: boolean | null): [string, 'success' | 'danger' | 'neutral'] =>
     ok === null ? ['Checking', 'neutral'] : ok ? ['Active', 'success'] : ['Share missing', 'danger'];
 
@@ -342,7 +359,28 @@ export function Home({
         </Group>
       )}
 
-      {!wallet.backupConfirmed && (
+      {unknownRemote && (
+        <Callout key="unknown" tone="danger" title="Swissquote does not know this wallet">
+          This device holds a wallet that the Swissquote service no longer knows (its demo data was reset), so
+          Swissquote cannot co-sign its payments.
+          {(balance === 0n || btc.name === 'regtest') && (
+            <Btn
+              kind="secondary"
+              onClick={async () => {
+                await deleteWallet(wallet.clientId);
+                onDiscard();
+              }}
+            >
+              {balance ? 'Remove it (its regtest test coins are abandoned)' : 'Remove it and create a new wallet'}
+            </Btn>
+          )}
+          {!!balance && btc.name !== 'regtest' && (
+            <strong>It holds bitcoin: move it out with your phone key and backup key (exit kit, from the login screen).</strong>
+          )}
+        </Callout>
+      )}
+
+      {!wallet.backupConfirmed && !unknownRemote && (
         <Callout key="backup" tone="danger" title="Backup incomplete">
           Wallet creation stopped before your backup words were checked. If you did not write them down, this wallet
           cannot be recovered if you lose your phone. Do not fund it: create a new one.

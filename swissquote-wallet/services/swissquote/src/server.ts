@@ -139,6 +139,9 @@ app.post('/webauthn/device/verify', async (req, reply) => {
 app.post('/webauthn/operation/options', async (req, reply) => {
   const body = req.body as { walletId?: string; purpose?: Purpose; payload?: string };
   const wallet = body?.walletId ? wallets()[body.walletId] : undefined;
+  if (body?.walletId && !wallet) {
+    return reply.code(404).send({ mock: true, error: 'Wallet inconnu de Swissquote (données du service réinitialisées ?)' });
+  }
   if (!wallet || !body.payload || !['cosign', 'cancel', 'unfreeze'].includes(body.purpose ?? '')) {
     return reply.code(400).send({ mock: true, error: 'walletId, purpose (cosign|cancel|unfreeze) et payload requis' });
   }
