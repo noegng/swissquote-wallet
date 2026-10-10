@@ -13,7 +13,9 @@ Swissquote veut porter le projet gagnant en production. L'architecture vise la p
 | KYC / identité | Écran de connexion simulé | **MOCK** : pas de vrai KYC | KYC renforcé, détection de pièces falsifiées et de deepfakes, formation du support |
 | Délais | 2 à 3 minutes | Raccourcis pour la démo | 7 jours pour la récupération, notifications SMS, e-mail, app |
 | Notifications | Boîte de réception dans l'app | **MOCK** : pas de vrais SMS ou e-mails | Canaux multiples et indépendants |
-| Clé téléphone | Web app, clé chiffrée, déverrouillée par passkey | Navigateur au lieu d'une app native | App native, puce sécurisée |
+| Passkey | WebAuthn de la plateforme (Secure Enclave, TPM via Windows Hello), défi lié à chaque transaction, vérifiée par le service Swissquote | Démo sur ordinateur ; passkeys synchronisées (iCloud) acceptées | App native ; politique différente pour les passkeys synchronisées |
+| Clé téléphone | Web app, clé chiffrée par une clé WebCrypto non exportable | Navigateur au lieu d'une app native ; la clé Bitcoin (secp256k1) ne peut pas vivre dans la puce (P-256 uniquement) | App native, clé chiffrée par une clé de la Secure Enclave ou dérivée par PRF |
+| Authentificateur des scripts de test | Authentificateur WebAuthn logiciel (`scripts/lib/soft-authenticator.ts`) | **Test uniquement**, jamais dans l'app | — |
 | Copie C2 (cloud) | Fichier chiffré | **MOCK** : pas de vrai cloud | iCloud / Google Drive, chiffrement par passkey (PRF) |
 | Continuité bancaire | Écran et plafond | **MOCK** : pas de lien avec un compte | Intégration compte et carte, limites, conformité |
 | Juridique | Hypothèse de non-garde | Aucune validation | Avis d'un avocat suisse (FINMA, LBA, Travel Rule) |

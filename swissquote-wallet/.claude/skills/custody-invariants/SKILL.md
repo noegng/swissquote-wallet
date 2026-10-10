@@ -31,7 +31,8 @@ Le modèle : multisig Bitcoin 2 sur 3 (clé téléphone, clé Swissquote, clé d
 - Donner une part SLIP-39 à Swissquote (même chiffrée).
 - Faire 3 groupes SLIP-39 avec un seuil de 2 (C1 + C2 suffiraient sans partenaire).
 - Persister la clé de secours reconstituée, l'envoyer à un service ou la logger.
-- Laisser le cosignataire signer sans assertion passkey valide ou hors des règles (palier, délai, sanctions).
+- Laisser le cosignataire signer sans assertion passkey valide ou hors des règles (palier, délai, sanctions). Le défi WebAuthn doit être à usage unique et lié à l'opération (empreinte de la PSBT pour `/cosign`, identifiant de la demande pour une annulation).
+- Utiliser l'authentificateur logiciel de test (`scripts/lib/soft-authenticator.ts`) ailleurs que dans les scripts.
 - Écrire une primitive cryptographique (hash, courbe, partage de secret, chiffrement) à la main.
 - Mocker sans l'étiqueter.
 

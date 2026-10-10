@@ -1,6 +1,6 @@
-// [MOCK] Service Swissquote : registre des wallets (Travel Rule), cosignataire avec règles,
-// notifications « hors bande ». Processus séparé avec son propre stockage (data/).
-// À venir : KYC mocké, passkeys (WebAuthn), récupération. Voir la skill mock-service.
+// [MOCK] Service Swissquote : connexion (KYC simulé), passkeys, registre des wallets (Travel Rule),
+// cosignataire avec règles, notifications « hors bande ». Processus séparé avec son propre
+// stockage (data/). À venir : récupération. Voir la skill mock-service.
 import './env';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
@@ -19,6 +19,16 @@ import {
 } from '@sqw/core';
 import { audit, readJson, resetData, SERVICE, writeJson } from './store';
 import { SwissquoteSigner } from './signer';
+import {
+  clientFromAuthHeader,
+  hasPasskey,
+  login,
+  operationOptions,
+  registrationOptions,
+  verifyOperation,
+  verifyRegistration,
+  type Purpose,
+} from './auth';
 import { DAILY_LIMIT_SATS, decide, HIGH_VALUE_DELAY_SECONDS, recordSpend, sanctionedAddresses } from './rules';
 
 const cfg = networkConfig(
@@ -86,12 +96,52 @@ await app.register(cors, { origin: process.env.ORIGIN ?? 'http://localhost:5173'
 
 app.get('/health', async () => ({ mock: true, service: SERVICE, ok: true, network: cfg.name }));
 
+// Connexion à l'espace client Swissquote. MOCK : le KYC est supposé déjà fait par la banque.
+app.post('/kyc/login', async (req, reply) => {
+  const clientId = (req.body as { clientId?: string })?.clientId?.trim().toLowerCase() ?? '';
+  const token = login(clientId);
+  if (!token) return reply.code(400).send({ mock: true, error: 'Identifiant client invalide (3 à 40 caractères a-z, 0-9, -)' });
+  return { mock: true, token, clientId, hasPasskey: hasPasskey(clientId) };
+});
+
+// Création de la passkey du client (session requise). La clé privée reste dans la puce de l'appareil.
+app.post('/webauthn/register/options', async (req, reply) => {
+  const clientId = clientFromAuthHeader(req.headers.authorization);
+  if (!clientId) return reply.code(401).send({ mock: true, error: 'Session requise' });
+  return registrationOptions(clientId);
+});
+
+app.post('/webauthn/register/verify', async (req, reply) => {
+  const clientId = clientFromAuthHeader(req.headers.authorization);
+  if (!clientId) return reply.code(401).send({ mock: true, error: 'Session requise' });
+  try {
+    const info = await verifyRegistration(clientId, (req.body as { response: never }).response);
+    return { mock: true, verified: true, ...info };
+  } catch (e) {
+    audit('passkey.refused', { clientId, reason: String(e) });
+    return reply.code(400).send({ mock: true, verified: false, error: (e as Error).message });
+  }
+});
+
+// Défi passkey lié à une opération : empreinte de la PSBT (cosign) ou identifiant de demande (cancel).
+app.post('/webauthn/operation/options', async (req, reply) => {
+  const body = req.body as { walletId?: string; purpose?: Purpose; payload?: string };
+  const wallet = body?.walletId ? wallets()[body.walletId] : undefined;
+  if (!wallet || !body.payload || !['cosign', 'cancel'].includes(body.purpose ?? '')) {
+    return reply.code(400).send({ mock: true, error: 'walletId, purpose (cosign|cancel) et payload requis' });
+  }
+  return operationOptions(wallet.clientId, body.purpose!, body.payload);
+});
+
 // Création du wallet : Swissquote dérive sa clé pour ce client et enregistre le descripteur.
 // L'enregistrement prouve que l'adresse appartient au client (Travel Rule, sans démarche).
 app.post('/wallets', async (req, reply) => {
-  const body = req.body as { clientId?: string; phoneKey?: unknown; backupKey?: unknown };
-  if (!body?.clientId || !isKeyOrigin(body.phoneKey) || !isKeyOrigin(body.backupKey)) {
-    return reply.code(400).send({ mock: true, error: 'clientId, phoneKey et backupKey requis' });
+  const clientId = clientFromAuthHeader(req.headers.authorization);
+  if (!clientId) return reply.code(401).send({ mock: true, error: 'Session requise' });
+  if (!hasPasskey(clientId)) return reply.code(403).send({ mock: true, error: 'Créer une passkey avant le wallet' });
+  const body = req.body as { phoneKey?: unknown; backupKey?: unknown };
+  if (!isKeyOrigin(body?.phoneKey) || !isKeyOrigin(body?.backupKey)) {
+    return reply.code(400).send({ mock: true, error: 'phoneKey et backupKey requis' });
   }
   const all = wallets();
   const account = Object.keys(all).length + 1;
@@ -101,7 +151,7 @@ app.post('/wallets', async (req, reply) => {
   };
   const record: WalletRecord = {
     walletId: randomUUID(),
-    clientId: body.clientId,
+    clientId,
     account,
     network: cfg.name,
     policy,
@@ -109,7 +159,7 @@ app.post('/wallets', async (req, reply) => {
     createdAt: new Date().toISOString(),
   };
   writeJson('wallets.json', { ...all, [record.walletId]: record });
-  audit('wallet.created', { walletId: record.walletId, clientId: body.clientId, account });
+  audit('wallet.created', { walletId: record.walletId, clientId, account });
   return {
     mock: true,
     walletId: record.walletId,
@@ -125,12 +175,17 @@ app.get('/wallets/:id', async (req, reply) => {
   return w ? { mock: true, ...w } : reply.code(404).send({ mock: true, error: 'Wallet inconnu' });
 });
 
-// Cosignature. TODO(passkey) : exiger une assertion WebAuthn valide avant toute signature
-// (skill custody-invariants). Tant que ce n'est pas branché, la réponse l'indique.
+// Cosignature : exige une assertion passkey fraîche dont le défi porte l'empreinte de cette PSBT.
 app.post('/cosign', async (req, reply) => {
-  const body = req.body as { walletId?: string; psbt?: string };
+  const body = req.body as { walletId?: string; psbt?: string; authentication?: never };
   const wallet = body?.walletId ? wallets()[body.walletId] : undefined;
   if (!wallet || !body.psbt) return reply.code(400).send({ mock: true, error: 'walletId et psbt requis' });
+  try {
+    await verifyOperation(wallet.clientId, 'cosign', body.psbt, body.authentication);
+  } catch (e) {
+    audit('cosign.unauthenticated', { walletId: wallet.walletId, reason: String(e) });
+    return reply.code(401).send({ mock: true, status: 'unauthenticated', reason: (e as Error).message });
+  }
 
   let analysed;
   try {
@@ -184,7 +239,6 @@ app.post('/cosign', async (req, reply) => {
     mock: true,
     status: 'signed',
     tier: 1,
-    authEnforced: false,
     psbt: analysed.psbt.toBase64(),
     summary,
   };
@@ -214,10 +268,17 @@ app.get('/cosign/:id', async (req, reply) => {
   };
 });
 
-// Annulation d'un gros paiement par le client. TODO(passkey) : exiger l'authentification du client.
+// Annulation d'un gros paiement : exige la passkey du client (défi lié à l'identifiant de la demande).
 app.post('/cosign/:id/cancel', async (req, reply) => {
   const request = requests()[(req.params as { id: string }).id];
   if (!request) return reply.code(404).send({ mock: true, error: 'Demande inconnue' });
+  try {
+    const clientId = wallets()[request.walletId].clientId;
+    await verifyOperation(clientId, 'cancel', request.id, (req.body as { authentication?: never })?.authentication);
+  } catch (e) {
+    audit('cancel.unauthenticated', { requestId: request.id, reason: String(e) });
+    return reply.code(401).send({ mock: true, status: 'unauthenticated', reason: (e as Error).message });
+  }
   if (request.status !== 'pending') {
     return reply.code(409).send({ mock: true, error: `Demande déjà ${request.status}` });
   }

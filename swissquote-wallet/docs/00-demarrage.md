@@ -80,14 +80,23 @@ Ouvrir http://localhost:5173 : les deux services doivent apparaître « en ligne
 
 `Ctrl + C` arrête les trois.
 
-## 6. Vérifier que tout va bien
+## 6. La passkey (Windows Hello, Touch ID)
+
+L'app crée une passkey : c'est la puce sécurisée de l'ordinateur qui la garde (TPM via Windows Hello sur PC, Secure Enclave sur Mac). Sur PC, Windows Hello demande le code PIN ou le visage. Rien à configurer : ça marche sur `localhost`.
+
+Si Windows Hello ne marche pas (machine de démo, PIN non configuré) : authentificateur virtuel de Chrome.
+1. F12 → menu ⋮ → **More tools** → **WebAuthn**.
+2. Cocher **Enable virtual authenticator environment**, puis **Add** (protocole `ctap2`, transport `internal`, cocher *resident key* et *user verification*).
+3. Recharger l'app : la passkey est créée dans cet authentificateur virtuel.
+
+## 7. Vérifier que tout va bien
 
 ```bash
 npm test             # tests (dont, plus tard, les invariants de sécurité)
 npm run typecheck    # vérification des types TypeScript
 ```
 
-## 7. Commandes du quotidien
+## 8. Commandes du quotidien
 
 | Je veux… | Commande |
 |---|---|
@@ -97,14 +106,14 @@ npm run typecheck    # vérification des types TypeScript
 | Repartir d'une chaîne vierge | `npm run regtest:down`, supprimer `tools/regtest/volumes/`, `npm run regtest:up` |
 | Récupérer le travail des autres | `git pull`, puis `npm install` si `package.json` a changé |
 
-## 8. Signet (le vrai réseau de test public, pour la démo)
+## 9. Signet (le vrai réseau de test public, pour la démo)
 
 Le regtest sert à développer vite. Pour la démo, on utilise **signet**, un réseau de test public où tout le monde peut vérifier nos transactions sur https://mempool.space/signet.
 
 - Dans `.env` : `BTC_NETWORK=signet`.
 - Obtenir des sats de test : https://bitcoinsignetfaucet.com (5 demandes par 24 h maximum : ne pas les gaspiller).
 
-## 9. Problèmes fréquents
+## 10. Problèmes fréquents
 
 | Symptôme | Solution |
 |---|---|
@@ -113,7 +122,8 @@ Le regtest sert à développer vite. Pour la démo, on utilise **signet**, un r�
 | `curl localhost:3000/...` ne répond pas juste après le lancement | Attendre 10 à 20 secondes que le nœud démarre |
 | L'app affiche les services « hors ligne » | `npm run dev:all` n'est pas lancé, ou a planté : regarder les messages `[sq]` et `[partner]` |
 | `npm install` très lent | Dépôt dans OneDrive : voir la section 2 |
+| La création de passkey échoue ou ne propose rien | Windows Hello non configuré : Paramètres → Comptes → Options de connexion → PIN. Sinon, authentificateur virtuel de Chrome (section 6) |
 
-## 10. Travailler avec Claude Code
+## 11. Travailler avec Claude Code
 
 Ouvrir Claude Code dans le dossier `swissquote-wallet/` (l'intérieur). Il lit `CLAUDE.md` et charge les skills du projet automatiquement (`custody-invariants`, `btc-multisig`, `slip39-backup`, `mock-service`, `demo-run`, `doc-sync`). Pour savoir quoi faire : `docs/09-plan-de-build.md`.

@@ -121,8 +121,8 @@ Clé de secours = groupe CLIENT  ET  groupe TIERS        (seuil de groupes = 2)
 
 **Authentification et signature**
 1. Le client prépare un envoi ; l'app affiche un **résumé clair** (montant, destinataire, frais).
-2. Le client s'authentifie par passkey (biométrie) ; l'app signe avec la clé téléphone.
-3. Le cosignataire Swissquote vérifie l'assertion passkey et applique les règles :
+2. Le client s'authentifie par passkey (biométrie). Le défi WebAuthn est **lié à cette transaction précise** (empreinte de la PSBT) : la biométrie approuve exactement ce paiement, pas une session ouverte. L'app signe avec la clé téléphone.
+3. Le cosignataire Swissquote vérifie l'assertion passkey (défi à usage unique, valable 2 minutes, empreinte de la PSBT identique) et applique les règles :
    - **Palier 1** (sous le plafond quotidien) : cosignature immédiate.
    - **Palier 2** (au-dessus) : délai + notification hors bande, annulable.
    - **Adresse sanctionnée** : refus.
@@ -195,9 +195,13 @@ Clé de secours = groupe CLIENT  ET  groupe TIERS        (seuil de groupes = 2)
 - **Difficulté :** Bitcoin ne permet pas de plafond ou de délai programmable comme un smart contract.
 - **Solution :** les règles sont appliquées par le cosignataire Swissquote. La banque est de confiance pour les **délais**, jamais pour les **fonds** : elle peut refuser, pas signer seule. Le dire clairement.
 
-### 5.2 La passkey ne signe pas en Bitcoin
-- **Difficulté :** WebAuthn signe en P-256, Bitcoin vérifie du secp256k1.
-- **Solution :** la passkey authentifie le client auprès du cosignataire et déverrouille la clé téléphone (extension PRF si disponible, sinon clé WebCrypto non extractable).
+### 5.2 La passkey, la Secure Enclave et la clé Bitcoin
+- **Une passkey, c'est déjà la puce sécurisée.** Avec WebAuthn, le navigateur fait générer la clé dans la puce de l'appareil : Secure Enclave (iPhone, Mac), TEE ou StrongBox (Android), TPM via Windows Hello (PC). La clé privée n'en sort jamais. Accéder directement à la Secure Enclave demanderait une app iOS native : impossible depuis une web app et inutile en 24 h.
+- **Difficulté :** la puce ne gère que P-256, alors que Bitcoin utilise secp256k1. La clé Bitcoin du téléphone ne peut donc pas vivre dans la puce (même problème chez Bitkey).
+- **Solution au hackathon :** la passkey **authentifie** le client auprès du cosignataire Swissquote, avec un défi lié à chaque transaction ; la clé Bitcoin du téléphone est chiffrée par une clé WebCrypto non exportable, stockée dans le navigateur.
+- **En production :** app native ; la clé Bitcoin est chiffrée par une clé P-256 de la Secure Enclave (ou dérivée de la passkey via l'extension PRF).
+- **Limites à dire :** les passkeys iCloud Keychain sont synchronisées (chiffrées de bout en bout), donc pas strictement liées à un appareil ; l'extension PRF n'est pas disponible partout, elle reste facultative.
+- **Démo :** sur ordinateur (Windows Hello ou Touch ID, en affichage téléphone), qui marche sur `localhost` sans configuration. Un vrai téléphone demande HTTPS et un domaine correspondant à la passkey : trop risqué le jour J. Filet de sécurité : l'authentificateur virtuel de Chrome (F12 → menu WebAuthn).
 
 ### 5.3 Où la clé de secours est-elle reconstituée ?
 - **Difficulté :** c'est la question piège du brief sur le split backup.
@@ -266,7 +270,8 @@ Clé de secours = groupe CLIENT  ET  groupe TIERS        (seuil de groupes = 2)
 | Partenaire | Service mocké | Contrôle d'identité simulé | Contrat, deux partenaires indépendants, SLA, réversibilité |
 | Contrôle d'identité | Écran simulé | Pas de vrai KYC | KYC renforcé, détection de deepfakes, formation du support |
 | Délais | 2 à 3 minutes | Raccourcis | 7 jours pour la récupération, notifications multicanal |
-| Clé téléphone | Navigateur, chiffrée par passkey | Web app | App native, puce sécurisée |
+| Passkey | WebAuthn de la plateforme (Secure Enclave, TPM via Windows Hello), défi lié à chaque transaction | Démo sur ordinateur ; passkeys synchronisées acceptées | App native ; politique différente pour les passkeys synchronisées |
+| Clé téléphone | Navigateur, chiffrée par une clé WebCrypto non exportable | Web app | App native, clé chiffrée par la Secure Enclave ou dérivée par PRF |
 | C2 (cloud) | Fichier simulé | Pas de vrai cloud | iCloud / Google Drive, chiffrement par passkey (PRF) |
 | Juridique | Hypothèse de non-garde | Aucune validation | Avis d'un avocat suisse (FINMA, LBA, Travel Rule) |
 | Continuité bancaire | Écran simulé | Pas de lien avec un compte | Intégration compte et carte |
