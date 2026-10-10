@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
+    "dev": "tsx watch --include ../../.env --include ../../../.env src/server.ts",
     "start": "tsx src/server.ts",
     "typecheck": "tsc -p ."
   },

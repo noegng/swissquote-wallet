@@ -3,8 +3,16 @@
 // lire. En production (app native), cette clé de chiffrement vivrait dans la Secure Enclave.
 // Ni la clé de secours ni ses parts ne sont jamais stockées ici.
 import type { BtcNetworkName, WalletPolicy } from '@sqw/core';
+import { btc } from './config';
 
 const DB_NAME = 'swissquote-wallet';
+
+// Un wallet appartient à un réseau (regtest ou signet) : les clés du coffre portent ce réseau, pour
+// qu'un wallet regtest déjà sur l'appareil ne soit jamais repris quand l'app passe sur signet.
+const NET = btc.name;
+const walletKey = (clientId: string) => `wallet:${NET}:${clientId}`;
+// Ancien format (sans réseau), encore lu tant qu'il correspond au réseau courant.
+const legacyWalletKey = (clientId: string) => `wallet:${clientId}`;
 const STORE = 'kv';
 
 export interface StoredWallet {
@@ -58,7 +66,7 @@ export async function sealWallet(
 }
 
 /** Enregistre un wallet comme le wallet de ce client sur cet appareil. */
-export const putWallet = (wallet: StoredWallet) => put(`wallet:${wallet.clientId}`, wallet);
+export const putWallet = (wallet: StoredWallet) => put(walletKey(wallet.clientId), wallet);
 
 export async function saveWallet(
   wallet: Omit<StoredWallet, 'phoneSeed' | 'backupConfirmed'>,
@@ -70,16 +78,25 @@ export async function saveWallet(
 export async function markBackupConfirmed(clientId: string): Promise<StoredWallet> {
   const wallet = (await loadWallet(clientId))!;
   const updated = { ...wallet, backupConfirmed: true };
-  await put(`wallet:${clientId}`, updated);
+  await putWallet(updated);
   return updated;
 }
 
 /** Oublie le wallet de ce client sur cet appareil (graine téléphone comprise). Réservé à un wallet
  *  vide dont la sauvegarde n'a jamais été faite. */
-export const deleteWallet = (clientId: string) => tx('readwrite', (s) => s.delete(`wallet:${clientId}`));
+export async function deleteWallet(clientId: string): Promise<void> {
+  await tx('readwrite', (s) => s.delete(walletKey(clientId)));
+  if ((await get<StoredWallet>(legacyWalletKey(clientId)))?.network === NET) {
+    await tx('readwrite', (s) => s.delete(legacyWalletKey(clientId)));
+  }
+}
 
-export function loadWallet(clientId: string): Promise<StoredWallet | undefined> {
-  return get<StoredWallet>(`wallet:${clientId}`);
+/** Wallet de ce client sur cet appareil, pour le réseau courant uniquement. */
+export async function loadWallet(clientId: string): Promise<StoredWallet | undefined> {
+  const current = await get<StoredWallet>(walletKey(clientId));
+  if (current) return current;
+  const legacy = await get<StoredWallet>(legacyWalletKey(clientId));
+  return legacy?.network === NET ? legacy : undefined;
 }
 
 /** Gros paiement en attente du délai de sécurité : la PSBT déjà signée par le téléphone (une seule
@@ -111,9 +128,9 @@ export interface RecoveryState {
   newWallet?: StoredWallet;
 }
 
-export const saveRecovery = (clientId: string, r: RecoveryState) => put(`recovery:${clientId}`, r);
-export const loadRecovery = (clientId: string) => get<RecoveryState>(`recovery:${clientId}`);
-export const clearRecovery = (clientId: string) => tx('readwrite', (s) => s.delete(`recovery:${clientId}`));
+export const saveRecovery = (clientId: string, r: RecoveryState) => put(`recovery:${NET}:${clientId}`, r);
+export const loadRecovery = (clientId: string) => get<RecoveryState>(`recovery:${NET}:${clientId}`);
+export const clearRecovery = (clientId: string) => tx('readwrite', (s) => s.delete(`recovery:${NET}:${clientId}`));
 
 /** Sortie sans Swissquote en cours (libération demandée au partenaire). */
 export interface ExitState {
@@ -123,16 +140,20 @@ export interface ExitState {
   deviceKey: CryptoKey;
 }
 
-export const saveExit = (clientId: string, e: ExitState) => put(`exit:${clientId}`, e);
-export const loadExit = (clientId: string) => get<ExitState>(`exit:${clientId}`);
-export const clearExit = (clientId: string) => tx('readwrite', (s) => s.delete(`exit:${clientId}`));
+export const saveExit = (clientId: string, e: ExitState) => put(`exit:${NET}:${clientId}`, e);
+export const loadExit = (clientId: string) => get<ExitState>(`exit:${NET}:${clientId}`);
+export const clearExit = (clientId: string) => tx('readwrite', (s) => s.delete(`exit:${NET}:${clientId}`));
 
-/** Wallets présents sur cet appareil (accessibles sans aucun service Swissquote). */
+/** Wallets présents sur cet appareil pour le réseau courant (accessibles sans aucun service Swissquote). */
 export async function listLocalWallets(): Promise<StoredWallet[]> {
   const keys = await tx<IDBValidKey[]>('readonly', (s) => s.getAllKeys());
-  const wallets = await Promise.all(
-    keys.filter((k) => String(k).startsWith('wallet:')).map((k) => get<StoredWallet>(String(k))),
+  const clients = new Set(
+    keys
+      .map(String)
+      .filter((k) => k.startsWith('wallet:'))
+      .map((k) => k.split(':').at(-1)!),
   );
+  const wallets = await Promise.all([...clients].map((c) => loadWallet(c)));
   return wallets.filter((w): w is StoredWallet => !!w);
 }
 

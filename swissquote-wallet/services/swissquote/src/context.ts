@@ -12,7 +12,7 @@ import { SwissquoteSigner } from './signer';
 import { audit, readJson, writeJson } from './store';
 
 export const cfg = networkConfig(
-  (process.env.BTC_NETWORK ?? 'regtest') as BtcNetworkName,
+  process.env.BTC_NETWORK as BtcNetworkName, // validé par env.ts
   process.env.BTC_NETWORK === 'signet' ? process.env.ESPLORA_URL_SIGNET : process.env.ESPLORA_URL_REGTEST,
 );
 

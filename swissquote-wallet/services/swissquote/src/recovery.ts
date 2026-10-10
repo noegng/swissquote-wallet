@@ -77,7 +77,8 @@ export function registerRecoveryRoutes(app: FastifyInstance): void {
     const clientId = clientFromAuthHeader(req.headers.authorization);
     if (!clientId) return reply.code(401).send({ mock: true, error: 'Session requise' });
     const mine = Object.values(wallets())
-      .filter((w) => w.clientId === clientId)
+      // Wallets de ce réseau seulement : un wallet regtest n'a rien à faire dans une session signet.
+      .filter((w) => w.clientId === clientId && w.network === cfg.name)
       .map((w) => ({ walletId: w.walletId, status: statusOf(w), policy: w.policy, createdAt: w.createdAt }));
     return { mock: true, wallets: mine };
   });
