@@ -5,6 +5,7 @@ import { formatBtc, formatChf, parseBtc, shortAddress, shortId } from '../format
 import { useChfRate } from '../price';
 import type { PendingPayment as Pending, StoredWallet } from '../keystore';
 import { preparePayment, submitPayment, type PreparedPayment } from '../payments';
+import { parsePaymentCode, QrScanner } from '../qr';
 import { Btn, Group, Hero, KV, Row, Screen, Title } from '../ui';
 import { PendingPaymentPanel, usePendingPayment } from './PendingPayment';
 
@@ -63,6 +64,7 @@ export function Send({ wallet, onBack }: { wallet: StoredWallet; onBack: () => v
   const [sanctioned, setSanctioned] = useState<string[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [scanning, setScanning] = useState(false);
   const rate = useChfRate();
 
   useEffect(() => {
@@ -246,6 +248,27 @@ export function Send({ wallet, onBack }: { wallet: StoredWallet; onBack: () => v
     );
   }
 
+  if (scanning) {
+    return (
+      <Screen title="Scan a QR code" onBack={() => setScanning(false)}>
+        <Title
+          title="Scan the recipient’s code"
+          lead="Point the camera at the QR code of the wallet you are paying."
+        />
+        <QrScanner
+          onResult={(text) => {
+            const code = parsePaymentCode(text);
+            setTo(code.address);
+            if (code.amount) setAmount(code.amount);
+            setError('');
+            setScanning(false);
+          }}
+        />
+        <p className="note">The address is checked on the next screen before anything is signed.</p>
+      </Screen>
+    );
+  }
+
   let sats: bigint | null = null;
   try {
     sats = amount ? parseBtc(amount) : null;
@@ -279,6 +302,9 @@ export function Send({ wallet, onBack }: { wallet: StoredWallet; onBack: () => v
         <span>Recipient address</span>
         <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="bcrt1… or tb1…" autoComplete="off" />
       </label>
+      <Btn kind="secondary" icon="qr" type="button" onClick={() => setScanning(true)}>
+        Scan a QR code
+      </Btn>
       <div className="sheet padded">
         <div className="limit-head">
           <strong>Daily limit</strong>

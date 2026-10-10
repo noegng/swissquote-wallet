@@ -20,7 +20,8 @@
     "demo:cosign": "tsx scripts/demo-cosign.ts",
     "demo:create": "tsx scripts/demo-create.ts",
     "demo:recover": "tsx scripts/demo-recover.ts",
-    "demo:exit": "tsx scripts/demo-exit.ts"
+    "demo:exit": "tsx scripts/demo-exit.ts",
+    "demo:trustee": "tsx scripts/demo-trustee.ts"
   },
   "devDependencies": {
     "@levischuck/tiny-cbor": "0.2.11",

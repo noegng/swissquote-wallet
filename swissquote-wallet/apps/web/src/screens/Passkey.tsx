@@ -32,12 +32,15 @@ export function Passkey({
   onDone,
   title = 'Create your passkey',
   allowExisting = false,
+  onBack,
 }: {
   session: Session;
   onDone: (info: PasskeyInfo) => void;
   title?: string;
   /** Récupération : si l'appareil a déjà une passkey du client, proposer de l'utiliser. */
   allowExisting?: boolean;
+  /** Retour à l’écran précédent (connexion, ou début de la récupération). */
+  onBack?: () => void;
 }) {
   const [platform, setPlatform] = useState<boolean | null>(null);
   const [error, setError] = useState('');
@@ -81,7 +84,7 @@ export function Passkey({
 
   if (!browserSupportsWebAuthn()) {
     return (
-      <Screen title="Passkey">
+      <Screen title="Passkey" onBack={onBack}>
         <Title
           title="Browser not supported"
           lead="This browser cannot use passkeys. Use a recent version of Chrome, Edge or Safari."
@@ -93,6 +96,7 @@ export function Passkey({
   return (
     <Screen
       title="Passkey"
+      onBack={onBack}
       footer={
         existing && allowExisting ? (
           <Btn icon="face" onClick={useExisting} disabled={busy}>

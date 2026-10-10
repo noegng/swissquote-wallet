@@ -18,6 +18,7 @@ export function Exit({ onBack }: { onBack: () => void }) {
   const [state, setState] = useState<ExitState | null>(null);
   const [step, setStep] = useState<Step>('choose');
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
+  const [awaiting, setAwaiting] = useState<string | undefined>(undefined);
   const [to, setTo] = useState('');
   const [log, setLog] = useState<string[]>([]);
   const [result, setResult] = useState<{ url: string; amount: bigint } | null>(null);
@@ -57,6 +58,7 @@ export function Exit({ onBack }: { onBack: () => void }) {
         if (s.status === 'released') return setStep('share');
         if (s.status === 'cancelled') return setError('The release was cancelled by our partner.');
         setSecondsLeft(s.secondsLeft);
+        setAwaiting(s.trusteeName);
       } catch (e) {
         if (!stop) setError((e as Error).message);
       }
@@ -163,6 +165,7 @@ export function Exit({ onBack }: { onBack: () => void }) {
     return (
       <Screen
         title="Exit kit"
+        onBack={() => setStep('choose')}
         footer={
           <Btn icon="up" disabled={busy || !hasDestination || !share.ready} onClick={share.submit}>
             Send bitcoin
@@ -186,7 +189,7 @@ export function Exit({ onBack }: { onBack: () => void }) {
 
   if (step === 'waiting') {
     return (
-      <Screen title="Exit kit">
+      <Screen title="Exit kit" onBack={() => setStep('choose')}>
         {status}
         <Title
           title="Our partner is preparing its share"
@@ -197,6 +200,11 @@ export function Exit({ onBack }: { onBack: () => void }) {
           secondsLeft={secondsLeft}
           footnote="before the share is released"
         />
+        {awaiting && (
+          <Callout title={`${awaiting} has to approve`}>
+            This person holds the share. Contact them: they check your identity, then approve your request.
+          </Callout>
+        )}
         <p className="note">Shortened for this demo. In production: several days, with an identity check by the partner.</p>
         {error && <p className="error">{error}</p>}
       </Screen>

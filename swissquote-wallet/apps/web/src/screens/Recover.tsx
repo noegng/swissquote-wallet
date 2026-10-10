@@ -41,11 +41,14 @@ export function Recover({
   remote,
   onRecovered,
   onCreateInstead,
+  onBack,
 }: {
   session: Session;
   remote: RemoteWallet;
   onRecovered: (w: StoredWallet) => void;
   onCreateInstead: () => void;
+  /** Retour à la connexion. Une récupération déjà lancée continue et reprend à la prochaine connexion. */
+  onBack: () => void;
 }) {
   const [step, setStep] = useState<Step>('intro');
   const [state, setState] = useState<RecoveryState | null>(null);
@@ -177,6 +180,7 @@ export function Recover({
         session={session}
         title="Passkey for this new device"
         allowExisting
+        onBack={() => setStep('intro')}
         onDone={(info) => begin(info.credentialId)}
       />
     );
@@ -206,7 +210,7 @@ export function Recover({
     const p = progress?.partner;
     const left = s && p ? Math.max(s.secondsLeft, p.status === 'released' ? 0 : p.secondsLeft) : null;
     return (
-      <Screen title="Recovery" step={[2, 4]}>
+      <Screen title="Recovery" step={[2, 4]} onBack={onBack}>
         <Title
           title="Recovery in progress"
           lead="Your wallet is frozen and you have been alerted. The delay gives the real owner time to cancel."
@@ -217,13 +221,21 @@ export function Recover({
               <>
                 Swissquote: {s ? (s.secondsLeft > 0 ? `${formatClock(s.secondsLeft)} left` : 'delay over') : '…'}
                 <br />
-                Partner: {p ? (p.status === 'released' ? 'share sent' : `${formatClock(p.secondsLeft)} left`) : '…'}
+                {p?.trusteeName
+                  ? `${p.trusteeName}: has to approve your request. Contact them.`
+                  : `Partner: ${p ? (p.status === 'released' ? 'share sent' : `${formatClock(p.secondsLeft)} left`) : '…'}`}
               </>
             ),
-            chip: left === null ? undefined : [left > 0 ? `${formatClock(left)} left` : 'Almost done', 'accent'],
+            chip:
+              left === null
+                ? undefined
+                : [left > 0 ? `${formatClock(left)} left` : p?.trusteeName ? 'Awaiting approval' : 'Almost done', 'accent'],
           })}
         />
         <p className="note">Shortened for this demo. In production: 7 days, with alerts by SMS, email and post.</p>
+        <p className="note">
+          You can leave this screen: the recovery keeps running and picks up where it was when you log in again.
+        </p>
         {error && <p className="error">{error}</p>}
       </Screen>
     );
@@ -234,6 +246,7 @@ export function Recover({
       <Screen
         title="Recovery"
         step={[3, 4]}
+        onBack={busy ? undefined : onBack}
         footer={
           <Btn disabled={busy || !share.ready} onClick={share.submit}>
             Recover your wallet
@@ -273,6 +286,7 @@ export function Recover({
   return (
     <Screen
       title="Recovery"
+      onBack={onBack}
       footer={
         <>
           <Btn disabled={!!remoteState?.recovery} onClick={() => setStep('passkey')}>

@@ -3,13 +3,15 @@
 //   alertes Swissquote), Recovery (clés, gel, téléphone perdu, kit de sortie).
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { deriveAddress, descriptorString, type WalletTx } from '@sqw/core';
-import { partner, sq, type Session } from '../api';
+import { sq, type Session } from '../api';
 import { btc } from '../config';
 import { formatBtc, formatChf } from '../format';
 import { loadPending, type PendingPayment as Pending, type StoredWallet } from '../keystore';
 import { approve, esplora } from '../payments';
 import { useChfRate } from '../price';
+import { QrCode } from '../qr';
 import { Brand, Btn, Callout, Group, Icon, Row, Screen, Timeline, Title, formatClock, type TabName } from '../ui';
+import { shareHolder, type ShareHolder } from '../trustee';
 import { PendingPaymentPanel, usePendingPayment } from './PendingPayment';
 
 function downloadExitKit(wallet: StoredWallet) {
@@ -97,16 +99,20 @@ export function Home({
   wallet,
   session,
   onSend,
+  onTrustee,
   onLogout,
 }: {
   wallet: StoredWallet;
   session: Session;
   onSend: () => void;
+  onTrustee: () => void;
   onLogout: () => void;
 }) {
   const [balance, setBalance] = useState<bigint | null>(null);
   const [address, setAddress] = useState(() => deriveAddress(wallet.policy, 0, 0, btc.network).address);
   const [backupDeposited, setBackupDeposited] = useState<boolean | null>(null);
+  // Qui détient la part TIERS : le partenaire, ou une personne de confiance choisie par le client.
+  const [holder, setHolder] = useState<ShareHolder | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [message, setMessage] = useState('');
@@ -146,8 +152,11 @@ export function Home({
 
   useEffect(() => {
     refresh();
-    partner<{ exists: boolean }>(`/shares/${wallet.walletId}`)
-      .then((r) => setBackupDeposited(r.exists))
+    shareHolder(wallet.walletId)
+      .then((r) => {
+        setBackupDeposited(r.exists);
+        setHolder(r);
+      })
       .catch(() => setBackupDeposited(false));
     sq<{ dailyLimitSats: string }>('/rules')
       .then((r) => setLimit(r.dailyLimitSats))
@@ -405,6 +414,7 @@ export function Home({
       {tab === 'transfers' && showReceive && (
         <Group key="receive" label="Your receive address">
           <div className="sheet padded">
+            <QrCode value={`bitcoin:${address}`} label="QR code of your receive address" />
             <span className="address">{address}</span>
             <Btn kind="secondary" small icon="copy" onClick={() => navigator.clipboard?.writeText(address)}>
               Copy address
@@ -518,7 +528,30 @@ export function Home({
             sub="Signs with you up to your daily limit"
             chip={frozen ? ['Frozen', 'accent'] : ['Active', 'success']}
           />
-          <Row icon="key" title="Backup key" sub="Your words and our partner’s share" chip={keyChip(backupDeposited)} />
+          <Row
+            icon="key"
+            title="Backup key"
+            sub={`Your words and ${holder?.trusteeName ?? 'our partner'}’s share`}
+            chip={keyChip(backupDeposited)}
+          />
+        </Group>
+      )}
+
+      {tab === 'recovery' && backupDeposited && (
+        <Group key="trustee" label="Who holds the other half of your backup key">
+          <Row
+            icon="face"
+            title={holder?.trusteeName ?? 'Our independent partner'}
+            sub={
+              holder?.holder === 'trustee'
+                ? 'Trusted person you chose'
+                : holder?.invitation
+                  ? `Invitation to ${holder.invitation.trusteeName} in progress`
+                  : 'Entrust it to a notary or a lawyer instead'
+            }
+            trail="chevR"
+            onClick={onTrustee}
+          />
         </Group>
       )}
 

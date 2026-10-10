@@ -1318,3 +1318,38 @@ button.row:disabled .t {
     background: var(--primary-50);
   }
 }
+
+/* ---- QR codes */
+.qr {
+  align-self: center;
+  width: 200px;
+  height: 200px;
+  border-radius: 12px;
+}
+
+.scanner {
+  aspect-ratio: 1;
+  border-radius: 20px;
+  background: var(--ink);
+  overflow: hidden;
+}
+
+.scanner video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ---- Personne de confiance : code de vérification à comparer de vive voix */
+.code-card {
+  padding: 20px 16px;
+  border-radius: 16px;
+  background: var(--white);
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 42px;
+  letter-spacing: 0.08em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}

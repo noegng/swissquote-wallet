@@ -131,6 +131,7 @@ export function BackupCeremony({
     <Screen
       title={navTitle}
       step={stepOf?.('cloud')}
+      onBack={busy ? undefined : () => setStep('verify')}
       footer={
         <Btn disabled={!strong || busy} onClick={finish}>
           {busy ? 'Encrypting…' : 'Save encrypted copy'}

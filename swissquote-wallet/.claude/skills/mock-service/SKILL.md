@@ -44,6 +44,8 @@ Règles de `/cosign`, dans cet ordre : wallet actif (ni gelé ni récupéré) �
 | `GET /release/:id` | Statut ; après le délai, renvoie la part **chiffrée pour la clé éphémère de l'appareil** |
 | `POST /release/:id/cancel` | Annulation par le client |
 
+Personne de confiance (D22, ajout du 10/10) : `POST /invitations`, `GET /invitations/:id`, `POST /invitations/:id/accept|confirm|collected|cancel`, `POST /release/:id/fulfil` ; stockage `invitations.json`. Après `collected`, `shares.json` ne contient plus la part (champ `trustee` à la place) et `GET /release/:id` attend l'approbation de cette personne (`awaiting: 'trustee'`). L'identifiant d'invitation n'est jamais renvoyé par `GET /shares/:walletId`. Preuve : `npm run demo:trustee`.
+
 Le partenaire ne dépend pas de Swissquote (il doit fonctionner si Swissquote a disparu).
 
 ## En production (à rappeler dans `docs/06`)

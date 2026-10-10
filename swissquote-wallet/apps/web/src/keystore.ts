@@ -127,3 +127,17 @@ export async function unlockPhoneSeed(wallet: StoredWallet): Promise<Uint8Array>
   const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: wallet.phoneSeed.iv }, await deviceKey(), wallet.phoneSeed.ct);
   return new Uint8Array(pt);
 }
+
+/** Invitation d'une personne de confiance, côté client : le lien à lui remettre (ce n'est pas une part). */
+export interface TrusteeInvite {
+  inviteId: string;
+  trusteeName: string;
+}
+
+export const saveInvite = (walletId: string, i: TrusteeInvite) => put(`invite:${walletId}`, i);
+export const loadInvite = (walletId: string) => get<TrusteeInvite>(`invite:${walletId}`);
+export const clearInvite = (walletId: string) => tx('readwrite', (s) => s.delete(`invite:${walletId}`));
+
+/** Côté personne de confiance : clé privée ECDH (non exportable) qui ouvre sa part, sur son appareil. */
+export const saveTrusteeKey = (inviteId: string, key: CryptoKey) => put(`trustee-key:${inviteId}`, key);
+export const loadTrusteeKey = (inviteId: string) => get<CryptoKey>(`trustee-key:${inviteId}`);

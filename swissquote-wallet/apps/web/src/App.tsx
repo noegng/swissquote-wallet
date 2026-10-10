@@ -4,16 +4,19 @@ import { loadWallet, type StoredWallet } from './keystore';
 import { CreateWallet } from './screens/CreateWallet';
 import { Exit } from './screens/Exit';
 import { Home } from './screens/Home';
+import { InviteTrustee } from './screens/InviteTrustee';
 import { Login } from './screens/Login';
 import { Passkey } from './screens/Passkey';
 import { Recover } from './screens/Recover';
 import { Send } from './screens/Send';
+import { Trustee } from './screens/Trustee';
 import { remoteWallets, type RemoteWallet } from './recovery';
 import { Brand, Screen } from './ui';
 
 // Parcours : connexion Swissquote (mock) → passkey → création du wallet → accueil ⇄ envoi.
 // Nouvel appareil (wallet existant chez Swissquote, absent ici) → récupération.
 // Deux présentations du même parcours : cadre de téléphone (app) ou page web (grand écran).
+// Lien d'invitation (?trustee=…) : portail de la personne de confiance, sans compte Swissquote.
 // Depuis la connexion, sans session : « Swissquote a disparu » → sortie avec téléphone + secours.
 
 type Layout = 'phone' | 'web';
@@ -32,7 +35,8 @@ export function App() {
   const [layout, setLayout] = useState<Layout>(loadLayout);
   const [session, setSession] = useState<Session | null>(loadSession);
   const [wallet, setWallet] = useState<StoredWallet | null | undefined>(undefined);
-  const [view, setView] = useState<'home' | 'send' | 'exit'>('home');
+  const [view, setView] = useState<'home' | 'send' | 'exit' | 'trustee'>('home');
+  const [trusteeInvite, setTrusteeInvite] = useState(() => new URLSearchParams(location.search).get('trustee'));
   // Wallet du client connu de Swissquote mais absent de cet appareil (téléphone perdu ?).
   const [remote, setRemote] = useState<RemoteWallet | null | undefined>(undefined);
   const [createInstead, setCreateInstead] = useState(false);
@@ -68,6 +72,11 @@ export function App() {
   function updateSession(s: Session | null) {
     saveSession(s);
     setSession(s);
+    if (!s) {
+      // Déconnexion : rien du parcours précédent ne doit orienter la prochaine connexion.
+      setRemote(undefined);
+      setCreateInstead(false);
+    }
   }
 
   const loading = (
@@ -77,28 +86,65 @@ export function App() {
   );
 
   let screen;
-  if (!session && view === 'exit') {
+  if (trusteeInvite) {
+    screen = (
+      <Trustee
+        inviteId={trusteeInvite}
+        onClose={() => {
+          history.replaceState(null, '', location.pathname);
+          setTrusteeInvite(null);
+        }}
+      />
+    );
+  } else if (!session && view === 'exit') {
     // Sortie sans Swissquote : aucune session, aucun appel au service Swissquote.
     screen = <Exit onBack={() => setView('home')} />;
   } else if (!session) {
     screen = <Login onLogin={updateSession} onExit={() => setView('exit')} />;
   } else if (!session.hasPasskey) {
-    screen = <Passkey session={session} onDone={() => updateSession({ ...session, hasPasskey: true })} />;
+    screen = (
+      <Passkey
+        session={session}
+        onDone={() => updateSession({ ...session, hasPasskey: true })}
+        onBack={() => updateSession(null)}
+      />
+    );
   } else if (wallet === undefined) {
     screen = loading;
   } else if (wallet === null && remote === undefined) {
     screen = loading;
   } else if (wallet === null && remote && !createInstead) {
     screen = (
-      <Recover session={session} remote={remote} onRecovered={setWallet} onCreateInstead={() => setCreateInstead(true)} />
+      <Recover
+        session={session}
+        remote={remote}
+        onRecovered={setWallet}
+        onCreateInstead={() => setCreateInstead(true)}
+        onBack={() => updateSession(null)}
+      />
     );
   } else if (wallet === null) {
-    screen = <CreateWallet session={session} onCreated={setWallet} />;
+    // Venu de la récupération (« créer un nouveau wallet à la place ») : la flèche y ramène.
+    screen = (
+      <CreateWallet
+        session={session}
+        onCreated={setWallet}
+        onBack={remote ? () => setCreateInstead(false) : () => updateSession(null)}
+      />
+    );
   } else if (view === 'send') {
     screen = <Send wallet={wallet} onBack={() => setView('home')} />;
+  } else if (view === 'trustee') {
+    screen = <InviteTrustee wallet={wallet} onBack={() => setView('home')} />;
   } else {
     screen = (
-      <Home wallet={wallet} session={session} onSend={() => setView('send')} onLogout={() => updateSession(null)} />
+      <Home
+        wallet={wallet}
+        session={session}
+        onSend={() => setView('send')}
+        onTrustee={() => setView('trustee')}
+        onLogout={() => updateSession(null)}
+      />
     );
   }
 

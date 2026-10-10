@@ -9,7 +9,16 @@ import { markBackupConfirmed, saveWallet, type StoredWallet } from '../keystore'
 import { Btn, Checklist, Group, Row, Screen, Title } from '../ui';
 import { BackupCeremony } from './BackupCeremony';
 
-export function CreateWallet({ session, onCreated }: { session: Session; onCreated: (w: StoredWallet) => void }) {
+export function CreateWallet({
+  session,
+  onCreated,
+  onBack,
+}: {
+  session: Session;
+  onCreated: (w: StoredWallet) => void;
+  /** Retour : vers la récupération si le client en venait, sinon vers la connexion. */
+  onBack: () => void;
+}) {
   const [step, setStep] = useState<'intro' | 'working' | 'backup'>('intro');
   const [progress, setProgress] = useState<string[]>([]);
   const [error, setError] = useState('');
@@ -82,6 +91,7 @@ export function CreateWallet({ session, onCreated }: { session: Session; onCreat
       <Screen
         title="New wallet"
         step={[1, 3]}
+        onBack={error ? () => setStep('intro') : undefined}
         footer={
           error ? (
             <Btn kind="secondary" onClick={create}>
@@ -98,7 +108,7 @@ export function CreateWallet({ session, onCreated }: { session: Session; onCreat
   }
 
   return (
-    <Screen title="New wallet" step={[1, 3]} footer={<Btn onClick={create}>Create your wallet</Btn>}>
+    <Screen title="New wallet" step={[1, 3]} onBack={onBack} footer={<Btn onClick={create}>Create your wallet</Btn>}>
       <Title title="Your wallet has three keys" lead="Any payment needs two of them." />
       <Group>
         <Row icon="phone" title="Phone key" sub="On this phone, for your daily payments" chip={['You', 'accent']} />

@@ -60,14 +60,19 @@ export async function startRecovery(session: Session, wallet: RemoteWallet, cred
 
 export interface RecoveryProgress {
   swissquote: { status: string; secondsLeft: number };
-  partner: { status: string; secondsLeft: number };
+  /** `trusteeName` : la part est détenue par une personne de confiance qui n'a pas encore approuvé. */
+  partner: { status: string; secondsLeft: number; trusteeName?: string };
 }
 
 export async function recoveryProgress(state: RecoveryState): Promise<RecoveryProgress> {
   const [s, p] = await Promise.all([sq(`/recovery/${state.recoveryId}`), partner(`/release/${state.releaseId}`)]);
   return {
     swissquote: { status: s.status, secondsLeft: s.secondsLeft ?? 0 },
-    partner: { status: p.status, secondsLeft: p.secondsLeft ?? 0 },
+    partner: {
+      status: p.status,
+      secondsLeft: p.secondsLeft ?? 0,
+      trusteeName: p.awaiting === 'trustee' ? p.trusteeName : undefined,
+    },
   };
 }
 

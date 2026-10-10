@@ -45,9 +45,16 @@ export async function requestPartnerShare(wallet: StoredWallet): Promise<ExitSta
   return state;
 }
 
-export async function partnerStatus(state: ExitState): Promise<{ status: string; secondsLeft: number }> {
+export async function partnerStatus(
+  state: ExitState,
+): Promise<{ status: string; secondsLeft: number; trusteeName?: string }> {
   const r = await partner(`/release/${state.releaseId}`);
-  return { status: r.status, secondsLeft: r.secondsLeft ?? 0 };
+  // `trusteeName` : la part est chez une personne de confiance qui n'a pas encore approuvé.
+  return {
+    status: r.status,
+    secondsLeft: r.secondsLeft ?? 0,
+    trusteeName: r.awaiting === 'trustee' ? r.trusteeName : undefined,
+  };
 }
 
 /** Transfère tous les fonds vers `to`, signés par le téléphone et la clé de secours, sans Swissquote. */

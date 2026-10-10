@@ -127,6 +127,17 @@ const ICONS = {
       <path d="M16 14h.01" />
     </>
   ),
+  qr: (
+    <>
+      <rect x="3" y="3" width="7" height="7" rx="1" />
+      <rect x="14" y="3" width="7" height="7" rx="1" />
+      <rect x="3" y="14" width="7" height="7" rx="1" />
+      <path d="M14 14h3v3h-3z" />
+      <path d="M21 14v.01" />
+      <path d="M21 21v-3" />
+      <path d="M14 21h3" />
+    </>
+  ),
   external: (
     <>
       <path d="M15 3h6v6" />
