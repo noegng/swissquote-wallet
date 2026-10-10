@@ -123,6 +123,25 @@ export async function verifyRegistration(clientId: string, response: Registratio
   return { credentialDeviceType, synced: credentialBackedUp };
 }
 
+export function credentialBelongsTo(clientId: string, credentialId: string): boolean {
+  return (credentials()[clientId] ?? []).some((c) => c.id === credentialId);
+}
+
+/**
+ * Fin de récupération : révoque toutes les passkeys du client sauf celle du nouvel appareil
+ * (celle du téléphone perdu ne doit plus pouvoir annuler ni approuver quoi que ce soit).
+ * Renvoie le nombre de passkeys révoquées.
+ */
+export function revokeCredentialsExcept(clientId: string, keepId: string): number {
+  const all = credentials();
+  const before = all[clientId] ?? [];
+  all[clientId] = before.filter((c) => c.id === keepId);
+  writeJson('credentials.json', all);
+  const revoked = before.length - all[clientId].length;
+  if (revoked) audit('passkey.revoked', { clientId, revoked });
+  return revoked;
+}
+
 // --- Authentification liée à une opération -------------------------------------------------
 
 export async function operationOptions(clientId: string, purpose: Purpose, payload: string) {

@@ -2,7 +2,7 @@
 import { Psbt, address as btcAddress, type Network } from 'bitcoinjs-lib';
 import type { BIP32Interface } from 'bip32';
 import { deriveAddress, type Chain, type WalletPolicy } from './descriptor';
-import { ecc } from './keys';
+import { ecc, toHex, type KeyOrigin } from './keys';
 
 /** Seuil de poussière d'une sortie P2WSH. */
 export const DUST_SATS = 330n;
@@ -86,6 +86,29 @@ export function buildSpend(args: BuildSpendArgs): BuiltSpend {
   return { psbt, fee, change };
 }
 
+/** Transfert de tous les fonds vers une seule adresse, sans change (récupération, sortie). */
+export function buildSweep(args: Omit<BuildSpendArgs, 'amount' | 'changeIndex'>): BuiltSpend {
+  const { policy, network, utxos, to, feeRate } = args;
+  if (utxos.length === 0) throw new Error('Aucun fonds à transférer');
+  btcAddress.toOutputScript(to, network);
+  const total = utxos.reduce((s, u) => s + u.value, 0n);
+  const fee = estimateFee(utxos.length, 1, feeRate);
+  if (total - fee < DUST_SATS) throw new Error(`Fonds insuffisants pour couvrir les frais (${total} sats)`);
+  const psbt = new Psbt({ network });
+  for (const u of utxos) {
+    const d = deriveAddress(policy, u.chain, u.index, network);
+    psbt.addInput({
+      hash: u.txid,
+      index: u.vout,
+      witnessUtxo: { script: d.output, value: u.value },
+      witnessScript: d.witnessScript,
+      bip32Derivation: d.bip32Derivation,
+    });
+  }
+  psbt.addOutput({ address: to, value: total - fee });
+  return { psbt, fee, change: 0n };
+}
+
 /** Signe toutes les entrées qui portent l'empreinte de cette racine. Ne touche pas aux autres. */
 export function signWithRoot(psbt: Psbt, root: BIP32Interface): Psbt {
   psbt.signAllInputsHD(root);
@@ -94,6 +117,23 @@ export function signWithRoot(psbt: Psbt, root: BIP32Interface): Psbt {
 
 const validator = (pubkey: Uint8Array, msghash: Uint8Array, signature: Uint8Array) =>
   ecc.verify(msghash, pubkey, signature);
+
+/**
+ * Vrai si chaque entrée porte une signature valide de la clé `key` (repérée par son empreinte dans
+ * les chemins BIP-32). Sert au cosignataire en récupération : exiger la clé de secours, pas celle
+ * du téléphone perdu.
+ */
+export function everyInputSignedBy(psbt: Psbt, key: KeyOrigin): boolean {
+  return psbt.data.inputs.every((input, i) => {
+    const d = input.bip32Derivation?.find((x) => toHex(x.masterFingerprint) === key.fingerprint);
+    if (!d || !input.partialSig?.some((s) => toHex(s.pubkey) === toHex(d.pubkey))) return false;
+    try {
+      return psbt.validateSignaturesOfInput(i, validator, d.pubkey);
+    } catch {
+      return false;
+    }
+  });
+}
 
 /** Relit une PSBT reçue en base64 (ex. côté service Swissquote). */
 export function psbtFromBase64(base64: string, network: Network): Psbt {

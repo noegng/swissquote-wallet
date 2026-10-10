@@ -1,24 +1,12 @@
 // [MOCK] Service Swissquote : connexion (KYC simulé), passkeys, registre des wallets (Travel Rule),
 // cosignataire avec règles, notifications « hors bande ». Processus séparé avec son propre
-// stockage (data/). À venir : récupération. Voir la skill mock-service.
+// stockage (data/). Récupération dans recovery.ts. Voir la skill mock-service.
 import './env';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { randomUUID } from 'node:crypto';
-import {
-  descriptorString,
-  deriveAddress,
-  networkConfig,
-  psbtFromBase64,
-  signWithRoot,
-  summarizeSpend,
-  type BtcNetworkName,
-  type KeyOrigin,
-  type SpendSummary,
-  type WalletPolicy,
-} from '@sqw/core';
+import { psbtFromBase64, signWithRoot, summarizeSpend, deriveAddress } from '@sqw/core';
 import { audit, readJson, resetData, SERVICE, writeJson } from './store';
-import { SwissquoteSigner } from './signer';
 import {
   clientFromAuthHeader,
   hasPasskey,
@@ -30,22 +18,19 @@ import {
   type Purpose,
 } from './auth';
 import { DAILY_LIMIT_SATS, decide, HIGH_VALUE_DELAY_SECONDS, recordSpend, sanctionedAddresses } from './rules';
-
-const cfg = networkConfig(
-  (process.env.BTC_NETWORK ?? 'regtest') as BtcNetworkName,
-  process.env.BTC_NETWORK === 'signet' ? process.env.ESPLORA_URL_SIGNET : process.env.ESPLORA_URL_REGTEST,
-);
-let signer = new SwissquoteSigner(cfg);
-
-interface WalletRecord {
-  walletId: string;
-  clientId: string;
-  account: number;
-  network: BtcNetworkName;
-  policy: WalletPolicy;
-  descriptor: string;
-  createdAt: string;
-}
+import {
+  cfg,
+  createWalletRecord,
+  getSigner,
+  isKeyOrigin,
+  notify,
+  plain,
+  resetSigner,
+  statusOf,
+  wallets,
+  type WalletRecord,
+} from './context';
+import { registerRecoveryRoutes } from './recovery';
 
 interface CosignRequest {
   id: string;
@@ -58,38 +43,20 @@ interface CosignRequest {
   executeAfter: number;
 }
 
-const wallets = () => readJson<Record<string, WalletRecord>>('wallets.json', {});
 const requests = () => readJson<Record<string, CosignRequest>>('requests.json', {});
 const saveRequest = (r: CosignRequest) => writeJson('requests.json', { ...requests(), [r.id]: r });
 
-function notify(walletId: string, text: string) {
-  const all = readJson<Record<string, { at: string; text: string }[]>>('notifications.json', {});
-  (all[walletId] ??= []).push({ at: new Date().toISOString(), text });
-  writeJson('notifications.json', all);
-  audit('notification', { walletId, text });
-}
-
-function plain(summary: SpendSummary) {
-  return {
-    inputTotal: summary.inputTotal.toString(),
-    sentExternal: summary.sentExternal.toString(),
-    change: summary.change.toString(),
-    fee: summary.fee.toString(),
-    external: summary.external.map((o) => ({ address: o.address, value: o.value.toString() })),
-  };
-}
-
-function isKeyOrigin(k: unknown): k is KeyOrigin {
-  const o = k as KeyOrigin;
-  return !!o && typeof o.fingerprint === 'string' && typeof o.path === 'string' && typeof o.xpub === 'string';
-}
-
-/** Signe la PSBT avec la clé SQ du wallet, après avoir vérifié qu'elle n'utilise que ses fonds. */
+/** Décode la PSBT et vérifie qu'elle n'utilise que les fonds du wallet, change compris. */
 function cosign(wallet: WalletRecord, psbtBase64: string) {
   const psbt = psbtFromBase64(psbtBase64, cfg.network);
   const summary = summarizeSpend(psbt, wallet.policy, cfg.network, wallet.policy.keys[1]);
   return { psbt, summary };
 }
+
+const frozenReason = (w: WalletRecord) =>
+  statusOf(w) === 'frozen'
+    ? 'Wallet gelé : une récupération est en cours (annulable depuis votre téléphone)'
+    : 'Wallet récupéré : les fonds ont été transférés vers un nouveau wallet';
 
 const app = Fastify();
 await app.register(cors, { origin: process.env.ORIGIN ?? 'http://localhost:5173' });
@@ -143,30 +110,15 @@ app.post('/wallets', async (req, reply) => {
   if (!isKeyOrigin(body?.phoneKey) || !isKeyOrigin(body?.backupKey)) {
     return reply.code(400).send({ mock: true, error: 'phoneKey et backupKey requis' });
   }
-  const all = wallets();
-  const account = Object.keys(all).length + 1;
-  const policy: WalletPolicy = {
-    threshold: 2,
-    keys: [body.phoneKey, signer.keyForAccount(account), body.backupKey],
-  };
-  const record: WalletRecord = {
-    walletId: randomUUID(),
-    clientId,
-    account,
-    network: cfg.name,
-    policy,
-    descriptor: descriptorString(policy, 0),
-    createdAt: new Date().toISOString(),
-  };
-  writeJson('wallets.json', { ...all, [record.walletId]: record });
-  audit('wallet.created', { walletId: record.walletId, clientId, account });
+  const record = createWalletRecord(clientId, body.phoneKey, body.backupKey);
+  audit('wallet.created', { walletId: record.walletId, clientId, account: record.account });
   return {
     mock: true,
     walletId: record.walletId,
-    swissquoteKey: policy.keys[1],
-    policy,
+    swissquoteKey: record.policy.keys[1],
+    policy: record.policy,
     descriptor: record.descriptor,
-    firstAddress: deriveAddress(policy, 0, 0, cfg.network).address,
+    firstAddress: deriveAddress(record.policy, 0, 0, cfg.network).address,
   };
 });
 
@@ -180,6 +132,10 @@ app.post('/cosign', async (req, reply) => {
   const body = req.body as { walletId?: string; psbt?: string; authentication?: never };
   const wallet = body?.walletId ? wallets()[body.walletId] : undefined;
   if (!wallet || !body.psbt) return reply.code(400).send({ mock: true, error: 'walletId et psbt requis' });
+  if (statusOf(wallet) !== 'active') {
+    audit('cosign.refused', { walletId: wallet.walletId, reason: frozenReason(wallet) });
+    return reply.code(423).send({ mock: true, status: 'refused', reason: frozenReason(wallet) });
+  }
   try {
     await verifyOperation(wallet.clientId, 'cosign', body.psbt, body.authentication);
   } catch (e) {
@@ -232,7 +188,7 @@ app.post('/cosign', async (req, reply) => {
     });
   }
 
-  signWithRoot(analysed.psbt, signer.root);
+  signWithRoot(analysed.psbt, getSigner().root);
   recordSpend(wallet.walletId, analysed.summary.sentExternal);
   audit('cosign.signed', { walletId: wallet.walletId, tier: 1, summary });
   return {
@@ -248,10 +204,16 @@ app.post('/cosign', async (req, reply) => {
 app.get('/cosign/:id', async (req, reply) => {
   const request = requests()[(req.params as { id: string }).id];
   if (!request) return reply.code(404).send({ mock: true, error: 'Demande inconnue' });
+  if (request.status === 'pending' && statusOf(wallets()[request.walletId]) !== 'active') {
+    // Un gros paiement en attente ne part pas si le wallet a été gelé entre-temps (récupération).
+    saveRequest({ ...request, status: 'cancelled' });
+    audit('cosign.cancelled', { requestId: request.id, reason: 'wallet gelé' });
+    return { mock: true, status: 'cancelled', reason: frozenReason(wallets()[request.walletId]) };
+  }
   if (request.status === 'pending' && Date.now() >= request.executeAfter) {
     const wallet = wallets()[request.walletId];
     const { psbt, summary } = cosign(wallet, request.psbt);
-    signWithRoot(psbt, signer.root);
+    signWithRoot(psbt, getSigner().root);
     recordSpend(wallet.walletId, summary.sentExternal);
     const signed = { ...request, status: 'signed' as const, psbt: psbt.toBase64() };
     saveRequest(signed);
@@ -314,10 +276,12 @@ app.post('/admin/sanctions', async (req, reply) => {
 // Démo uniquement : vide le stockage du service (une nouvelle clé maître est générée).
 app.post('/admin/reset', async () => {
   resetData();
-  signer = new SwissquoteSigner(cfg);
+  resetSigner();
   audit('reset');
   return { mock: true, reset: true };
 });
+
+registerRecoveryRoutes(app);
 
 const port = Number(process.env.SWISSQUOTE_PORT ?? 4001);
 await app.listen({ port, host: '127.0.0.1' });

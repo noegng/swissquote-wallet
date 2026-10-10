@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   accountOrigin,
   buildSpend,
+  buildSweep,
   combinePsbts,
   deriveAddress,
   descriptorString,
+  everyInputSignedBy,
   finalizeSpend,
   networkConfig,
   randomSeed,
@@ -112,5 +114,39 @@ describe('invariants de signature (I1, I3)', () => {
     const stranger = rootFromSeed(randomSeed(), network);
     const { psbt } = unsignedSpend(w.policy);
     expect(() => signWithRoot(psbt, stranger)).toThrow();
+  });
+});
+
+describe('signature d’une clé précise (récupération)', () => {
+  it('distingue une PSBT signée par la clé de secours d’une PSBT signée par le téléphone', () => {
+    const w = makeWallet();
+    const byBackup = signWithRoot(unsignedSpend(w.policy).psbt, w.backup);
+    const byPhone = signWithRoot(unsignedSpend(w.policy).psbt, w.phone);
+    expect(everyInputSignedBy(byBackup, w.policy.keys[2])).toBe(true);
+    expect(everyInputSignedBy(byPhone, w.policy.keys[2])).toBe(false);
+    expect(everyInputSignedBy(unsignedSpend(w.policy).psbt, w.policy.keys[2])).toBe(false);
+  });
+});
+
+describe('transfert de tous les fonds (récupération, sortie)', () => {
+  it('une seule sortie, aucun change, signable par secours + Swissquote', () => {
+    const w = makeWallet();
+    const to = deriveAddress(makeWallet().policy, 0, 0, network).address;
+    const { psbt, fee, change } = buildSweep({
+      policy: w.policy,
+      network,
+      utxos: [
+        { txid: '44'.repeat(32), vout: 0, value: 60_000n, chain: 0, index: 0 },
+        { txid: '55'.repeat(32), vout: 1, value: 40_000n, chain: 1, index: 3 },
+      ],
+      to,
+      feeRate: 2,
+    });
+    expect(change).toBe(0n);
+    expect(psbt.txOutputs).toHaveLength(1);
+    expect(psbt.txOutputs[0].value + fee).toBe(100_000n);
+    const a = signWithRoot(psbt.clone(), w.backup).toBase64();
+    const b = signWithRoot(psbt.clone(), w.swissquote).toBase64();
+    expect(finalizeSpend(combinePsbts([a, b], network)).txid).toMatch(/^[0-9a-f]{64}$/);
   });
 });
