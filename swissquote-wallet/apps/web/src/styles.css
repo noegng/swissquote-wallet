@@ -328,11 +328,11 @@ span.nav-btn {
   line-height: 28px;
 }
 
-.brand i {
+.brand svg {
+  flex: none;
   width: 28px;
   height: 28px;
-  border-radius: 50%;
-  background: var(--primary);
+  color: var(--primary);
 }
 
 .brand.large {
@@ -341,7 +341,7 @@ span.nav-btn {
   line-height: 34px;
 }
 
-.brand.large i {
+.brand.large svg {
   width: 34px;
   height: 34px;
 }
