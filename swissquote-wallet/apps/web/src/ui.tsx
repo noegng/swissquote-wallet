@@ -1,7 +1,7 @@
 // Briques d'interface communes, reprises de la maquette Figma « V3 App » : coque d'écran (barre de
 // navigation, progression, pied collant), listes groupées, pastilles d'état, boutons.
 // Aucune logique métier ici : uniquement de la présentation.
-import type { ButtonHTMLAttributes, FormEventHandler, ReactNode } from 'react';
+import { useState, type ButtonHTMLAttributes, type FormEventHandler, type ReactNode } from 'react';
 
 const ICONS = {
   chevL: <path d="m15 18-6-6 6-6" />,
@@ -519,5 +519,34 @@ export function Brand({ large }: { large?: boolean }) {
       </svg>
       Swissquote
     </span>
+  );
+}
+
+/**
+ * Mots d'une part de sauvegarde, numérotés. Les numéros sont dessinés en CSS (::before) : une
+ * sélection copiée ne contient que les mots. Le bouton copie les mots séparés par des espaces,
+ * prêts à coller dans le champ de saisie.
+ */
+export function WordList({ words }: { words: string[] }) {
+  const [copied, setCopied] = useState(false);
+  const rows = Math.ceil(words.length / 2);
+  return (
+    <>
+      <ol className="words" style={{ gridTemplateRows: `repeat(${rows}, auto)` }}>
+        {words.map((w, i) => (
+          <li key={i} className={i % rows === 0 ? 'first' : undefined} data-n={String(i + 1).padStart(2, '0')}>
+            {w}
+          </li>
+        ))}
+      </ol>
+      <Btn
+        kind="secondary"
+        small
+        icon="copy"
+        onClick={() => navigator.clipboard?.writeText(words.join(' ')).then(() => setCopied(true))}
+      >
+        {copied ? 'Words copied' : 'Copy the words'}
+      </Btn>
+    </>
   );
 }

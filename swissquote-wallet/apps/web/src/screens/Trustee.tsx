@@ -15,24 +15,10 @@ import {
   type Invitation,
   type ReleaseRequest,
 } from '../trustee';
-import { Btn, Callout, Group, Hero, Row, Screen, Title } from '../ui';
+import { Btn, Callout, Group, Hero, Row, Screen, Title, WordList } from '../ui';
 
 const when = (iso: string) =>
   new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
-
-function Words({ words }: { words: string[] }) {
-  const rows = Math.ceil(words.length / 2);
-  return (
-    <ol className="words" style={{ gridTemplateRows: `repeat(${rows}, auto)` }}>
-      {words.map((w, i) => (
-        <li key={i} className={i % rows === 0 ? 'first' : undefined}>
-          <span className="n">{String(i + 1).padStart(2, '0')}</span>
-          {w}
-        </li>
-      ))}
-    </ol>
-  );
-}
 
 export function Trustee({ inviteId, onClose }: { inviteId: string; onClose: () => void }) {
   const [inv, setInv] = useState<Invitation | null>(null);
@@ -188,7 +174,7 @@ export function Trustee({ inviteId, onClose }: { inviteId: string; onClose: () =
           title={`Write down these ${words.length} words`}
           lead={`They are your half of ${inv.clientId}’s backup key. Keep them where you keep your clients’ documents.`}
         />
-        <Words words={words} />
+        <WordList words={words} />
         {error && <p className="error">{error}</p>}
         <p className="note">
           Decrypted on this device only. Once you confirm, the partner that held this share destroys its copy.

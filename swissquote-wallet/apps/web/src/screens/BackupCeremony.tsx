@@ -4,7 +4,7 @@
 import { useMemo, useState } from 'react';
 import { sealWithPassphrase } from '@sqw/core';
 import { btc } from '../config';
-import { Btn, Callout, Screen, Title } from '../ui';
+import { Btn, Callout, Screen, Title, WordList } from '../ui';
 
 function download(filename: string, content: unknown) {
   const url = URL.createObjectURL(new Blob([JSON.stringify(content, null, 2)], { type: 'application/json' }));
@@ -64,7 +64,6 @@ export function BackupCeremony({
   }
 
   if (step === 'paper') {
-    const rows = Math.ceil(words.length / 2);
     return (
       <Screen
         title={navTitle}
@@ -75,14 +74,7 @@ export function BackupCeremony({
           title={`Write down these ${words.length} words`}
           lead="They are your half of the backup key. You will need them if you lose your phone."
         />
-        <ol className="words" style={{ gridTemplateRows: `repeat(${rows}, auto)` }}>
-          {words.map((w, i) => (
-            <li key={i} className={i % rows === 0 ? 'first' : undefined}>
-              <span className="n">{String(i + 1).padStart(2, '0')}</span>
-              {w}
-            </li>
-          ))}
-        </ol>
+        <WordList words={words} />
         <p className="note">
           On their own these words do nothing: our partner’s share is needed too. Keep the paper in a safe place at
           home.

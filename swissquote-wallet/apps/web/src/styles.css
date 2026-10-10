@@ -933,7 +933,10 @@ button.row:disabled .t {
   border-top: 0;
 }
 
-.words .n {
+/* Numéro dessiné en CSS : jamais inclus dans le texte copié. */
+.words li::before {
+  content: attr(data-n);
+  flex: none;
   width: 20px;
   font-size: 14px;
   font-weight: 500;
