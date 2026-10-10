@@ -71,6 +71,20 @@ export function loadWallet(clientId: string): Promise<StoredWallet | undefined> 
   return get<StoredWallet>(`wallet:${clientId}`);
 }
 
+/** Gros paiement en attente du délai de sécurité : la PSBT déjà signée par le téléphone (une seule
+ *  signature sur deux, donc inutilisable seule) est gardée pour pouvoir finir après un rechargement. */
+export interface PendingPayment {
+  requestId: string;
+  appSigned: string;
+  to: string;
+  amount: string;
+  executeAfter: string;
+}
+
+export const savePending = (walletId: string, p: PendingPayment) => put(`pending:${walletId}`, p);
+export const loadPending = (walletId: string) => get<PendingPayment>(`pending:${walletId}`);
+export const clearPending = (walletId: string) => tx('readwrite', (s) => s.delete(`pending:${walletId}`));
+
 /** Déchiffre la graine de la clé téléphone, juste le temps de signer. */
 export async function unlockPhoneSeed(wallet: StoredWallet): Promise<Uint8Array> {
   const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: wallet.phoneSeed.iv }, await deviceKey(), wallet.phoneSeed.ct);

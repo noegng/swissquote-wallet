@@ -223,3 +223,54 @@ button:disabled {
   font-size: 14px;
   line-height: 1.4;
 }
+
+.summary {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 12px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-size: 14px;
+}
+
+.summary dt {
+  color: var(--muted);
+}
+
+.summary dd {
+  margin: 0;
+  text-align: right;
+}
+
+.summary dd.address {
+  text-align: left;
+  grid-column: 1 / -1;
+}
+
+.countdown {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.inbox {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.inbox time {
+  color: var(--muted);
+  margin-right: 4px;
+}
+
+.link {
+  color: var(--accent);
+  font-weight: 600;
+}

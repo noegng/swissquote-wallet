@@ -52,6 +52,22 @@ export class Esplora {
     return Math.max(1, Math.ceil(estimates['3'] ?? estimates['6'] ?? 1));
   }
 
+  /** Vrai si l'adresse a déjà reçu au moins une transaction (confirmée ou non). */
+  async addressUsed(address: string): Promise<boolean> {
+    const a = await this.get<{ chain_stats: { tx_count: number }; mempool_stats: { tx_count: number } }>(
+      `/address/${address}`,
+    );
+    return a.chain_stats.tx_count + a.mempool_stats.tx_count > 0;
+  }
+
+  /** Premier index jamais utilisé sur une chaîne (réception 0 ou change 1), pour ne pas réutiliser d'adresse. */
+  async firstUnusedIndex(policy: WalletPolicy, network: Network, chain: Chain, max = 50): Promise<number> {
+    for (let index = 0; index < max; index++) {
+      if (!(await this.addressUsed(deriveAddress(policy, chain, index, network).address))) return index;
+    }
+    return max;
+  }
+
   /** Cherche les UTXO des `gap` premières adresses de réception et de change. */
   async scanWallet(policy: WalletPolicy, network: Network, gap = 10): Promise<WalletUtxo[]> {
     const found: WalletUtxo[] = [];

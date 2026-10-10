@@ -11,9 +11,9 @@ Le modèle : multisig Bitcoin 2 sur 3 (clé téléphone, clé Swissquote, clé d
 
 | # | Invariant | Test qui le garantit |
 |---|---|---|
-| I1 | Swissquote seul ne peut pas déplacer les fonds | `packages/core/test/invariants.test.ts` : une PSBT signée par la seule clé SQ ne se finalise pas |
-| I2 | Swissquote + partenaire ne peuvent ni déplacer les fonds ni restaurer la clé de secours | idem : `combine([part TIERS])` échoue ; clé SQ + rien d'autre ne finalise pas |
-| I3 | Le client sort sans Swissquote | idem : téléphone + clé de secours (C1 + TIERS) finalisent une PSBT ; e2e regtest avec service SQ arrêté |
+| I1 | Swissquote seul ne peut pas déplacer les fonds | `packages/core/test/multisig.test.ts` (« aucune clé seule ne peut finaliser ») ; `npm run demo:cosign` (étape I1) |
+| I2 | Swissquote + partenaire ne peuvent ni déplacer les fonds ni restaurer la clé de secours | `backup.test.ts` et `onboarding.test.ts` (TIERS seul ne restaure rien) ; `multisig.test.ts` (clé SQ seule ne finalise pas) |
+| I3 | Le client sort sans Swissquote | `multisig.test.ts` (paire téléphone + secours) ; `onboarding.test.ts` (CLIENT + TIERS redonnent la clé de secours) ; e2e « Swissquote arrêté » à écrire |
 | I4 | L'app ne détient jamais la clé SQ ni la part TIERS | revue : aucun import de `services/*` dans `apps/web` ; la part TIERS n'arrive dans l'app que **chiffrée pour l'appareil** pendant une récupération |
 | I5 | La clé de secours n'est réassemblée que sur l'appareil, puis abandonnée | e2e : après récupération, les fonds sont sur un **nouveau** descripteur ; la clé reconstituée n'est jamais persistée ni envoyée |
 | I6 | Aucune cryptographie maison | revue : uniquement bitcoinjs-lib, bip32, ecpair, @bitcoinerlab/secp256k1, la lib SLIP-39 validée, WebCrypto, SimpleWebAuthn |
@@ -24,7 +24,7 @@ Le modèle : multisig Bitcoin 2 sur 3 (clé téléphone, clé Swissquote, clé d
 1. Identifier quels invariants le changement touche.
 2. Vérifier qu'aucune des combinaisons suivantes ne devient suffisante : {SQ}, {SQ, TIERS}, {SQ, C1}, {téléphone volé + e-mail}, {C1 + C2 sans TIERS}.
 3. Vérifier que les combinaisons légitimes restent suffisantes : {téléphone, SQ} (quotidien), {secours, SQ} (téléphone perdu), {téléphone, secours} (SQ disparu).
-4. Lancer `npm test -w packages/core` : les tests d'invariants doivent passer.
+4. Lancer `npm test` (tests d'invariants dans `packages/core/test/`) et `npm run demo:cosign` (services lancés).
 
 ## Erreurs interdites
 

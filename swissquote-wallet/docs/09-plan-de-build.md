@@ -29,7 +29,7 @@ Règles : P0 et P1 terminés avant tout bonus. Points d'étape à **H10, H20, H2
 - [x] **A** `backup.ts` (split / combine), `sealing.ts` (ECDH + HKDF + AES-GCM, et PBKDF2 pour C2), `summary.ts` (résumé vérifié), `onboarding.ts` (matériel d'un nouveau wallet)
 - [ ] **A** Tests des invariants I1 à I5
 - [x] **B** Onboarding : connexion mockée → passkey → clés → Swissquote → part TIERS scellée au partenaire → C1 + vérification de 2 mots → C2 chiffrée et téléchargée ; accueil (solde, adresse, faucet regtest, kit de sortie). Testé dans Chrome jusqu'au téléchargement de C2
-- [ ] **B** Écran Envoyer : résumé clair, palier affiché, lien explorateur
+- [x] **B** Écran Envoyer : résumé vérifié par l'app, approbation passkey liée à la PSBT, palier 1 immédiat, palier 2 avec compte à rebours et annulation par passkey (repris après rechargement), lien explorateur ; accueil avec alertes Swissquote et adresse de réception non réutilisée. Testé dans Chrome jusqu'à l'approbation passkey
 - [x] **C** Règles du cosignataire : plafond quotidien, palier 2 (délai + notification annulable), sanctions (`npm run demo:cosign`)
 - [x] **B + C** Passkey exigée sur `/cosign` et `/cosign/:id/cancel` ; attaques sans passkey, PSBT échangée et rejeu refusées (`npm run demo:cosign`)
 - [x] **C** Registre des wallets (Travel Rule), KYC mocké, journal d'audit ; service partenaire : clé publique, dépôt de la part TIERS (`npm run demo:create`)

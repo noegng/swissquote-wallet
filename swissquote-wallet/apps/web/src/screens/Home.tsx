@@ -1,11 +1,13 @@
-// Accueil du wallet : solde, adresse de réception, état de la sauvegarde, kit de sortie.
+// Accueil du wallet : solde, envoi, paiement en attente, alertes Swissquote, réception, sauvegarde,
+// kit de sortie.
 import { useCallback, useEffect, useState } from 'react';
-import { deriveAddress, descriptorString, Esplora } from '@sqw/core';
-import { partner } from '../api';
+import { deriveAddress, descriptorString } from '@sqw/core';
+import { partner, sq } from '../api';
 import { btc } from '../config';
-import type { StoredWallet } from '../keystore';
-
-const esplora = new Esplora(btc);
+import { formatBtc, formatSats } from '../format';
+import { loadPending, type PendingPayment as Pending, type StoredWallet } from '../keystore';
+import { esplora } from '../payments';
+import { PendingPayment } from './PendingPayment';
 
 function downloadExitKit(wallet: StoredWallet) {
   const kit = {
@@ -24,19 +26,42 @@ function downloadExitKit(wallet: StoredWallet) {
   URL.revokeObjectURL(url);
 }
 
-export function Home({ wallet, onLogout }: { wallet: StoredWallet; onLogout: () => void }) {
+interface Notification {
+  at: string;
+  text: string;
+}
+
+export function Home({
+  wallet,
+  onSend,
+  onLogout,
+}: {
+  wallet: StoredWallet;
+  onSend: () => void;
+  onLogout: () => void;
+}) {
   const [balance, setBalance] = useState<bigint | null>(null);
+  const [address, setAddress] = useState(() => deriveAddress(wallet.policy, 0, 0, btc.network).address);
   const [backupDeposited, setBackupDeposited] = useState<boolean | null>(null);
+  const [pending, setPending] = useState<Pending | null>(null);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [message, setMessage] = useState('');
-  const address = deriveAddress(wallet.policy, 0, 0, btc.network).address;
 
   const refresh = useCallback(async () => {
     try {
-      const utxos = await esplora.scanWallet(wallet.policy, btc.network, 5);
+      const [utxos, index] = await Promise.all([
+        esplora.scanWallet(wallet.policy, btc.network, 20),
+        esplora.firstUnusedIndex(wallet.policy, btc.network, 0),
+      ]);
       setBalance(utxos.reduce((s, u) => s + u.value, 0n));
+      setAddress(deriveAddress(wallet.policy, 0, index, btc.network).address);
     } catch {
       setMessage('Réseau Bitcoin injoignable (regtest lancé ? `npm run regtest:up`)');
     }
+    loadPending(wallet.walletId).then((p) => setPending(p ?? null));
+    sq<{ notifications: Notification[] }>(`/notifications/${wallet.walletId}`)
+      .then((r) => setNotifications(r.notifications.slice(-3).reverse()))
+      .catch(() => setNotifications([]));
   }, [wallet]);
 
   useEffect(() => {
@@ -44,6 +69,8 @@ export function Home({ wallet, onLogout }: { wallet: StoredWallet; onLogout: () 
     partner<{ exists: boolean }>(`/shares/${wallet.walletId}`)
       .then((r) => setBackupDeposited(r.exists))
       .catch(() => setBackupDeposited(false));
+    const timer = setInterval(refresh, 5000);
+    return () => clearInterval(timer);
   }, [refresh, wallet.walletId]);
 
   async function faucet() {
@@ -76,9 +103,37 @@ export function Home({ wallet, onLogout }: { wallet: StoredWallet; onLogout: () 
       )}
       <div className="balance">
         <span>Solde</span>
-        <strong>{balance === null ? '…' : `${(Number(balance) / 1e8).toFixed(8)} BTC`}</strong>
-        <small>{balance === null ? '' : `${balance.toLocaleString('fr-CH')} sats`}</small>
+        <strong>{balance === null ? '…' : formatBtc(balance)}</strong>
+        <small>{balance === null ? '' : formatSats(balance)}</small>
       </div>
+      <button className="primary" disabled={!balance || !!pending} onClick={onSend}>
+        Envoyer
+      </button>
+
+      {pending && (
+        <PendingPayment
+          wallet={wallet}
+          pending={pending}
+          onDone={(r) => {
+            setPending(null);
+            setMessage(r.status === 'sent' ? 'Gros paiement envoyé après le délai de sécurité.' : 'Paiement annulé.');
+            refresh();
+          }}
+        />
+      )}
+
+      {notifications.length > 0 && (
+        <div className="card">
+          <span className="label">Alertes Swissquote (MOCK : SMS, e-mail, espace client)</span>
+          <ul className="inbox">
+            {notifications.map((n) => (
+              <li key={n.at + n.text}>
+                <time>{new Date(n.at).toLocaleTimeString('fr-CH')}</time> {n.text}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="card">
         <span className="label">Adresse de réception</span>

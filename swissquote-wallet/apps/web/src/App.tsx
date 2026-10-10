@@ -5,13 +5,15 @@ import { CreateWallet } from './screens/CreateWallet';
 import { Home } from './screens/Home';
 import { Login } from './screens/Login';
 import { Passkey } from './screens/Passkey';
+import { Send } from './screens/Send';
 
-// Parcours : connexion Swissquote (mock) → passkey → création du wallet → accueil.
-// À venir : envoi, récupération, sortie sans Swissquote.
+// Parcours : connexion Swissquote (mock) → passkey → création du wallet → accueil ⇄ envoi.
+// À venir : récupération, sortie sans Swissquote.
 
 export function App() {
   const [session, setSession] = useState<Session | null>(loadSession);
   const [wallet, setWallet] = useState<StoredWallet | null | undefined>(undefined);
+  const [view, setView] = useState<'home' | 'send'>('home');
 
   useEffect(() => {
     if (!session) return setWallet(undefined);
@@ -34,8 +36,10 @@ export function App() {
     screen = <p className="note">Chargement…</p>;
   } else if (wallet === null) {
     screen = <CreateWallet session={session} onCreated={setWallet} />;
+  } else if (view === 'send') {
+    screen = <Send wallet={wallet} onBack={() => setView('home')} />;
   } else {
-    screen = <Home wallet={wallet} onLogout={() => updateSession(null)} />;
+    screen = <Home wallet={wallet} onSend={() => setView('send')} onLogout={() => updateSession(null)} />;
   }
 
   return (
