@@ -21,6 +21,7 @@ Mettre à jour ce fichier à chaque changement, avec la date et la raison.
 | D14 | Cryptographie | Aucune cryptographie maison : bibliothèques et contrats éprouvés uniquement | Décidé | Exigé par le brief |
 | D15 | Différenciation | Démo d'attaques qui échouent, veto indépendant, continuité bancaire pendant le délai, section « Du prototype à la production » | Proposé | Voir `05-differenciation.md` |
 | D16 | Cadrage juridique | Hypothèse de non-garde, présentée comme à valider par un avocat suisse | À valider | Voir `02-conception.md` section 7 |
+| D17 | MPC (10 octobre 2026) | Rejeté au profit de la smart custody (règles on-chain dans le smart account) | Proposé | Avec un MPC où la banque cosigne, elle participe à chaque mouvement (risque de qualification en garde). Règles vérifiables on-chain, compte utilisable sans le fournisseur. Limites : EVM uniquement (Bitcoin natif en point ouvert), plafonds et gardiens publics (confidentialité). Détail dans `swissquote-wallet-projet.md` section 2.5 |
 
 ## Spike de départ (H0–H3)
 
