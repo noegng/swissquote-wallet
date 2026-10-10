@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { loadSession, saveSession, type Session } from './api';
-import { loadWallet, type StoredWallet } from './keystore';
+import { loadRecovery, loadWallet, type StoredWallet } from './keystore';
 import { CreateWallet } from './screens/CreateWallet';
 import { Exit } from './screens/Exit';
 import { Home } from './screens/Home';
@@ -50,11 +50,15 @@ export function App() {
 
   useEffect(() => {
     if (!session || wallet !== null) return;
-    remoteWallets(session)
-      // Le plus récent des wallets non récupérés (un client peut en avoir plusieurs).
-      .then((ws) =>
+    Promise.all([remoteWallets(session), loadRecovery(session.clientId).catch(() => undefined)])
+      .then(([ws, local]) =>
         setRemote(
-          [...ws].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).find((w) => w.status !== 'recovered') ?? null,
+          // Récupération commencée sur cet appareil : on la reprend, même si Swissquote a déjà marqué
+          // l'ancien wallet comme récupéré (transfert diffusé, mais pas encore finalisé ici).
+          ws.find((w) => w.walletId === local?.oldWalletId) ??
+            // Sinon, le plus récent des wallets non récupérés (un client peut en avoir plusieurs).
+            [...ws].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).find((w) => w.status !== 'recovered') ??
+            null,
         ),
       )
       .catch(() => setRemote(null));

@@ -12,7 +12,7 @@ import { useChfRate } from '../price';
 import { QrCode } from '../qr';
 import { Brand, Btn, Callout, Group, Icon, Row, Screen, Timeline, Title, formatClock, type TabName } from '../ui';
 import { shareHolder, type ShareHolder } from '../trustee';
-import { PendingPaymentPanel, usePendingPayment } from './PendingPayment';
+import { PendingPaymentPanel, usePendingPayment, type Done } from './PendingPayment';
 
 function downloadExitKit(wallet: StoredWallet) {
   const kit = {
@@ -82,7 +82,7 @@ function HomePending({
 }: {
   wallet: StoredWallet;
   pending: Pending;
-  onDone: (r: { status: 'sent' | 'cancelled' }) => void;
+  onDone: (r: Done) => void;
 }) {
   const p = usePendingPayment(wallet, pending, onDone);
   return (
@@ -131,10 +131,7 @@ export function Home({
 
   const refresh = useCallback(async () => {
     try {
-      const [utxos, index] = await Promise.all([
-        esplora.scanWallet(wallet.policy, btc.network, 20),
-        esplora.firstUnusedIndex(wallet.policy, btc.network, 0),
-      ]);
+      const { utxos, nextReceive: index } = await esplora.walletState(wallet.policy, btc.network, 20);
       setBalance(utxos.reduce((s, u) => s + u.value, 0n));
       setAddress(deriveAddress(wallet.policy, 0, index, btc.network).address);
       setMessage((m) => (m === NETWORK_DOWN ? '' : m));
@@ -431,7 +428,13 @@ export function Home({
             pending={pending}
             onDone={(r) => {
               setPending(null);
-              setMessage(r.status === 'sent' ? 'Large payment sent after the security delay.' : 'Payment cancelled.');
+              setMessage(
+                r.status === 'sent'
+                  ? 'Large payment sent after the security delay.'
+                  : r.status === 'failed'
+                    ? `Large payment not sent. ${r.reason}`
+                    : 'Payment cancelled.',
+              );
               refresh();
             }}
           />

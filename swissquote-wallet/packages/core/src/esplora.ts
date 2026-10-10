@@ -30,6 +30,14 @@ export interface WalletTx {
   blockTime?: number;
 }
 
+/** Transaction dont les entrées sont déjà dépensées ailleurs : la rediffuser est inutile. */
+export class StaleTransactionError extends Error {
+  constructor(detail: string) {
+    super(`Transaction obsolète, ses fonds ont déjà été dépensés : ${detail}`);
+    this.name = 'StaleTransactionError';
+  }
+}
+
 export class Esplora {
   constructor(private readonly cfg: NetworkConfig) {}
 
@@ -53,6 +61,25 @@ export class Esplora {
     const body = await res.text();
     if (!res.ok) throw new Error(`Diffusion refusée : ${body}`);
     return body.trim();
+  }
+
+  /**
+   * Diffusion rejouable : si le réseau refuse une transaction qu'il connaît déjà (diffusion
+   * précédente dont la réponse s'est perdue), c'est un succès. Si ses entrées sont déjà dépensées
+   * par une autre transaction, lève `StaleTransactionError` : la rejouer ne servira jamais à rien.
+   * Toute autre erreur (réseau, API) est relancée telle quelle : on peut réessayer.
+   */
+  async broadcastOnce(hex: string, txid: string): Promise<string> {
+    try {
+      return await this.broadcast(hex);
+    } catch (e) {
+      if (/txn-already-known|txn-already-in-mempool|already in block ?chain/i.test(String(e))) return txid;
+      if (await this.txStatus(txid).then(() => true, () => false)) return txid;
+      if (/missing ?inputs|missingorspent|mempool-conflict/i.test(String(e))) {
+        throw new StaleTransactionError(String((e as Error).message ?? e));
+      }
+      throw e;
+    }
   }
 
   async txStatus(txid: string): Promise<{ confirmed: boolean; block_height?: number }> {
@@ -79,49 +106,88 @@ export class Esplora {
     return a.chain_stats.tx_count + a.mempool_stats.tx_count > 0;
   }
 
-  /** Premier index jamais utilisé sur une chaîne (réception 0 ou change 1), pour ne pas réutiliser d'adresse.
-   *  Interroge les adresses par lots parallèles de 10. */
-  async firstUnusedIndex(policy: WalletPolicy, network: Network, chain: Chain, max = 50): Promise<number> {
-    for (let start = 0; start < max; start += 10) {
-      const indexes = Array.from({ length: Math.min(10, max - start) }, (_, i) => start + i);
-      const used = await Promise.all(
-        indexes.map((i) => this.addressUsed(deriveAddress(policy, chain, i, network).address)),
-      );
-      const free = used.indexOf(false);
-      if (free !== -1) return indexes[free];
+  /**
+   * Parcourt une chaîne (réception 0 ou change 1) par lots parallèles de 10, jusqu'à trouver `gap`
+   * adresses consécutives jamais utilisées (« gap limit » BIP-44). Aucune adresse utilisée n'est
+   * ainsi oubliée, quel que soit son index. Renvoie les index utilisés et le premier index libre.
+   */
+  async usedIndexes(
+    policy: WalletPolicy,
+    network: Network,
+    chain: Chain,
+    gap = 20,
+  ): Promise<{ used: { index: number; address: string }[]; firstUnused: number }> {
+    const used: { index: number; address: string }[] = [];
+    let firstUnused = -1;
+    let unusedRun = 0;
+    for (let start = 0; unusedRun < gap; start += 10) {
+      const addresses = Array.from({ length: 10 }, (_, i) => deriveAddress(policy, chain, start + i, network).address);
+      const flags = await Promise.all(addresses.map((a) => this.addressUsed(a)));
+      addresses.forEach((address, k) => {
+        const index = start + k;
+        if (unusedRun >= gap) return;
+        if (flags[k]) {
+          used.push({ index, address });
+          unusedRun = 0;
+        } else {
+          if (firstUnused === -1) firstUnused = index;
+          unusedRun++;
+        }
+      });
     }
-    return max;
+    return { used, firstUnused };
   }
 
-  /** Cherche les UTXO des `gap` premières adresses de réception et de change, par lots parallèles de 10
-   *  (assez rapide, sans dépasser les limites de débit des API publiques). */
-  async scanWallet(policy: WalletPolicy, network: Network, gap = 10): Promise<WalletUtxo[]> {
-    const slots = ([0, 1] as Chain[]).flatMap((chain) => Array.from({ length: gap }, (_, index) => ({ chain, index })));
-    const found: WalletUtxo[] = [];
-    for (let start = 0; start < slots.length; start += 10) {
+  /** Premier index jamais utilisé sur une chaîne (réception 0 ou change 1), pour ne pas réutiliser d'adresse. */
+  async firstUnusedIndex(policy: WalletPolicy, network: Network, chain: Chain, gap = 20): Promise<number> {
+    return (await this.usedIndexes(policy, network, chain, gap)).firstUnused;
+  }
+
+  /** Adresses utilisées du wallet (réception et change), découvertes avec le gap limit. */
+  private async usedAddresses(policy: WalletPolicy, network: Network, gap: number) {
+    const chains = await Promise.all(([0, 1] as Chain[]).map((chain) => this.usedIndexes(policy, network, chain, gap)));
+    const used = chains.flatMap(({ used }, chain) => used.map((u) => ({ chain: chain as Chain, ...u })));
+    return { used, firstUnused: chains.map((c) => c.firstUnused) as [receive: number, change: number] };
+  }
+
+  /**
+   * État du wallet en un seul parcours : UTXO de toutes les adresses utilisées (jusqu'à `gap` adresses
+   * vides consécutives par chaîne) et premier index libre de chaque chaîne (prochaine adresse de
+   * réception, prochaine adresse de change). Requêtes par lots parallèles de 10.
+   */
+  async walletState(
+    policy: WalletPolicy,
+    network: Network,
+    gap = 20,
+  ): Promise<{ utxos: WalletUtxo[]; nextReceive: number; nextChange: number }> {
+    const { used, firstUnused } = await this.usedAddresses(policy, network, gap);
+    const utxos: WalletUtxo[] = [];
+    for (let start = 0; start < used.length; start += 10) {
       const batch = await Promise.all(
-        slots.slice(start, start + 10).map(async ({ chain, index }) => {
-          const { address } = deriveAddress(policy, chain, index, network);
-          return (await this.addressUtxos(address)).map((u) => ({
+        used.slice(start, start + 10).map(async ({ chain, index, address }) =>
+          (await this.addressUtxos(address)).map((u) => ({
             txid: u.txid,
             vout: u.vout,
             value: BigInt(u.value),
             chain,
             index,
-          }));
-        }),
+          })),
+        ),
       );
-      found.push(...batch.flat());
+      utxos.push(...batch.flat());
     }
-    return found;
+    return { utxos, nextReceive: firstUnused[0], nextChange: firstUnused[1] };
   }
 
-  /** Historique du wallet lu sur la chaîne : transactions des `gap` premières adresses de réception
-   *  et de change, dédoublonnées, les plus récentes d'abord (non confirmées en tête). */
-  async walletTxs(policy: WalletPolicy, network: Network, gap = 10): Promise<WalletTx[]> {
-    const addresses = ([0, 1] as Chain[]).flatMap((chain) =>
-      Array.from({ length: gap }, (_, index) => deriveAddress(policy, chain, index, network).address),
-    );
+  /** UTXO du wallet, sur toutes ses adresses utilisées (voir `walletState`). */
+  async scanWallet(policy: WalletPolicy, network: Network, gap = 20): Promise<WalletUtxo[]> {
+    return (await this.walletState(policy, network, gap)).utxos;
+  }
+
+  /** Historique du wallet lu sur la chaîne : transactions de ses adresses utilisées (gap limit),
+   *  dédoublonnées, les plus récentes d'abord (non confirmées en tête). */
+  async walletTxs(policy: WalletPolicy, network: Network, gap = 20): Promise<WalletTx[]> {
+    const addresses = (await this.usedAddresses(policy, network, gap)).used.map((a) => a.address);
     const mine = new Set(addresses);
     const byId = new Map<string, EsploraTx>();
     for (let start = 0; start < addresses.length; start += 10) {

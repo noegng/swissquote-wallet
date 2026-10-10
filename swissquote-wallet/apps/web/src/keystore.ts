@@ -47,17 +47,24 @@ async function deviceKey(): Promise<CryptoKey> {
   return key;
 }
 
+/** Chiffre la graine téléphone avec la clé de l'appareil, sans rien enregistrer. */
+export async function sealWallet(
+  wallet: Omit<StoredWallet, 'phoneSeed' | 'backupConfirmed'>,
+  phoneSeed: Uint8Array,
+): Promise<StoredWallet> {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await deviceKey(), phoneSeed as BufferSource);
+  return { ...wallet, backupConfirmed: false, phoneSeed: { iv, ct } };
+}
+
+/** Enregistre un wallet comme le wallet de ce client sur cet appareil. */
+export const putWallet = (wallet: StoredWallet) => put(`wallet:${wallet.clientId}`, wallet);
+
 export async function saveWallet(
   wallet: Omit<StoredWallet, 'phoneSeed' | 'backupConfirmed'>,
   phoneSeed: Uint8Array,
 ): Promise<void> {
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await deviceKey(), phoneSeed as BufferSource);
-  await put(`wallet:${wallet.clientId}`, {
-    ...wallet,
-    backupConfirmed: false,
-    phoneSeed: { iv, ct },
-  } satisfies StoredWallet);
+  await putWallet(await sealWallet(wallet, phoneSeed));
 }
 
 export async function markBackupConfirmed(clientId: string): Promise<StoredWallet> {
@@ -95,6 +102,9 @@ export interface RecoveryState {
   /** Clé privée ECDH de l'appareil (non exportable). */
   deviceKey: CryptoKey;
   credentialId: string;
+  /** Nouveau wallet, enregistré une fois sa sauvegarde faite et AVANT le transfert des fonds : si le
+   *  transfert échoue ou que l'appareil s'éteint, il reprend sans rien perdre. Graine chiffrée. */
+  newWallet?: StoredWallet;
 }
 
 export const saveRecovery = (clientId: string, r: RecoveryState) => put(`recovery:${clientId}`, r);

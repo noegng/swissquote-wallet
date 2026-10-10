@@ -13,7 +13,8 @@ type Outcome =
   | { kind: 'sent'; url: string; txid: string }
   | { kind: 'pending'; pending: Pending }
   | { kind: 'cancelled' }
-  | { kind: 'refused'; reason: string };
+  | { kind: 'refused'; reason: string }
+  | { kind: 'failed'; reason: string };
 
 function explain(e: unknown): string {
   const err = e as Error;
@@ -33,7 +34,13 @@ function OnHold({
   onDone: (o: Outcome) => void;
 }) {
   const p = usePendingPayment(wallet, pending, (r) =>
-    onDone(r.status === 'sent' ? { kind: 'sent', url: r.url, txid: r.txid } : { kind: 'cancelled' }),
+    onDone(
+      r.status === 'sent'
+        ? { kind: 'sent', url: r.url, txid: r.txid }
+        : r.status === 'failed'
+          ? { kind: 'failed', reason: r.reason }
+          : { kind: 'cancelled' },
+    ),
   );
   return (
     <Screen
@@ -164,6 +171,21 @@ export function Send({ wallet, onBack }: { wallet: StoredWallet; onBack: () => v
           title="Payment cancelled"
           lead="Swissquote did not sign, so no bitcoin has left your wallet."
         />
+      </Screen>
+    );
+  }
+
+  if (outcome?.kind === 'failed') {
+    return (
+      <Screen
+        footer={
+          <Btn kind="secondary" onClick={onBack}>
+            Back to wallet
+          </Btn>
+        }
+      >
+        <Hero tone="danger" />
+        <Title center title="Payment not sent" lead={outcome.reason} />
       </Screen>
     );
   }

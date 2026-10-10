@@ -3,9 +3,11 @@
 //      (MOCK), le wallet est GELÉ (plus aucun paiement), notification, délai.
 //   2. Pendant le délai, le vrai client peut annuler : passkey de l'ancien appareil OU session de
 //      l'espace client (s'il n'a plus son téléphone). Annuler protège : la session suffit.
-//   3. Après le délai : Swissquote crée le nouveau wallet (nouvelle clé SQ), puis cosigne UNE
-//      transaction de transfert, seulement si elle est déjà signée par la CLÉ DE SECOURS (pas par
-//      le téléphone perdu, qu'un voleur pourrait avoir) et si toutes les sorties vont au nouveau wallet.
+//   3. Après le délai : Swissquote crée le nouveau wallet (nouvelle clé SQ), puis cosigne le
+//      transfert, seulement s'il est déjà signé par la CLÉ DE SECOURS (pas par le téléphone perdu,
+//      qu'un voleur pourrait avoir) et si toutes les sorties vont au nouveau wallet. Ce transfert
+//      peut être recosigné aux mêmes conditions (diffusion échouée, fonds arrivés plus tard) : il ne
+//      peut mener les fonds que vers le nouveau wallet.
 //   4. Toutes les passkeys sont révoquées, sauf celle du nouvel appareil (déclarée à l'ouverture).
 // Swissquote seul ne peut rien : sans la clé de secours (part CLIENT + part du partenaire), pas de
 // transfert possible.
@@ -191,13 +193,15 @@ export function registerRecoveryRoutes(app: FastifyInstance): void {
     return { mock: true, newWalletId: record.walletId, policy: record.policy, descriptor: record.descriptor };
   });
 
-  // Transfert de tous les fonds vers le nouveau wallet, cosigné une seule fois et sous conditions.
+  // Transfert de tous les fonds vers le nouveau wallet, sous conditions. La première cosignature clôt
+  // la récupération ; les suivantes (mêmes conditions) servent à réessayer une diffusion échouée ou
+  // à rapatrier des fonds arrivés ensuite sur l'ancien wallet, qui sinon y resteraient bloqués.
   app.post('/recovery/:id/sweep', async (req, reply) => {
     const clientId = clientFromAuthHeader(req.headers.authorization);
     const t = tickets()[(req.params as { id: string }).id];
     if (!t || t.clientId !== clientId) return reply.code(404).send({ mock: true, error: 'Récupération inconnue' });
-    if (t.status !== 'pending' || !t.newWalletId) {
-      return reply.code(409).send({ mock: true, error: 'Récupération non prête (nouveau wallet absent ou terminée)' });
+    if (t.status === 'cancelled' || !t.newWalletId) {
+      return reply.code(409).send({ mock: true, error: 'Récupération non prête (nouveau wallet absent) ou annulée' });
     }
     if (secondsLeft(t) > 0) return reply.code(425).send({ mock: true, error: 'Délai de sécurité en cours' });
     const oldWallet = wallets()[t.walletId];
@@ -224,6 +228,10 @@ export function registerRecoveryRoutes(app: FastifyInstance): void {
     }
 
     signWithRoot(psbt, getSigner().root);
+    if (t.status === 'completed') {
+      audit('recovery.sweep.repeated', { recoveryId: t.id, newWalletId: newWallet.walletId, summary: plain(summary) });
+      return { mock: true, status: 'signed', psbt: psbt.toBase64(), revokedPasskeys: 0 };
+    }
     saveTicket({ ...t, status: 'completed' });
     saveWallet({ ...oldWallet, status: 'recovered', recoveredTo: newWallet.walletId });
     const revoked = revokeCredentialsExcept(t.clientId, t.deviceCredentialId);

@@ -2,11 +2,12 @@
 // → délai de sécurité → part du client (papier ou copie cloud) → transfert → nouvelle sauvegarde.
 import { useEffect, useRef, useState } from 'react';
 import { sq, type Session } from '../api';
-import { loadRecovery, markBackupConfirmed, type RecoveryState, type StoredWallet } from '../keystore';
+import { loadRecovery, saveRecovery, type RecoveryState, type StoredWallet } from '../keystore';
 import {
-  completeRecovery,
+  prepareNewWallet,
   recoveryProgress,
   startRecovery,
+  sweepToNewWallet,
   type RecoveryProgress,
   type RemoteWallet,
 } from '../recovery';
@@ -56,7 +57,11 @@ export function Recover({
   const [log, setLog] = useState<string[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<{ wallet: StoredWallet; newClientShare: string; txUrl: string } | null>(null);
+  // Nouveau wallet préparé, en attente de sa cérémonie de sauvegarde (rien n'est encore enregistré).
+  const [prepared, setPrepared] = useState<{ newWallet: StoredWallet; newClientShare: string } | null>(null);
+  // Part CLIENT de l'ancien wallet : gardée en mémoire le temps de la cérémonie, pour signer le
+  // transfert juste après, puis oubliée.
+  const oldShare = useRef<string | null>(null);
   const started = useRef(false);
   // État du wallet chez Swissquote : gel, récupération en cours lancée ailleurs.
   const [remoteState, setRemoteState] = useState<{
@@ -145,31 +150,60 @@ export function Recover({
     }
   }
 
+  const addLog = (l: string) => setLog((x) => [...x, l]);
+
+  // Transfert des fonds, une fois le nouveau wallet sauvegardé et enregistré. Rejouable.
+  async function sweep(s: RecoveryState) {
+    const r = await sweepToNewWallet(session, s, oldShare.current!, addLog);
+    oldShare.current = null;
+    onRecovered(r.wallet);
+  }
+
   async function finish(share: string) {
     setBusy(true);
     setError('');
+    setStep('finishing');
+    setLog([]);
+    oldShare.current = share;
     try {
-      setStep('finishing');
-      setLog([]);
-      setResult(await completeRecovery(session, state!, share, (l) => setLog((x) => [...x, l])));
-      setStep('backup');
+      if (state!.newWallet) {
+        // Nouveau wallet déjà sauvegardé (transfert interrompu) : il ne reste que le transfert.
+        await sweep(state!);
+      } else {
+        setPrepared(await prepareNewWallet(session, state!, share, addLog));
+        setStep('backup');
+      }
     } catch (e) {
       setError((e as Error).message);
-      setStep((s) => (s === 'finishing' ? 'finishing' : 'share'));
     } finally {
       setBusy(false);
     }
   }
 
+  // Sauvegarde faite : le nouveau wallet est enregistré AVANT que les fonds bougent.
+  async function backupDone() {
+    const next: RecoveryState = { ...state!, newWallet: { ...prepared!.newWallet, backupConfirmed: true } };
+    await saveRecovery(session.clientId, next);
+    setState(next);
+    setPrepared(null);
+    setStep('finishing');
+    setError('');
+    try {
+      await sweep(next);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
   const share = useClientShareInput(finish);
 
-  if (step === 'backup' && result) {
+  if (step === 'backup' && prepared) {
     return (
       <BackupCeremony
-        walletId={result.wallet.walletId}
-        clientShare={result.newClientShare}
+        walletId={prepared.newWallet.walletId}
+        clientShare={prepared.newClientShare}
         navTitle="New backup"
-        onDone={async () => onRecovered(await markBackupConfirmed(session.clientId))}
+        onDone={backupDone}
       />
     );
   }
@@ -255,7 +289,11 @@ export function Recover({
       >
         <Title
           title="Enter your backup words"
-          lead="Our partner’s share has arrived, encrypted for this device. Yours is the missing half."
+          lead={
+            state?.newWallet
+              ? 'Your new wallet is ready and backed up. Enter your old backup words again to move your bitcoin to it.'
+              : 'Our partner’s share has arrived, encrypted for this device. Yours is the missing half.'
+          }
         />
         {error && <p className="error">{error}</p>}
         {share.fields}
@@ -270,7 +308,21 @@ export function Recover({
         step={[4, 4]}
         footer={
           error ? (
-            <Btn kind="secondary" onClick={() => (setError(''), setStep('share'))}>
+            <Btn
+              kind="secondary"
+              disabled={busy}
+              onClick={() => {
+                setError('');
+                // Transfert interrompu, mots encore en mémoire : on le relance directement.
+                if (state?.newWallet && oldShare.current) {
+                  setBusy(true);
+                  setLog([]);
+                  sweep(state)
+                    .catch((e) => setError((e as Error).message))
+                    .finally(() => setBusy(false));
+                } else setStep('share');
+              }}
+            >
               Try again
             </Btn>
           ) : undefined

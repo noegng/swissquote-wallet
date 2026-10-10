@@ -7,7 +7,10 @@ import type { PendingPayment as Pending, StoredWallet } from '../keystore';
 import { cancelPending, checkPending } from '../payments';
 import { Callout, Countdown } from '../ui';
 
-type Done = { status: 'sent'; txid: string; url: string } | { status: 'cancelled' };
+export type Done =
+  | { status: 'sent'; txid: string; url: string }
+  | { status: 'cancelled' }
+  | { status: 'failed'; reason: string };
 
 /** Suit un paiement en attente. Une seule boucle de suivi par paiement, quel que soit le nombre de rendus. */
 export function usePendingPayment(wallet: StoredWallet, pending: Pending, onDone: (result: Done) => void) {

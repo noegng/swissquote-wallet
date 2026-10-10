@@ -12,6 +12,7 @@ import {
   psbtFromBase64,
   rootFromSeed,
   signWithRoot,
+  StaleTransactionError,
   summarizeSpend,
   type SpendSummary,
 } from '@sqw/core';
@@ -42,11 +43,10 @@ export type SubmitResult =
   | { status: 'pending'; pending: PendingPayment; reason: string };
 
 export async function preparePayment(wallet: StoredWallet, to: string, amount: bigint): Promise<PreparedPayment> {
-  const [utxos, changeIndex] = await Promise.all([
-    esplora.scanWallet(wallet.policy, btc.network, 20),
-    esplora.firstUnusedIndex(wallet.policy, btc.network, 1),
+  const [{ utxos, nextChange: changeIndex }, feeRate] = await Promise.all([
+    esplora.walletState(wallet.policy, btc.network, 20),
+    currentFeeRate(),
   ]);
-  const feeRate = await currentFeeRate();
   const { psbt } = buildSpend({ policy: wallet.policy, network: btc.network, utxos, to, amount, feeRate, changeIndex });
   // L'app vérifie sa propre PSBT avec sa clé : ce qu'elle affiche est ce qui sera signé.
   const summary = summarizeSpend(psbt, wallet.policy, btc.network, wallet.policy.keys[0]);
@@ -68,9 +68,10 @@ async function signWithPhone(wallet: StoredWallet, psbt: string): Promise<string
   }
 }
 
+/** Diffusion rejouable : une transaction déjà diffusée (réponse perdue) compte comme envoyée. */
 async function broadcast(appSigned: string, sqSigned: string) {
-  const { hex } = finalizeSpend(combinePsbts([appSigned, sqSigned], btc.network));
-  const txid = await esplora.broadcast(hex);
+  const { hex, txid } = finalizeSpend(combinePsbts([appSigned, sqSigned], btc.network));
+  await esplora.broadcastOnce(hex, txid);
   return { status: 'sent' as const, txid, url: btc.explorerTxUrl(txid) };
 }
 
@@ -94,16 +95,29 @@ export async function submitPayment(wallet: StoredWallet, p: PreparedPayment): P
 export async function checkPending(
   wallet: StoredWallet,
   pending: PendingPayment,
-): Promise<{ status: 'pending'; secondsLeft: number } | { status: 'cancelled' } | { status: 'sent'; txid: string; url: string }> {
+): Promise<
+  | { status: 'pending'; secondsLeft: number }
+  | { status: 'cancelled' }
+  | { status: 'failed'; reason: string }
+  | { status: 'sent'; txid: string; url: string }
+> {
   const r = await sq(`/cosign/${pending.requestId}`);
   if (r.status === 'cancelled') {
     await clearPending(wallet.walletId);
     return { status: 'cancelled' };
   }
   if (r.status === 'signed') {
-    const sent = await broadcast(pending.appSigned, r.psbt);
-    await clearPending(wallet.walletId);
-    return sent;
+    try {
+      const sent = await broadcast(pending.appSigned, r.psbt);
+      await clearPending(wallet.walletId);
+      return sent;
+    } catch (e) {
+      // Fonds déjà dépensés par une autre transaction : ce paiement ne partira jamais, on l'abandonne
+      // au lieu de bloquer l'app. Autre erreur (réseau) : on réessaiera au prochain passage.
+      if (!(e instanceof StaleTransactionError)) throw e;
+      await clearPending(wallet.walletId);
+      return { status: 'failed', reason: 'Its funds were already spent by another transaction, so it was not sent.' };
+    }
   }
   return { status: 'pending', secondsLeft: r.secondsLeft };
 }

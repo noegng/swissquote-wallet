@@ -85,8 +85,8 @@ export async function exitWithoutSwissquote(
   signWithRoot(psbt, backupRoot);
   log('Transaction signed by the phone key and the backup key (2 of 3, without Swissquote)');
 
-  const { hex } = finalizeSpend(psbt);
-  const txid = await esplora.broadcast(hex);
+  const { hex, txid } = finalizeSpend(psbt);
+  await esplora.broadcastOnce(hex, txid);
   await clearExit(wallet.clientId);
   log('Broadcast directly to the Bitcoin network');
   const total = utxos.reduce((s, u) => s + u.value, 0n);
