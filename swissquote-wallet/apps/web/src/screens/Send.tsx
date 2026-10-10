@@ -1,20 +1,56 @@
 // Envoi : saisie → résumé en clair vérifié par l'app → approbation passkey → résultat.
 import { useEffect, useState, type FormEvent } from 'react';
-import { sq } from '../api';
-import { formatBtc, formatSats, parseBtc } from '../format';
+import { ApiError, sq } from '../api';
+import { formatBtc, formatSats, parseBtc, shortAddress, shortId } from '../format';
 import type { PendingPayment as Pending, StoredWallet } from '../keystore';
 import { preparePayment, submitPayment, type PreparedPayment } from '../payments';
-import { PendingPayment } from './PendingPayment';
+import { Btn, Group, Hero, KV, Row, Screen, Title } from '../ui';
+import { PendingPaymentPanel, usePendingPayment } from './PendingPayment';
 
 type Outcome =
-  | { kind: 'sent'; url: string }
+  | { kind: 'sent'; url: string; txid: string }
   | { kind: 'pending'; pending: Pending }
-  | { kind: 'cancelled' };
+  | { kind: 'cancelled' }
+  | { kind: 'refused'; reason: string };
 
 function explain(e: unknown): string {
   const err = e as Error;
-  if (err.name === 'NotAllowedError') return 'Approbation annulée sur l’appareil.';
+  if (err.name === 'NotAllowedError') return 'Approval cancelled on the device.';
   return err.message;
+}
+
+function OnHold({
+  wallet,
+  pending,
+  onBack,
+  onDone,
+}: {
+  wallet: StoredWallet;
+  pending: Pending;
+  onBack: () => void;
+  onDone: (o: Outcome) => void;
+}) {
+  const p = usePendingPayment(wallet, pending, (r) =>
+    onDone(r.status === 'sent' ? { kind: 'sent', url: r.url, txid: r.txid } : { kind: 'cancelled' }),
+  );
+  return (
+    <Screen
+      title="Payment on hold"
+      onBack={onBack}
+      footer={
+        <>
+          <Btn icon="face" disabled={p.busy} onClick={p.cancel}>
+            {p.busy ? 'Confirm on your device…' : 'Cancel payment'}
+          </Btn>
+          <Btn kind="text" onClick={onBack}>
+            Back to wallet
+          </Btn>
+        </>
+      }
+    >
+      <PendingPaymentPanel pending={pending} secondsLeft={p.secondsLeft} total={p.total} error={p.error} />
+    </Screen>
+  );
 }
 
 export function Send({ wallet, onBack }: { wallet: StoredWallet; onBack: () => void }) {
@@ -23,12 +59,16 @@ export function Send({ wallet, onBack }: { wallet: StoredWallet; onBack: () => v
   const [prepared, setPrepared] = useState<PreparedPayment | null>(null);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [limit, setLimit] = useState<string | null>(null);
+  const [sanctioned, setSanctioned] = useState<string[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     sq('/rules')
-      .then((r) => setLimit(r.dailyLimitSats))
+      .then((r) => {
+        setLimit(r.dailyLimitSats);
+        setSanctioned(r.sanctionedAddresses ?? []);
+      })
       .catch(() => setLimit(null));
   }, []);
 
@@ -40,7 +80,7 @@ export function Send({ wallet, onBack }: { wallet: StoredWallet; onBack: () => v
       setPrepared(await preparePayment(wallet, to.trim(), parseBtc(amount)));
     } catch (err) {
       const msg = explain(err);
-      setError(/Invalid|network|prefix|checksum|has no matching/i.test(msg) ? 'Adresse invalide pour ce réseau.' : msg);
+      setError(/Invalid|network|prefix|checksum|has no matching/i.test(msg) && !/amount/i.test(msg) ? 'Invalid address for this network.' : msg);
     } finally {
       setBusy(false);
     }
@@ -51,9 +91,14 @@ export function Send({ wallet, onBack }: { wallet: StoredWallet; onBack: () => v
     setError('');
     try {
       const r = await submitPayment(wallet, prepared!);
-      setOutcome(r.status === 'sent' ? { kind: 'sent', url: r.url } : { kind: 'pending', pending: r.pending });
+      setOutcome(r.status === 'sent' ? { kind: 'sent', url: r.url, txid: r.txid } : { kind: 'pending', pending: r.pending });
     } catch (err) {
-      setError(explain(err));
+      // 403 : refus des règles (sanctions, PSBT étrangère). 423 : wallet gelé.
+      if (err instanceof ApiError && (err.status === 403 || err.status === 423)) {
+        setOutcome({ kind: 'refused', reason: err.message });
+      } else {
+        setError(explain(err));
+      }
     } finally {
       setBusy(false);
     }
@@ -61,104 +106,184 @@ export function Send({ wallet, onBack }: { wallet: StoredWallet; onBack: () => v
 
   if (outcome?.kind === 'sent') {
     return (
-      <div className="screen">
-        <p className="eyebrow">Paiement envoyé</p>
-        <h1>C’est parti ✓</h1>
-        <p>La transaction est signée par votre téléphone et par Swissquote, puis diffusée sur le réseau Bitcoin.</p>
-        <a className="link" href={outcome.url} target="_blank" rel="noreferrer">
-          Voir la transaction sur l’explorateur
-        </a>
-        <button className="secondary" onClick={onBack}>
-          Retour
-        </button>
-      </div>
+      <Screen
+        footer={
+          <>
+            <a className="btn secondary" href={outcome.url} target="_blank" rel="noreferrer">
+              View transaction
+            </a>
+            <Btn kind="text" onClick={onBack}>
+              Back to wallet
+            </Btn>
+          </>
+        }
+      >
+        <Hero tone="success" />
+        <Title
+          center
+          title="Payment sent"
+          lead={
+            prepared
+              ? `${formatBtc(prepared.summary.sentExternal)} is on its way to ${shortAddress(prepared.to)}.`
+              : 'Your payment has been signed and sent to the Bitcoin network.'
+          }
+        />
+        <Group label="Signed with">
+          <Row icon="phone" title="Your phone key" chip={['Signed', 'success']} />
+          <Row icon="bank" title="Swissquote key" chip={['Signed', 'success']} />
+          <Row icon="key" title="Backup key" chip={['Not needed', 'neutral']} />
+        </Group>
+        <Group>
+          <Row
+            title="Transaction ID"
+            sub={shortId(outcome.txid)}
+            trail="copy"
+            onClick={() => navigator.clipboard?.writeText(outcome.txid)}
+          />
+        </Group>
+      </Screen>
     );
   }
 
   if (outcome?.kind === 'cancelled') {
     return (
-      <div className="screen">
-        <h1>Paiement annulé</h1>
-        <p>Swissquote n’a pas cosigné : aucun bitcoin n’a quitté votre wallet.</p>
-        <button className="secondary" onClick={onBack}>
-          Retour
-        </button>
-      </div>
+      <Screen
+        footer={
+          <Btn kind="secondary" onClick={onBack}>
+            Back to wallet
+          </Btn>
+        }
+      >
+        <Hero tone="danger" />
+        <Title
+          center
+          title="Payment cancelled"
+          lead="Swissquote did not sign, so no bitcoin has left your wallet."
+        />
+      </Screen>
+    );
+  }
+
+  if (outcome?.kind === 'refused') {
+    return (
+      <Screen
+        footer={
+          <>
+            <Btn kind="secondary" onClick={onBack}>
+              Back to wallet
+            </Btn>
+            <Btn kind="text" onClick={() => (setOutcome(null), setPrepared(null))}>
+              Edit payment
+            </Btn>
+          </>
+        }
+      >
+        <Hero tone="danger" />
+        <Title center title="Payment refused" lead="This payment was not sent. Your balance has not changed." />
+        <Group label="Reason">
+          <Row icon="alert" iconTone="danger" title="Swissquote did not sign" sub={outcome.reason} />
+        </Group>
+        <p className="note">
+          A payment needs two keys, and Swissquote did not sign this one. The sanctions list is simulated for this
+          demo.
+        </p>
+      </Screen>
     );
   }
 
   if (outcome?.kind === 'pending') {
-    return (
-      <div className="screen">
-        <h1>Délai de sécurité</h1>
-        <PendingPayment
-          wallet={wallet}
-          pending={outcome.pending}
-          onDone={(r) => setOutcome(r.status === 'sent' ? { kind: 'sent', url: r.url } : { kind: 'cancelled' })}
-        />
-        <button className="secondary" onClick={onBack}>
-          Retour (le paiement continue)
-        </button>
-      </div>
-    );
+    return <OnHold wallet={wallet} pending={outcome.pending} onBack={onBack} onDone={setOutcome} />;
   }
 
   if (prepared) {
     const s = prepared.summary;
-    const overLimit = limit !== null && s.sentExternal > BigInt(limit);
+    const overLimit = limit !== null && s.sentExternal + s.fee > BigInt(limit);
+    const flagged = sanctioned.includes(prepared.to);
     return (
-      <div className="screen">
-        <p className="eyebrow">Vérifiez avant d’approuver</p>
-        <h1>Vous envoyez {formatBtc(s.sentExternal)}</h1>
-        <dl className="summary">
-          <dt>À</dt>
-          <dd className="address">{prepared.to}</dd>
-          <dt>Montant</dt>
-          <dd>{formatSats(s.sentExternal)}</dd>
-          <dt>Frais du réseau</dt>
-          <dd>
+      <Screen
+        title="Confirm payment"
+        onBack={() => setPrepared(null)}
+        footer={
+          <>
+            <Btn icon="face" disabled={busy} onClick={confirm}>
+              {busy ? 'Confirm on your device…' : 'Approve with passkey'}
+            </Btn>
+            <Btn kind="text" disabled={busy} onClick={() => setPrepared(null)}>
+              Edit
+            </Btn>
+          </>
+        }
+      >
+        <div className="amount static">
+          <strong>{formatBtc(s.sentExternal)}</strong>
+          <span className="sub">{formatSats(s.sentExternal)}</span>
+        </div>
+        <Group>
+          <KV k="To">{prepared.to}</KV>
+          <KV k="Network fee">
             {formatSats(s.fee)} ({prepared.feeRate} sat/vB)
-          </dd>
-          <dt>Retour sur votre wallet</dt>
-          <dd>{formatSats(s.change)}</dd>
-        </dl>
-        {overLimit && (
+          </KV>
+          <KV k="Returned to your wallet">{formatSats(s.change)}</KV>
+        </Group>
+        <Group label="Swissquote checks">
+          <Row
+            title="Recipient address"
+            chip={flagged ? ['On a sanctions list', 'danger'] : ['Not on the sanctions list', 'success']}
+          />
+          <Row title="Daily limit" chip={overLimit ? ['Security delay', 'accent'] : ['Below the limit', 'success']} />
+        </Group>
+        {overLimit && limit && (
           <p className="note">
-            Au-dessus de votre plafond de {formatSats(limit!)} par 24 h : Swissquote appliquera un délai de
-            sécurité avant de cosigner, et vous préviendra.
+            This payment is above your daily limit of {formatSats(limit)}. Swissquote will hold it for a security
+            delay before signing, and will alert you.
           </p>
         )}
         {error && <p className="error">{error}</p>}
-        <button className="primary" disabled={busy} onClick={confirm}>
-          {busy ? 'Validation sur l’appareil…' : 'Approuver avec ma passkey'}
-        </button>
-        <button className="secondary" disabled={busy} onClick={() => setPrepared(null)}>
-          Modifier
-        </button>
-      </div>
+      </Screen>
     );
   }
 
+  let sats: bigint | null = null;
+  try {
+    sats = amount ? parseBtc(amount) : null;
+  } catch {
+    sats = null;
+  }
+
   return (
-    <form className="screen" onSubmit={review}>
-      <p className="eyebrow">Envoyer des bitcoins</p>
-      <h1>Nouveau paiement</h1>
+    <Screen
+      title="Send bitcoin"
+      onBack={onBack}
+      onSubmit={review}
+      footer={<Btn disabled={busy || !to || !amount}>{busy ? 'Preparing…' : 'Review payment'}</Btn>}
+    >
+      <div className="amount">
+        <label className="value">
+          <input
+            aria-label="Amount in BTC"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            inputMode="decimal"
+            placeholder="0"
+            autoComplete="off"
+            style={{ width: `${Math.max(1, amount.length)}ch` }}
+          />
+          <span className="unit">BTC</span>
+        </label>
+        <span className="sub">{sats === null ? 'Enter an amount' : formatSats(sats)}</span>
+      </div>
       <label className="field">
-        <span>Adresse du destinataire</span>
-        <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="bcrt1… ou tb1…" autoComplete="off" />
+        <span>Recipient address</span>
+        <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="bcrt1… or tb1…" autoComplete="off" />
       </label>
-      <label className="field">
-        <span>Montant (BTC)</span>
-        <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" placeholder="0.0001" />
-      </label>
-      {limit && <p className="note">Plafond sans délai : {formatSats(limit)} par 24 h.</p>}
+      <div className="sheet padded">
+        <div className="limit-head">
+          <strong>Daily limit</strong>
+          <span>{limit === null ? '…' : formatSats(limit)}</span>
+        </div>
+        <p className="note">Payments above your daily limit are held for a security delay.</p>
+      </div>
       {error && <p className="error">{error}</p>}
-      <button className="primary" disabled={busy || !to || !amount}>
-        {busy ? 'Préparation…' : 'Vérifier le paiement'}
-      </button>
-      <button type="button" className="secondary" onClick={onBack}>
-        Annuler
-      </button>
-    </form>
+    </Screen>
   );
 }

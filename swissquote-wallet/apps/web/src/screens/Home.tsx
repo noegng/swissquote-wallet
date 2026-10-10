@@ -1,13 +1,15 @@
-// Accueil du wallet : solde, envoi, paiement en attente, alertes Swissquote, réception, sauvegarde,
-// kit de sortie.
+// Accueil du wallet, en trois onglets qui correspondent à ce que l'app sait faire :
+//   Wallet (solde, alertes), Transfers (envoyer, recevoir), Recovery (clés, gel, téléphone perdu,
+//   kit de sortie).
 import { useCallback, useEffect, useState } from 'react';
 import { deriveAddress, descriptorString } from '@sqw/core';
-import { partner, sq } from '../api';
+import { partner, sq, type Session } from '../api';
 import { btc } from '../config';
 import { formatBtc, formatSats } from '../format';
 import { loadPending, type PendingPayment as Pending, type StoredWallet } from '../keystore';
 import { approve, esplora } from '../payments';
-import { PendingPayment } from './PendingPayment';
+import { Brand, Btn, Callout, Group, Icon, Row, Screen, Timeline, Title, formatClock, type TabName } from '../ui';
+import { PendingPaymentPanel, usePendingPayment } from './PendingPayment';
 
 function downloadExitKit(wallet: StoredWallet) {
   const kit = {
@@ -36,12 +38,42 @@ interface RecoveryInfo {
   recovery: { recoveryId: string; secondsLeft: number } | null;
 }
 
+const initials = (clientId: string) =>
+  clientId
+    .split(/[^a-z0-9]+/i)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0])
+    .join('');
+
+function HomePending({
+  wallet,
+  pending,
+  onDone,
+}: {
+  wallet: StoredWallet;
+  pending: Pending;
+  onDone: (r: { status: 'sent' | 'cancelled' }) => void;
+}) {
+  const p = usePendingPayment(wallet, pending, onDone);
+  return (
+    <>
+      <PendingPaymentPanel pending={pending} secondsLeft={p.secondsLeft} total={p.total} error={p.error} />
+      <Btn kind="secondary" disabled={p.busy} onClick={p.cancel}>
+        {p.busy ? 'Confirm on your device…' : 'Cancel payment'}
+      </Btn>
+    </>
+  );
+}
+
 export function Home({
   wallet,
+  session,
   onSend,
   onLogout,
 }: {
   wallet: StoredWallet;
+  session: Session;
   onSend: () => void;
   onLogout: () => void;
 }) {
@@ -53,6 +85,11 @@ export function Home({
   const [message, setMessage] = useState('');
   const [recoveryInfo, setRecoveryInfo] = useState<RecoveryInfo | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  const [limit, setLimit] = useState<string | null>(null);
+  const [showReceive, setShowReceive] = useState(false);
+  const [busyFreeze, setBusyFreeze] = useState(false);
+  const [tab, setTab] = useState<TabName>('wallet');
+  const [showLost, setShowLost] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -63,7 +100,7 @@ export function Home({
       setBalance(utxos.reduce((s, u) => s + u.value, 0n));
       setAddress(deriveAddress(wallet.policy, 0, index, btc.network).address);
     } catch {
-      setMessage('Réseau Bitcoin injoignable (regtest lancé ? `npm run regtest:up`)');
+      setMessage('Bitcoin network unreachable (is regtest running? `npm run regtest:up`)');
     }
     loadPending(wallet.walletId).then((p) => setPending(p ?? null));
     sq<RecoveryInfo>(`/wallets/${wallet.walletId}/recovery`)
@@ -79,6 +116,9 @@ export function Home({
     partner<{ exists: boolean }>(`/shares/${wallet.walletId}`)
       .then((r) => setBackupDeposited(r.exists))
       .catch(() => setBackupDeposited(false));
+    sq<{ dailyLimitSats: string }>('/rules')
+      .then((r) => setLimit(r.dailyLimitSats))
+      .catch(() => setLimit(null));
     const timer = setInterval(refresh, 5000);
     return () => clearInterval(timer);
   }, [refresh, wallet.walletId]);
@@ -89,33 +129,62 @@ export function Home({
     try {
       const authentication = await approve(wallet.walletId, 'cancel', recoveryId);
       await sq(`/recovery/${recoveryId}/cancel`, { authentication });
-      setMessage('Récupération annulée : votre wallet est dégelé.');
+      setMessage('Recovery cancelled. Your wallet is unfrozen.');
       refresh();
     } catch (e) {
-      setMessage((e as Error).name === 'NotAllowedError' ? 'Annulation interrompue sur l’appareil.' : (e as Error).message);
+      setMessage((e as Error).name === 'NotAllowedError' ? 'Cancellation interrupted on the device.' : (e as Error).message);
     } finally {
       setCancelling(false);
     }
   }
 
+  // Gel : action de protection, la session suffit. Dégel : assouplit la protection, passkey exigée.
+  async function freeze() {
+    setBusyFreeze(true);
+    try {
+      const r = await sq<{ cancelledPayments: number }>(`/wallets/${wallet.walletId}/freeze`, {}, session.token);
+      setMessage(`Wallet frozen. ${r.cancelledPayments} pending payment(s) cancelled.`);
+      refresh();
+    } catch (e) {
+      setMessage((e as Error).message);
+    } finally {
+      setBusyFreeze(false);
+    }
+  }
+
+  async function unfreeze() {
+    setBusyFreeze(true);
+    try {
+      const authentication = await approve(wallet.walletId, 'unfreeze', wallet.walletId);
+      await sq(`/wallets/${wallet.walletId}/unfreeze`, { authentication });
+      setMessage('Wallet unfrozen.');
+      refresh();
+    } catch (e) {
+      setMessage((e as Error).name === 'NotAllowedError' ? 'Unfreeze interrupted on the device.' : (e as Error).message);
+    } finally {
+      setBusyFreeze(false);
+    }
+  }
+
   if (recoveryInfo?.status === 'recovered') {
     return (
-      <div className="screen">
-        <p className="eyebrow">Wallet récupéré</p>
-        <h1>Ce wallet a été récupéré sur un autre appareil</h1>
-        <p>
-          Les fonds ont été transférés vers un nouveau wallet et la passkey de cet appareil a été révoquée.
-          Cet appareil n’a plus accès à rien.
-        </p>
-        <button className="secondary" onClick={onLogout}>
-          Se déconnecter
-        </button>
-      </div>
+      <Screen
+        footer={
+          <Btn kind="secondary" onClick={onLogout}>
+            Log out
+          </Btn>
+        }
+      >
+        <Title
+          title="This wallet was recovered on another device"
+          lead="The funds were moved to a new wallet and this device’s passkey was revoked. This device no longer has access to anything."
+        />
+      </Screen>
     );
   }
 
   async function faucet() {
-    setMessage('Demande au faucet regtest…');
+    setMessage('Requesting test bitcoin from the regtest faucet…');
     await fetch(`${btc.esploraUrl}/faucet`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -127,104 +196,240 @@ export function Home({
     }, 1500);
   }
 
+  const frozen = recoveryInfo?.status === 'frozen';
+  const frozenByClient = frozen && !recoveryInfo?.recovery;
+  const sendBlocked = !balance ? 'No funds yet' : pending ? 'A payment is on hold' : frozen ? 'Wallet frozen' : null;
+  const keyChip = (ok: boolean | null): [string, 'success' | 'danger' | 'neutral'] =>
+    ok === null ? ['Checking', 'neutral'] : ok ? ['Active', 'success'] : ['Share missing', 'danger'];
+
   return (
-    <div className="screen">
-      <p className="eyebrow">
-        Wallet Bitcoin · {wallet.network === 'signet' ? 'signet (réseau de test public)' : 'regtest (local)'}
-      </p>
-      {!wallet.backupConfirmed && (
-        <div className="card warning">
-          <strong>Sauvegarde incomplète</strong>
-          <span>
-            La création a été interrompue avant la vérification de votre part de secours. Si vous ne
-            l’avez pas recopiée, ce wallet ne pourra pas être récupéré en cas de perte du téléphone :
-            n’y déposez pas de fonds et créez-en un nouveau.
-          </span>
-        </div>
-      )}
-      <div className="balance">
-        <span>Solde</span>
-        <strong>{balance === null ? '…' : formatBtc(balance)}</strong>
-        <small>{balance === null ? '' : formatSats(balance)}</small>
-      </div>
-      {recoveryInfo?.recovery && (
-        <div className="card warning">
-          <strong>Récupération demandée depuis un autre appareil</strong>
-          <span>
-            Votre wallet est gelé. Si c’est vous, ne faites rien. Si ce n’est pas vous, annulez : sans votre
-            part papier, personne ne peut de toute façon récupérer ce wallet.
-          </span>
-          <span className="countdown">
-            {recoveryInfo.recovery.secondsLeft > 0
-              ? `Aboutit dans ${recoveryInfo.recovery.secondsLeft} s`
-              : 'Délai écoulé : elle peut aboutir à tout moment'}
-          </span>
-          <button className="primary" disabled={cancelling} onClick={() => cancelRecovery(recoveryInfo.recovery!.recoveryId)}>
-            {cancelling ? 'Validation sur l’appareil…' : 'Ce n’est pas moi : annuler'}
+    <Screen tabs={{ value: tab, onChange: setTab }}>
+      {tab === 'wallet' ? (
+        <div className="home-head" key="head">
+          <Brand />
+          <button type="button" className="avatar" onClick={onLogout} title="Log out" aria-label="Log out">
+            {initials(wallet.clientId)}
           </button>
         </div>
-      )}
-      <button className="primary" disabled={!balance || !!pending || recoveryInfo?.status === 'frozen'} onClick={onSend}>
-        Envoyer
-      </button>
-
-      {pending && (
-        <PendingPayment
-          wallet={wallet}
-          pending={pending}
-          onDone={(r) => {
-            setPending(null);
-            setMessage(r.status === 'sent' ? 'Gros paiement envoyé après le délai de sécurité.' : 'Paiement annulé.');
-            refresh();
-          }}
+      ) : (
+        <Title
+          key="head"
+          title={tab === 'transfers' ? 'Transfers' : 'Recovery'}
+          lead={
+            tab === 'transfers'
+              ? 'Send and receive bitcoin.'
+              : 'What protects your wallet, and what to do if something goes wrong.'
+          }
         />
       )}
 
-      {notifications.length > 0 && (
-        <div className="card">
-          <span className="label">Alertes Swissquote (MOCK : SMS, e-mail, espace client)</span>
-          <ul className="inbox">
-            {notifications.map((n) => (
-              <li key={n.at + n.text}>
-                <time>{new Date(n.at).toLocaleTimeString('fr-CH')}</time> {n.text}
-              </li>
-            ))}
-          </ul>
+      {!wallet.backupConfirmed && (
+        <Callout key="backup" tone="danger" title="Backup incomplete">
+          Wallet creation stopped before your backup words were checked. If you did not write them down, this wallet
+          cannot be recovered if you lose your phone. Do not fund it: create a new one.
+        </Callout>
+      )}
+
+      {recoveryInfo?.recovery && (
+        <Callout key="foreign" tone="danger" title="Recovery requested from another device">
+          Your wallet is frozen. If this is you, do nothing. If it is not you, cancel it: without your backup words
+          nobody can recover this wallet anyway.
+          <strong>
+            {recoveryInfo.recovery.secondsLeft > 0
+              ? `Completes in ${formatClock(recoveryInfo.recovery.secondsLeft)}`
+              : 'Delay over: it can complete at any moment'}
+          </strong>
+          <Btn disabled={cancelling} icon="face" onClick={() => cancelRecovery(recoveryInfo.recovery!.recoveryId)}>
+            {cancelling ? 'Confirm on your device…' : 'This is not me: cancel'}
+          </Btn>
+        </Callout>
+      )}
+
+      {frozenByClient && (
+        <Callout key="frozen" title="Wallet frozen">
+          No payment can leave this wallet until you unfreeze it with your passkey.
+          <Btn kind="secondary" icon="face" disabled={busyFreeze} onClick={unfreeze}>
+            {busyFreeze ? 'Confirm on your device…' : 'Unfreeze wallet'}
+          </Btn>
+        </Callout>
+      )}
+
+      {tab === 'wallet' && (
+        <div className="balance-card" key="balance">
+          <span className="cap">
+            Bitcoin wallet, {wallet.network === 'signet' ? 'signet (public test network)' : 'regtest (local)'}
+          </span>
+          <strong>{balance === null ? '…' : formatBtc(balance)}</strong>
+          <span className="cap">{balance === null ? '' : formatSats(balance)}</span>
         </div>
       )}
 
-      <div className="card">
-        <span className="label">Adresse de réception</span>
-        <code className="address">{address}</code>
-        <button className="secondary" onClick={() => navigator.clipboard?.writeText(address)}>
-          Copier l’adresse
-        </button>
-        {wallet.network === 'regtest' && (
-          <button className="secondary" onClick={faucet}>
-            Recevoir des BTC de test (regtest)
+      {tab === 'wallet' && (
+        <div className="quick" key="quick">
+          <button type="button" disabled={!!sendBlocked} onClick={onSend}>
+            <span className="disc dark">
+              <Icon name="up" size={24} />
+            </span>
+            Send
           </button>
-        )}
-      </div>
+          <button type="button" onClick={() => (setShowReceive(true), setTab('transfers'))}>
+            <span className="disc">
+              <Icon name="down" size={24} />
+            </span>
+            Receive
+          </button>
+        </div>
+      )}
 
-      <div className="card">
-        <span className="label">Protection</span>
-        <ul className="facts">
-          <li>Multisig 2 sur 3 : téléphone, Swissquote, secours.</li>
-          <li>
-            Part de secours chez le partenaire :{' '}
-            {backupDeposited === null ? '…' : backupDeposited ? 'déposée ✓' : 'introuvable ⚠'}
-          </li>
-          <li>Votre part papier et sa copie chiffrée : chez vous.</li>
-        </ul>
-        <button className="secondary" onClick={() => downloadExitKit(wallet)}>
-          Télécharger le kit de sortie
-        </button>
-      </div>
+      {tab === 'transfers' && (
+        <Group key="actions">
+          <Row
+            icon="up"
+            title="Send bitcoin"
+            sub={sendBlocked ?? 'To any Bitcoin address'}
+            trail="chevR"
+            disabled={!!sendBlocked}
+            onClick={onSend}
+          />
+          <Row
+            icon="down"
+            title="Receive bitcoin"
+            sub={showReceive ? 'Hide your address' : 'Show your address'}
+            trail="chevR"
+            onClick={() => setShowReceive((v) => !v)}
+          />
+          {wallet.network === 'regtest' && (
+            <Row icon="plus" title="Get test bitcoin" sub="Regtest faucet, for the demo" trail="chevR" onClick={faucet} />
+          )}
+        </Group>
+      )}
 
-      {message && <p className="note">{message}</p>}
-      <button className="secondary" onClick={onLogout}>
-        Se déconnecter
-      </button>
-    </div>
+      {tab === 'transfers' && showReceive && (
+        <Group key="receive" label="Your receive address">
+          <div className="sheet padded">
+            <span className="address">{address}</span>
+            <Btn kind="secondary" small icon="copy" onClick={() => navigator.clipboard?.writeText(address)}>
+              Copy address
+            </Btn>
+          </div>
+        </Group>
+      )}
+
+      {/* Toujours monté, quel que soit l'onglet : une seule boucle de suivi par paiement en attente. */}
+      {pending && (
+        <div key="pending" className="stack" hidden={tab === 'recovery'}>
+          <HomePending
+            wallet={wallet}
+            pending={pending}
+            onDone={(r) => {
+              setPending(null);
+              setMessage(r.status === 'sent' ? 'Large payment sent after the security delay.' : 'Payment cancelled.');
+              refresh();
+            }}
+          />
+        </div>
+      )}
+
+      {message && (
+        <p className="note" key="message">
+          {message}
+        </p>
+      )}
+
+      {tab !== 'recovery' && (
+        <div className="sheet padded" key="limit">
+          <div className="limit-head">
+            <strong>Daily limit</strong>
+            <span>{limit === null ? '…' : formatSats(limit)}</span>
+          </div>
+          <p className="note">Payments above your daily limit are held for a security delay.</p>
+        </div>
+      )}
+
+      {tab !== 'recovery' && notifications.length > 0 && (
+        <Group key="alerts" label="Swissquote alerts (mock SMS, email and client area)">
+          {notifications.map((n) => (
+            <Row
+              key={n.at + n.text}
+              icon="bell"
+              title={new Date(n.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+              sub={n.text}
+            />
+          ))}
+        </Group>
+      )}
+
+      {tab === 'recovery' && (
+        <Group key="keys" label="Your three keys">
+          <Row icon="phone" title="Phone key" sub="On this device" chip={['Active', 'success']} />
+          <Row
+            icon="bank"
+            title="Swissquote key"
+            sub="Signs with you up to your daily limit"
+            chip={frozen ? ['Frozen', 'accent'] : ['Active', 'success']}
+          />
+          <Row icon="key" title="Backup key" sub="Your words and our partner’s share" chip={keyChip(backupDeposited)} />
+        </Group>
+      )}
+
+      {tab === 'recovery' && (
+        <Group key="help" label="If something goes wrong">
+          {!frozen && (
+            <Row
+              icon="lock"
+              title={busyFreeze ? 'Freezing…' : 'Freeze wallet'}
+              sub="Phone stolen? Blocks every payment at once"
+              trail="chevR"
+              disabled={busyFreeze}
+              onClick={freeze}
+            />
+          )}
+          <Row
+            icon="lifebuoy"
+            title="Lost your phone?"
+            sub={showLost ? 'Hide the steps' : 'How recovery works'}
+            trail="chevR"
+            onClick={() => setShowLost((v) => !v)}
+          />
+          <Row
+            icon="download"
+            title="Exit kit"
+            sub="Use your wallet without Swissquote"
+            trail="chevR"
+            onClick={() => downloadExitKit(wallet)}
+          />
+        </Group>
+      )}
+
+      {tab === 'recovery' && showLost && (
+        <Timeline
+          key="lost"
+          items={[
+            {
+              state: 'todo',
+              title: 'Log in on your new device',
+              desc: 'With your Swissquote account. Recovery starts from there.',
+            },
+            { state: 'todo', title: 'Wait for the security delay', desc: 'This phone is alerted and can still cancel.' },
+            {
+              state: 'todo',
+              title: 'Enter your backup words',
+              desc: 'Your paper copy, or your encrypted copy and passphrase.',
+            },
+            {
+              state: 'todo',
+              title: 'Get your new keys',
+              desc: 'Your bitcoin moves to a new wallet and this phone stops working.',
+            },
+          ]}
+        />
+      )}
+
+      {tab === 'recovery' && (
+        <Group key="session">
+          <Row icon="logout" title="Log out" trail="chevR" onClick={onLogout} />
+        </Group>
+      )}
+    </Screen>
   );
 }

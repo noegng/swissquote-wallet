@@ -78,15 +78,15 @@ export async function completeRecovery(
   log: (line: string) => void,
 ): Promise<{ wallet: StoredWallet; newClientShare: string; txUrl: string }> {
   const rel = await partner<{ status: string; sealedForDevice?: SealedBox }>(`/release/${state.releaseId}`);
-  if (!rel.sealedForDevice) throw new Error('La part du partenaire n’est pas encore disponible');
+  if (!rel.sealedForDevice) throw new Error('Our partner’s share is not available yet');
   const tiers = await openSealed(rel.sealedForDevice, state.deviceKey);
-  log('Part du partenaire reçue et déchiffrée sur cet appareil');
+  log('Partner’s share received and decrypted on this device');
 
   const backupRoot = backupRootFromShares([clientShare, tiers], btc.network);
   if (accountOrigin(backupRoot).xpub !== state.oldPolicy.keys[2].xpub) {
-    throw new Error('Cette part ne correspond pas à ce wallet');
+    throw new Error('These backup words do not match this wallet');
   }
-  log('Clé de secours reconstituée, en mémoire uniquement');
+  log('Backup key restored, in memory only');
 
   const next = createWalletMaterial(btc.network);
   const nw = await sq<{ newWalletId: string; policy: WalletPolicy }>(
@@ -94,7 +94,7 @@ export async function completeRecovery(
     { phoneKey: next.phoneKey, backupKey: next.backupKey },
     session.token,
   );
-  log('Nouveau wallet créé avec de nouvelles clés (téléphone, Swissquote, secours)');
+  log('New wallet created with new keys (phone, Swissquote, backup)');
 
   const utxos = await esplora.scanWallet(state.oldPolicy, btc.network, 20);
   const { psbt } = buildSweep({
@@ -108,7 +108,7 @@ export async function completeRecovery(
   const sweep = await sq<{ psbt: string }>(`/recovery/${state.recoveryId}/sweep`, { psbt: backupSigned }, session.token);
   const { hex } = finalizeSpend(combinePsbts([backupSigned, sweep.psbt], btc.network));
   const txid = await esplora.broadcast(hex);
-  log('Fonds transférés : signé par la clé de secours, cosigné par Swissquote');
+  log('Funds moved: signed by the backup key and by Swissquote');
 
   await saveWallet(
     {
@@ -128,7 +128,7 @@ export async function completeRecovery(
     sealedShare: await sealFor(publicKey, next.shares.tiers),
   });
   await clearRecovery(session.clientId);
-  log('Nouvelle part de secours confiée au partenaire ; anciennes passkeys révoquées');
+  log('New backup share handed to our partner, old passkeys revoked');
 
   return {
     wallet: (await loadWallet(session.clientId))!,

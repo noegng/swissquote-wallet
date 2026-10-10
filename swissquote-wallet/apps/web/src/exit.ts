@@ -59,13 +59,13 @@ export async function exitWithoutSwissquote(
   log: (line: string) => void,
 ): Promise<{ txid: string; url: string; amount: bigint }> {
   const rel = await partner<{ sealedForDevice?: SealedBox }>(`/release/${state.releaseId}`);
-  if (!rel.sealedForDevice) throw new Error('La part du partenaire n’est pas encore disponible');
+  if (!rel.sealedForDevice) throw new Error('Our partner’s share is not available yet');
   const tiers = await openSealed(rel.sealedForDevice, state.deviceKey);
-  log('Part du partenaire reçue et déchiffrée sur cet appareil');
+  log('Partner’s share received and decrypted on this device');
 
   const backupRoot = backupRootFromShares([clientShare, tiers], btc.network);
-  if (accountOrigin(backupRoot).xpub !== wallet.policy.keys[2].xpub) throw new Error('Cette part ne correspond pas à ce wallet');
-  log('Clé de secours reconstituée, en mémoire uniquement');
+  if (accountOrigin(backupRoot).xpub !== wallet.policy.keys[2].xpub) throw new Error('These backup words do not match this wallet');
+  log('Backup key restored, in memory only');
 
   const utxos = await esplora.scanWallet(wallet.policy, btc.network, 20);
   const { psbt, fee } = buildSweep({ policy: wallet.policy, network: btc.network, utxos, to, feeRate: await feeRate() });
@@ -76,12 +76,12 @@ export async function exitWithoutSwissquote(
     seed.fill(0);
   }
   signWithRoot(psbt, backupRoot);
-  log('Transaction signée par la clé du téléphone et la clé de secours (2 sur 3, sans Swissquote)');
+  log('Transaction signed by the phone key and the backup key (2 of 3, without Swissquote)');
 
   const { hex } = finalizeSpend(psbt);
   const txid = await esplora.broadcast(hex);
   await clearExit(wallet.clientId);
-  log('Diffusée directement sur le réseau Bitcoin');
+  log('Broadcast directly to the Bitcoin network');
   const total = utxos.reduce((s, u) => s + u.value, 0n);
   return { txid, url: btc.explorerTxUrl(txid), amount: total - fee };
 }

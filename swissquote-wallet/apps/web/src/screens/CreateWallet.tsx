@@ -6,6 +6,7 @@ import { createWalletMaterial, sealFor, type WalletPolicy } from '@sqw/core';
 import { partner, sq, type Session } from '../api';
 import { btc } from '../config';
 import { markBackupConfirmed, saveWallet, type StoredWallet } from '../keystore';
+import { Btn, Checklist, Group, Row, Screen, Title } from '../ui';
 import { BackupCeremony } from './BackupCeremony';
 
 export function CreateWallet({ session, onCreated }: { session: Session; onCreated: (w: StoredWallet) => void }) {
@@ -23,14 +24,14 @@ export function CreateWallet({ session, onCreated }: { session: Session; onCreat
     const log = (line: string) => setProgress((p) => [...p, line]);
     try {
       const m = createWalletMaterial(btc.network);
-      log('Clés du téléphone et de secours générées sur cet appareil');
+      log('Phone key and backup key created on this device');
 
       const created = await sq<{ walletId: string; policy: WalletPolicy }>(
         '/wallets',
         { phoneKey: m.phoneKey, backupKey: m.backupKey },
         session.token,
       );
-      log('Swissquote a ajouté sa clé et enregistré votre wallet');
+      log('Swissquote added its key and registered your wallet');
 
       const { publicKey } = await partner<{ publicKey: JsonWebKey }>('/public-key');
       await partner('/shares', {
@@ -38,7 +39,7 @@ export function CreateWallet({ session, onCreated }: { session: Session; onCreat
         clientId: session.clientId,
         sealedShare: await sealFor(publicKey, m.shares.tiers),
       });
-      log('Part de secours chiffrée et confiée au partenaire indépendant');
+      log('Backup share encrypted and handed to our independent partner');
 
       await saveWallet(
         {
@@ -51,7 +52,7 @@ export function CreateWallet({ session, onCreated }: { session: Session; onCreat
         m.phoneSeed,
       );
       m.phoneSeed.fill(0);
-      log('Clé du téléphone chiffrée dans le coffre de cet appareil');
+      log('Phone key encrypted in this device’s vault');
 
       setWalletId(created.walletId);
       setClientShare(m.shares.client);
@@ -66,7 +67,8 @@ export function CreateWallet({ session, onCreated }: { session: Session; onCreat
       <BackupCeremony
         walletId={walletId}
         clientShare={clientShare}
-        stepLabel={(s) => (s === 'cloud' ? 'Étape 3 sur 3' : 'Étape 2 sur 3')}
+        navTitle="New wallet"
+        stepOf={(s) => (s === 'cloud' ? [3, 3] : [2, 3])}
         onDone={async () => {
           setClientShare(null);
           onCreated(await markBackupConfirmed(session.clientId));
@@ -77,47 +79,38 @@ export function CreateWallet({ session, onCreated }: { session: Session; onCreat
 
   if (step === 'working') {
     return (
-      <div className="screen">
-        <h1>Création en cours…</h1>
-        <ul className="progress">
-          {progress.map((p) => (
-            <li key={p}>✓ {p}</li>
-          ))}
-        </ul>
-        {error && (
-          <>
-            <p className="error">{error}</p>
-            <button className="secondary" onClick={create}>
-              Réessayer
-            </button>
-          </>
-        )}
-      </div>
+      <Screen
+        title="New wallet"
+        step={[1, 3]}
+        footer={
+          error ? (
+            <Btn kind="secondary" onClick={create}>
+              Try again
+            </Btn>
+          ) : undefined
+        }
+      >
+        <Title title="Creating your wallet" />
+        <Checklist lines={progress} />
+        {error && <p className="error">{error}</p>}
+      </Screen>
     );
   }
 
   return (
-    <div className="screen">
-      <p className="eyebrow">Étape 1 sur 3</p>
-      <h1>Votre wallet Bitcoin</h1>
-      <p>Votre wallet est protégé par trois clés. Il en faut deux pour envoyer des bitcoins.</p>
-      <ul className="keys">
-        <li>
-          <strong>Clé du téléphone</strong>
-          <span>Sur cet appareil, déverrouillée par votre passkey. Pour l’usage quotidien.</span>
-        </li>
-        <li>
-          <strong>Clé Swissquote</strong>
-          <span>Cosigne vos paiements selon vos plafonds. Ne peut jamais rien faire seule.</span>
-        </li>
-        <li>
-          <strong>Clé de secours</strong>
-          <span>Découpée en deux parts : une pour vous, une chez un partenaire indépendant.</span>
-        </li>
-      </ul>
-      <button className="primary" onClick={create}>
-        Créer mon wallet
-      </button>
-    </div>
+    <Screen title="New wallet" step={[1, 3]} footer={<Btn onClick={create}>Create your wallet</Btn>}>
+      <Title title="Your wallet has three keys" lead="Any payment needs two of them." />
+      <Group>
+        <Row icon="phone" title="Phone key" sub="On this phone, for your daily payments" chip={['You', 'accent']} />
+        <Row
+          icon="bank"
+          title="Swissquote key"
+          sub="Signs with you up to your daily limit"
+          chip={['Swissquote', 'neutral']}
+        />
+        <Row icon="key" title="Backup key" sub="For emergencies, shared with a partner" chip={['Shared', 'neutral']} />
+      </Group>
+      <p className="note">Your keys are created on this phone. Swissquote cannot make a payment alone.</p>
+    </Screen>
   );
 }

@@ -1,20 +1,18 @@
 // Gros paiement en attente du délai de sécurité (palier 2) : compte à rebours, annulation par passkey,
 // diffusion automatique une fois le délai écoulé.
 import { useEffect, useRef, useState } from 'react';
+import { sq } from '../api';
 import { formatBtc, shortAddress } from '../format';
 import type { PendingPayment as Pending, StoredWallet } from '../keystore';
 import { cancelPending, checkPending } from '../payments';
+import { Callout, Countdown } from '../ui';
 
-export function PendingPayment({
-  wallet,
-  pending,
-  onDone,
-}: {
-  wallet: StoredWallet;
-  pending: Pending;
-  onDone: (result: { status: 'sent'; url: string } | { status: 'cancelled' }) => void;
-}) {
+type Done = { status: 'sent'; txid: string; url: string } | { status: 'cancelled' };
+
+/** Suit un paiement en attente. Une seule boucle de suivi par paiement, quel que soit le nombre de rendus. */
+export function usePendingPayment(wallet: StoredWallet, pending: Pending, onDone: (result: Done) => void) {
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
+  const [total, setTotal] = useState<number | undefined>(undefined);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   // Le parent se re-rend souvent : on garde le dernier onDone sans relancer la boucle de suivi
@@ -23,6 +21,13 @@ export function PendingPayment({
   onDoneRef.current = onDone;
   const latest = useRef({ wallet, pending });
   latest.current = { wallet, pending };
+
+  useEffect(() => {
+    // Durée totale du délai, pour la jauge uniquement.
+    sq<{ highValueDelaySeconds: number }>('/rules')
+      .then((r) => setTotal(r.highValueDelaySeconds))
+      .catch(() => setTotal(undefined));
+  }, []);
 
   useEffect(() => {
     let stop = false;
@@ -50,28 +55,45 @@ export function PendingPayment({
     setError('');
     try {
       await cancelPending(wallet, pending);
-      onDone({ status: 'cancelled' });
+      onDoneRef.current({ status: 'cancelled' });
     } catch (e) {
-      setError((e as Error).message);
+      setError((e as Error).name === 'NotAllowedError' ? 'Cancellation interrupted on the device.' : (e as Error).message);
       setBusy(false);
     }
   }
 
+  return { secondsLeft, total, error, busy, cancel };
+}
+
+/** Compte à rebours et explication, communs à l'accueil et à l'écran d'envoi. */
+export function PendingPaymentPanel({
+  pending,
+  secondsLeft,
+  total,
+  error,
+}: {
+  pending: Pending;
+  secondsLeft: number | null;
+  total?: number;
+  error: string;
+}) {
   return (
-    <div className="card warning">
-      <strong>Paiement en attente de sécurité</strong>
-      <span>
-        {formatBtc(pending.amount)} vers {shortAddress(pending.to)}. Ce montant dépasse votre plafond
-        quotidien : Swissquote attend avant de cosigner, et vous a envoyé une alerte.
-      </span>
-      <span className="countdown">
-        {secondsLeft === null ? '…' : secondsLeft > 0 ? `Départ dans ${secondsLeft} s` : 'Envoi en cours…'}
-      </span>
-      <span className="note">En production : 24 h à 7 jours. Si ce n’est pas vous, annulez.</span>
-      {error && <span className="error">{error}</span>}
-      <button className="primary" disabled={busy} onClick={cancel}>
-        {busy ? 'Validation sur l’appareil…' : 'Annuler ce paiement'}
-      </button>
-    </div>
+    <>
+      <Countdown
+        caption={`${formatBtc(pending.amount)} to ${shortAddress(pending.to)}`}
+        secondsLeft={secondsLeft}
+        total={total}
+        footnote={secondsLeft === 0 ? 'Sending now…' : 'before the payment is sent'}
+      />
+      <div className="why">
+        <strong>Above your daily limit</strong>
+        <p>Large payments wait before Swissquote signs them. Swissquote has also sent you an alert.</p>
+      </div>
+      <Callout title="Didn’t make this payment?">
+        Cancel it now. You can also freeze your wallet from your Swissquote account on any device.
+      </Callout>
+      {error && <p className="error">{error}</p>}
+      <p className="note">Shortened for this demo. In production: 24 hours to 7 days.</p>
+    </>
   );
 }

@@ -10,11 +10,31 @@ import {
   type RecoveryProgress,
   type RemoteWallet,
 } from '../recovery';
+import { Btn, Callout, Checklist, Hero, Screen, Timeline, Title, formatClock, type TimelineItem } from '../ui';
 import { BackupCeremony } from './BackupCeremony';
-import { ClientShareInput } from './ClientShareInput';
+import { useClientShareInput } from './ClientShareInput';
 import { Passkey } from './Passkey';
 
 type Step = 'intro' | 'passkey' | 'waiting' | 'share' | 'finishing' | 'backup' | 'cancelled';
+
+const STEPS = [
+  { title: 'Set up a passkey on this device' },
+  {
+    title: 'Wait for the security delay',
+    desc: 'Swissquote freezes the wallet and alerts you. Our partner prepares its share.',
+  },
+  { title: 'Enter your backup words', desc: 'Your paper copy, or your encrypted copy and passphrase.' },
+  { title: 'Get your new keys', desc: 'Your bitcoin moves to a new wallet and the old phone stops working.' },
+];
+
+/** Les quatre étapes, avec l'étape `current` (0 à 3) en cours et les précédentes cochées. */
+function steps(current: number, override?: Partial<TimelineItem>): TimelineItem[] {
+  return STEPS.map((s, i) => ({
+    ...s,
+    state: i < current ? 'done' : i === current ? 'now' : 'todo',
+    ...(i === current ? override : {}),
+  }));
+}
 
 export function Recover({
   session,
@@ -59,7 +79,7 @@ export function Recover({
     setError('');
     try {
       const r = await sq(`/wallets/${remote.walletId}/freeze`, {}, session.token);
-      setNotice(`Wallet gelé. ${r.cancelledPayments} paiement(s) en attente annulé(s).`);
+      setNotice(`Wallet frozen. ${r.cancelledPayments} pending payment(s) cancelled.`);
       refreshRemote();
     } catch (e) {
       setError((e as Error).message);
@@ -70,7 +90,7 @@ export function Recover({
     setError('');
     try {
       await sq(`/recovery/${recoveryId}/cancel`, {}, session.token);
-      setNotice('Récupération annulée. Si votre téléphone a été volé, gelez le wallet puis lancez votre propre récupération.');
+      setNotice('Recovery cancelled. If your phone was stolen, freeze the wallet, then start your own recovery.');
       refreshRemote();
     } catch (e) {
       setError((e as Error).message);
@@ -138,12 +158,14 @@ export function Recover({
     }
   }
 
+  const share = useClientShareInput(finish);
+
   if (step === 'backup' && result) {
     return (
       <BackupCeremony
         walletId={result.wallet.walletId}
         clientShare={result.newClientShare}
-        stepLabel={() => 'Nouvelle sauvegarde'}
+        navTitle="New backup"
         onDone={async () => onRecovered(await markBackupConfirmed(session.clientId))}
       />
     );
@@ -153,7 +175,7 @@ export function Recover({
     return (
       <Passkey
         session={session}
-        title="Passkey de ce nouvel appareil"
+        title="Passkey for this new device"
         allowExisting
         onDone={(info) => begin(info.credentialId)}
       />
@@ -162,120 +184,132 @@ export function Recover({
 
   if (step === 'cancelled') {
     return (
-      <div className="screen">
-        <h1>Récupération annulée</h1>
-        <p>
-          La récupération a été annulée depuis le téléphone associé au wallet. Si ce n’était pas vous,
-          votre wallet est protégé : rien n’a été transféré.
-        </p>
-        <button className="secondary" onClick={() => setStep('intro')}>
-          Retour
-        </button>
-      </div>
+      <Screen
+        footer={
+          <Btn kind="secondary" onClick={() => setStep('intro')}>
+            Back
+          </Btn>
+        }
+      >
+        <Hero tone="danger" />
+        <Title
+          center
+          title="Recovery cancelled"
+          lead="The recovery was cancelled from the phone linked to this wallet. If that was not you, your wallet is protected: nothing was moved."
+        />
+      </Screen>
     );
   }
 
   if (step === 'waiting') {
     const s = progress?.swissquote;
     const p = progress?.partner;
+    const left = s && p ? Math.max(s.secondsLeft, p.status === 'released' ? 0 : p.secondsLeft) : null;
     return (
-      <div className="screen">
-        <p className="eyebrow">Récupération en cours</p>
-        <h1>Délai de sécurité</h1>
-        <p>
-          Votre wallet est gelé et vous avez reçu des alertes. Ce délai laisse au vrai propriétaire le temps
-          d’annuler si ce n’est pas lui qui demande la récupération.
-        </p>
-        <ul className="progress">
-          <li>
-            Swissquote : {s ? (s.secondsLeft > 0 ? `${s.secondsLeft} s restantes` : 'délai écoulé ✓') : '…'}
-          </li>
-          <li>
-            Partenaire : {p ? (p.status === 'released' ? 'part transmise ✓' : `${p.secondsLeft} s restantes`) : '…'}
-          </li>
-        </ul>
-        <p className="note">En production : 7 jours, avec alertes par SMS, e-mail et courrier.</p>
+      <Screen title="Recovery" step={[2, 4]}>
+        <Title
+          title="Recovery in progress"
+          lead="Your wallet is frozen and you have been alerted. The delay gives the real owner time to cancel."
+        />
+        <Timeline
+          items={steps(1, {
+            desc: (
+              <>
+                Swissquote: {s ? (s.secondsLeft > 0 ? `${formatClock(s.secondsLeft)} left` : 'delay over') : '…'}
+                <br />
+                Partner: {p ? (p.status === 'released' ? 'share sent' : `${formatClock(p.secondsLeft)} left`) : '…'}
+              </>
+            ),
+            chip: left === null ? undefined : [left > 0 ? `${formatClock(left)} left` : 'Almost done', 'accent'],
+          })}
+        />
+        <p className="note">Shortened for this demo. In production: 7 days, with alerts by SMS, email and post.</p>
         {error && <p className="error">{error}</p>}
-      </div>
+      </Screen>
     );
   }
 
-  if (step === 'share' || step === 'finishing') {
+  if (step === 'share') {
     return (
-      <div className="screen">
-        <p className="eyebrow">Dernière étape</p>
-        <h1>Votre part de secours</h1>
-        {step === 'share' ? (
-          <>
-            <p>La part du partenaire est arrivée, chiffrée pour cet appareil. Il manque la vôtre.</p>
-            {error && <p className="error">{error}</p>}
-            <ClientShareInput busy={busy} submitLabel="Récupérer mon wallet" onShare={finish} />
-          </>
-        ) : (
-          <>
-            <ul className="progress">
-              {log.map((l) => (
-                <li key={l}>✓ {l}</li>
-              ))}
-            </ul>
-            {error && (
-              <>
-                <p className="error">{error}</p>
-                <button className="secondary" onClick={() => (setError(''), setStep('share'))}>
-                  Réessayer
-                </button>
-              </>
-            )}
-          </>
-        )}
-      </div>
+      <Screen
+        title="Recovery"
+        step={[3, 4]}
+        footer={
+          <Btn disabled={busy || !share.ready} onClick={share.submit}>
+            Recover your wallet
+          </Btn>
+        }
+      >
+        <Title
+          title="Enter your backup words"
+          lead="Our partner’s share has arrived, encrypted for this device. Yours is the missing half."
+        />
+        {error && <p className="error">{error}</p>}
+        {share.fields}
+      </Screen>
+    );
+  }
+
+  if (step === 'finishing') {
+    return (
+      <Screen
+        title="Recovery"
+        step={[4, 4]}
+        footer={
+          error ? (
+            <Btn kind="secondary" onClick={() => (setError(''), setStep('share'))}>
+              Try again
+            </Btn>
+          ) : undefined
+        }
+      >
+        <Title title="Moving to your new keys" />
+        <Checklist lines={log} />
+        {error && <p className="error">{error}</p>}
+      </Screen>
     );
   }
 
   return (
-    <div className="screen">
-      <p className="eyebrow">Nouvel appareil</p>
-      <h1>Récupérer votre wallet</h1>
-      <p>Un wallet Bitcoin est associé à votre compte, mais pas à cet appareil. Avez-vous perdu votre téléphone ?</p>
-      <ul className="facts">
-        <li>Vous créez une passkey pour cet appareil.</li>
-        <li>Swissquote gèle le wallet et vous alerte ; le partenaire prépare sa part. Délai de sécurité.</li>
-        <li>Vous saisissez votre part papier (ou votre copie cloud) : la clé de secours est reconstituée ici.</li>
-        <li>Vos fonds sont transférés vers un nouveau wallet, avec de nouvelles clés.</li>
-      </ul>
-      <p className="note">
-        Sans votre part papier ou sa copie, personne ne peut récupérer ce wallet : ni Swissquote, ni le
-        partenaire, ni un voleur de votre téléphone.
-      </p>
+    <Screen
+      title="Recovery"
+      footer={
+        <>
+          <Btn disabled={!!remoteState?.recovery} onClick={() => setStep('passkey')}>
+            Start recovery
+          </Btn>
+          <Btn kind="text" onClick={onCreateInstead}>
+            Create a new wallet instead
+          </Btn>
+        </>
+      }
+    >
+      <Title
+        title="Recover your wallet"
+        lead="A Bitcoin wallet is linked to your account, but not to this device. Have you lost your phone?"
+      />
+      <Timeline items={steps(0)} />
       {remoteState?.recovery && (
-        <div className="card warning">
-          <strong>Une récupération est déjà en cours, lancée depuis un autre appareil</strong>
-          <span>Si ce n’est pas vous, annulez-la depuis votre espace client : pas besoin de votre téléphone.</span>
-          <button className="primary" onClick={() => cancelForeignRecovery(remoteState.recovery!.recoveryId)}>
-            Ce n’est pas moi : annuler
-          </button>
-        </div>
+        <Callout tone="danger" title="A recovery is already in progress from another device">
+          If this is not you, cancel it from here. You do not need your phone.
+          <Btn onClick={() => cancelForeignRecovery(remoteState.recovery!.recoveryId)}>This is not me: cancel</Btn>
+        </Callout>
       )}
       {remoteState?.status === 'active' && (
-        <div className="card">
-          <strong>Téléphone volé ?</strong>
-          <span className="label">
-            Gelez le wallet tout de suite depuis votre espace client : plus aucun paiement, et les paiements en
-            attente sont annulés. Le dégel exigera votre passkey ; la récupération reste possible.
-          </span>
-          <button className="secondary" onClick={freeze}>
-            Geler mon wallet
-          </button>
-        </div>
+        <Callout title="Phone stolen?">
+          Freeze the wallet now: no payment can leave it and pending payments are cancelled. Unfreezing requires
+          your passkey, and recovery stays possible.
+          <Btn kind="secondary" onClick={freeze}>
+            Freeze my wallet
+          </Btn>
+        </Callout>
       )}
       {notice && <p className="note">{notice}</p>}
       {error && <p className="error">{error}</p>}
-      <button className="primary" disabled={!!remoteState?.recovery} onClick={() => setStep('passkey')}>
-        Commencer la récupération
-      </button>
-      <button className="secondary" onClick={onCreateInstead}>
-        Créer plutôt un nouveau wallet
-      </button>
-    </div>
+      <p className="note">
+        Without your backup words or their encrypted copy, nobody can recover this wallet: not Swissquote, not our
+        partner, not someone who stole your phone.
+      </p>
+    </Screen>
   );
 }

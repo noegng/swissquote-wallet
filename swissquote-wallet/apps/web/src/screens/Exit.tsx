@@ -5,7 +5,8 @@ import { config } from '../config';
 import { exitWithoutSwissquote, partnerStatus, requestPartnerShare, walletBalance } from '../exit';
 import { formatBtc, formatSats } from '../format';
 import { listLocalWallets, loadExit, type ExitState, type StoredWallet } from '../keystore';
-import { ClientShareInput } from './ClientShareInput';
+import { Btn, Callout, Checklist, Countdown, Group, Hero, Row, Screen, Title } from '../ui';
+import { useClientShareInput } from './ClientShareInput';
 
 type Step = 'choose' | 'intro' | 'waiting' | 'share' | 'finishing' | 'done';
 
@@ -52,7 +53,7 @@ export function Exit({ onBack }: { onBack: () => void }) {
         const s = await partnerStatus(state!);
         if (stop) return;
         if (s.status === 'released') return setStep('share');
-        if (s.status === 'cancelled') return setError('La libération a été annulée chez le partenaire.');
+        if (s.status === 'cancelled') return setError('The release was cancelled by our partner.');
         setSecondsLeft(s.secondsLeft);
       } catch (e) {
         if (!stop) setError((e as Error).message);
@@ -89,147 +90,178 @@ export function Exit({ onBack }: { onBack: () => void }) {
       setStep('done');
     } catch (e) {
       const msg = (e as Error).message;
-      setError(/Invalid|prefix|checksum|has no matching/i.test(msg) ? 'Adresse de destination invalide pour ce réseau.' : msg);
+      setError(/Invalid|prefix|checksum|has no matching/i.test(msg) ? 'Invalid destination address for this network.' : msg);
     } finally {
       setBusy(false);
     }
   }
 
-  const header = (
-    <>
-      <p className="eyebrow">Sortie sans Swissquote</p>
-      <p className="note">
-        Service Swissquote :{' '}
-        {swissquoteUp === null ? '…' : swissquoteUp ? 'joignable (non utilisé ici)' : 'injoignable — aucune importance'}
-      </p>
-    </>
-  );
+  const share = useClientShareInput(exit);
+
+  // Constat pour la démo : cet écran n'appelle jamais Swissquote, qu'il réponde ou non.
+  const status =
+    swissquoteUp === null ? null : swissquoteUp ? (
+      <p className="note">Swissquote is reachable right now, but nothing on this screen uses it.</p>
+    ) : (
+      <Callout tone="danger" title="Swissquote is currently unavailable">
+        You can still access your funds.
+      </Callout>
+    );
 
   if (step === 'done' && result) {
     return (
-      <div className="screen">
-        {header}
-        <h1>Vos fonds sont sortis ✓</h1>
-        <p>
-          {formatBtc(result.amount)} envoyés avec la clé du téléphone et la clé de secours. Aucun service
-          Swissquote n’a été contacté.
-        </p>
-        <a className="link" href={result.url} target="_blank" rel="noreferrer">
-          Voir la transaction sur l’explorateur
-        </a>
-        <button className="secondary" onClick={onBack}>
-          Retour
-        </button>
-      </div>
+      <Screen
+        footer={
+          <>
+            <a className="btn secondary" href={result.url} target="_blank" rel="noreferrer">
+              View transaction
+            </a>
+            <Btn kind="text" onClick={onBack}>
+              Back
+            </Btn>
+          </>
+        }
+      >
+        <Hero tone="success" />
+        <Title
+          center
+          title="Your funds are out"
+          lead={`${formatBtc(result.amount)} sent with your phone key and your backup key. No Swissquote service was contacted.`}
+        />
+        <Group label="Signed with">
+          <Row icon="phone" title="Your phone key" chip={['Signed', 'success']} />
+          <Row icon="key" title="Backup key" chip={['Signed', 'success']} />
+          <Row icon="bank" title="Swissquote key" chip={['Not needed', 'neutral']} />
+        </Group>
+      </Screen>
     );
   }
 
-  if (step === 'share' || step === 'finishing') {
+  if (step === 'finishing') {
     return (
-      <div className="screen">
-        {header}
-        <h1>Où envoyer vos fonds ?</h1>
-        {step === 'share' ? (
-          <>
-            <label className="field">
-              <span>Adresse de destination (un autre wallet à vous)</span>
-              <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="bcrt1… ou tb1…" autoComplete="off" />
-            </label>
-            <p>La part du partenaire est arrivée. Il manque la vôtre pour reconstituer la clé de secours.</p>
-            {error && <p className="error">{error}</p>}
-            {to.trim().length > 20 && <ClientShareInput busy={busy} submitLabel="Sortir mes fonds" onShare={exit} />}
-          </>
-        ) : (
-          <>
-            <ul className="progress">
-              {log.map((l) => (
-                <li key={l}>✓ {l}</li>
-              ))}
-            </ul>
-            {error && (
-              <>
-                <p className="error">{error}</p>
-                <button className="secondary" onClick={() => (setError(''), setStep('share'))}>
-                  Réessayer
-                </button>
-              </>
-            )}
-          </>
-        )}
-      </div>
+      <Screen
+        title="Exit kit"
+        footer={
+          error ? (
+            <Btn kind="secondary" onClick={() => (setError(''), setStep('share'))}>
+              Try again
+            </Btn>
+          ) : undefined
+        }
+      >
+        <Title title="Sending your funds" />
+        <Checklist lines={log} />
+        {error && <p className="error">{error}</p>}
+      </Screen>
+    );
+  }
+
+  if (step === 'share') {
+    const hasDestination = to.trim().length > 20;
+    return (
+      <Screen
+        title="Exit kit"
+        footer={
+          <Btn icon="up" disabled={busy || !hasDestination || !share.ready} onClick={share.submit}>
+            Send bitcoin
+          </Btn>
+        }
+      >
+        {status}
+        <Title
+          title="Where should your funds go?"
+          lead="Our partner’s share has arrived. Yours is the missing half of the backup key."
+        />
+        <label className="field">
+          <span>Destination address (another wallet of yours)</span>
+          <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="bcrt1… or tb1…" autoComplete="off" />
+        </label>
+        {error && <p className="error">{error}</p>}
+        {hasDestination && share.fields}
+      </Screen>
     );
   }
 
   if (step === 'waiting') {
     return (
-      <div className="screen">
-        {header}
-        <h1>Le partenaire prépare votre part</h1>
-        <p>
-          Le partenaire indépendant applique son propre délai de sécurité, sans passer par Swissquote, puis
-          envoie sa part chiffrée pour cet appareil.
-        </p>
-        <p className="countdown">{secondsLeft === null ? '…' : `${secondsLeft} s restantes`}</p>
-        <p className="note">En production : plusieurs jours, avec vérification d’identité par le partenaire.</p>
+      <Screen title="Exit kit">
+        {status}
+        <Title
+          title="Our partner is preparing its share"
+          lead="The independent partner applies its own security delay, without going through Swissquote, then sends its share encrypted for this device."
+        />
+        <Countdown
+          caption="Partner security delay"
+          secondsLeft={secondsLeft}
+          footnote="before the share is released"
+        />
+        <p className="note">Shortened for this demo. In production: several days, with an identity check by the partner.</p>
         {error && <p className="error">{error}</p>}
-      </div>
+      </Screen>
     );
   }
 
   if (step === 'intro' && wallet) {
     return (
-      <div className="screen">
-        {header}
-        <h1>Sortir sans Swissquote</h1>
-        <p>
-          Votre wallet demande 2 signatures sur 3. Sans Swissquote, vous avez toujours les deux autres : la clé
-          de ce téléphone, et la clé de secours (votre part papier + la part du partenaire).
-        </p>
-        <p>Solde : {balance === null ? '…' : `${formatBtc(balance)} (${formatSats(balance)})`}</p>
+      <Screen
+        title="Exit kit"
+        onBack={() => setStep('choose')}
+        footer={
+          <Btn disabled={busy} onClick={request}>
+            Request our partner’s share
+          </Btn>
+        }
+      >
+        {status}
+        <Title
+          title="Use your wallet without Swissquote"
+          lead="Your wallet needs 2 signatures out of 3. Without Swissquote you still hold the other two."
+        />
+        <Group label="Keys used">
+          <Row icon="phone" title="Phone key" sub="On this phone" chip={['Ready', 'success']} />
+          <Row icon="key" title="Backup key" sub="Your words and our partner’s share" chip={['To restore', 'accent']} />
+          <Row icon="bank" title="Swissquote key" chip={['Not needed', 'neutral']} />
+        </Group>
+        <Group>
+          <Row
+            title="Balance"
+            value={balance === null ? '…' : formatBtc(balance)}
+            sub={balance === null ? undefined : formatSats(balance)}
+          />
+        </Group>
         {error && <p className="error">{error}</p>}
-        <button className="primary" disabled={busy} onClick={request}>
-          Demander la part du partenaire
-        </button>
-        <button className="secondary" onClick={() => setStep('choose')}>
-          Retour
-        </button>
-      </div>
+      </Screen>
     );
   }
 
   return (
-    <div className="screen">
-      {header}
-      <h1>Swissquote a disparu ?</h1>
-      <p>
-        Si les services Swissquote sont indisponibles pour de bon, vous pouvez quand même récupérer vos bitcoins
-        depuis ce téléphone. Choisissez votre wallet :
-      </p>
+    <Screen title="Exit kit" onBack={onBack}>
+      {status}
+      <Title
+        title="Use your wallet without Swissquote"
+        lead="If Swissquote’s services are gone for good, you can still move your bitcoin from this phone. Choose your wallet."
+      />
       {wallets === null ? (
-        <p className="note">Chargement…</p>
+        <p className="note">Loading…</p>
       ) : wallets.length === 0 ? (
         <p className="note">
-          Aucun wallet sur cet appareil. La sortie sans Swissquote demande le téléphone qui contient la clé du
-          téléphone. À défaut, le kit de sortie permet de le faire dans un wallet du marché (Sparrow, Bitcoin Core).
+          No wallet on this device. Leaving without Swissquote needs the phone that holds the phone key. Failing
+          that, the exit kit file lets you do it in a standard wallet (Sparrow, Bitcoin Core).
         </p>
       ) : (
-        <ul className="keys">
+        <Group label="Wallets on this device">
           {wallets.map((w) => (
-            <li key={w.walletId}>
-              <strong>{w.clientId}</strong>
-              <span>
-                Wallet créé le {new Date(w.createdAt).toLocaleDateString('fr-CH')} · {w.network}
-              </span>
-              <button className="secondary" onClick={() => select(w)}>
-                Sortir les fonds de ce wallet
-              </button>
-            </li>
+            <Row
+              key={w.walletId}
+              icon="wallet"
+              title={w.clientId}
+              sub={`Created on ${new Date(w.createdAt).toLocaleDateString('en-GB')}, ${w.network}`}
+              trail="chevR"
+              onClick={() => select(w)}
+            />
           ))}
-        </ul>
+        </Group>
       )}
-      <button className="secondary" onClick={onBack}>
-        Retour à la connexion
-      </button>
-    </div>
+    </Screen>
   );
 }

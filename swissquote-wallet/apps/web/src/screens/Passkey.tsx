@@ -7,6 +7,7 @@ import {
   WebAuthnError,
 } from '@simplewebauthn/browser';
 import { sq, type Session } from '../api';
+import { Btn, Group, Icon, Row, Screen, Title } from '../ui';
 
 export interface PasskeyInfo {
   credentialDeviceType: string;
@@ -16,12 +17,12 @@ export interface PasskeyInfo {
 }
 
 function explain(err: unknown): string {
-  if (err instanceof WebAuthnError && err.code === 'ERROR_CEREMONY_ABORTED') return 'Création annulée.';
+  if (err instanceof WebAuthnError && err.code === 'ERROR_CEREMONY_ABORTED') return 'Passkey creation cancelled.';
   if (err instanceof Error && err.name === 'NotAllowedError') {
-    return 'Création annulée ou délai dépassé. Réessayez et validez avec Windows Hello, Touch ID ou Face ID.';
+    return 'Cancelled or timed out. Try again and confirm with Windows Hello, Touch ID or Face ID.';
   }
   if (err instanceof WebAuthnError && err.code === 'ERROR_AUTHENTICATOR_PREVIOUSLY_REGISTERED') {
-    return 'Une passkey de votre compte existe déjà sur cet appareil (par exemple synchronisée par iCloud ou Google).';
+    return 'This device already holds a passkey for your account (for example synced by iCloud or Google).';
   }
   return (err as Error).message;
 }
@@ -29,7 +30,7 @@ function explain(err: unknown): string {
 export function Passkey({
   session,
   onDone,
-  title = 'Créez votre passkey',
+  title = 'Create your passkey',
   allowExisting = false,
 }: {
   session: Session;
@@ -80,42 +81,51 @@ export function Passkey({
 
   if (!browserSupportsWebAuthn()) {
     return (
-      <div className="screen">
-        <h1>Navigateur non compatible</h1>
-        <p>Ce navigateur ne gère pas les passkeys. Utilisez une version récente de Chrome, Edge ou Safari.</p>
-      </div>
+      <Screen title="Passkey">
+        <Title
+          title="Browser not supported"
+          lead="This browser cannot use passkeys. Use a recent version of Chrome, Edge or Safari."
+        />
+      </Screen>
     );
   }
 
   return (
-    <div className="screen">
-      <p className="eyebrow">Bonjour {session.clientId}</p>
-      <h1>{title}</h1>
-      <p>
-        Votre passkey remplace le mot de passe. Elle est créée et gardée dans la puce sécurisée de cet
-        appareil, et ne la quitte jamais.
-      </p>
-      <ul className="facts">
-        <li>Vous approuvez chaque paiement avec votre visage, votre empreinte ou votre code.</li>
-        <li>Chaque approbation vaut pour un seul paiement précis : impossible de la réutiliser.</li>
-        <li>Swissquote vérifie la passkey, mais ne peut rien signer à votre place.</li>
-      </ul>
+    <Screen
+      title="Passkey"
+      footer={
+        existing && allowExisting ? (
+          <Btn icon="face" onClick={useExisting} disabled={busy}>
+            {busy ? 'Confirm on your device…' : 'Use the passkey on this device'}
+          </Btn>
+        ) : (
+          <Btn icon="face" onClick={create} disabled={busy}>
+            {busy ? 'Confirm on your device…' : 'Create your passkey'}
+          </Btn>
+        )
+      }
+    >
+      <div className="hero start">
+        <span className="glyph plain">
+          <Icon name="face" size={36} stroke={1.75} />
+        </span>
+      </div>
+      <Title
+        title={title}
+        lead="Approve payments with your face, fingerprint or device passcode instead of a password."
+      />
+      <Group>
+        <Row icon="phone" title="Stored on this device only" />
+        <Row icon="check" title="One approval per payment" />
+        <Row icon="bank" title="Swissquote cannot approve for you" />
+      </Group>
       {platform === false && (
         <p className="note">
-          Aucun capteur détecté sur cet appareil : Chrome proposera une clé de sécurité ou un téléphone.
-          Pour la démo, voir « authentificateur virtuel » dans docs/00-demarrage.md.
+          No biometric sensor found on this device: Chrome will offer a security key or a phone instead. For the
+          demo, see the virtual authenticator in docs/00-demarrage.md.
         </p>
       )}
       {error && <p className="error">{error}</p>}
-      {existing && allowExisting ? (
-        <button className="primary" onClick={useExisting} disabled={busy}>
-          {busy ? 'Validation sur l’appareil…' : 'Utiliser la passkey déjà présente sur cet appareil'}
-        </button>
-      ) : (
-        <button className="primary" onClick={create} disabled={busy}>
-          {busy ? 'Validation sur l’appareil…' : 'Créer ma passkey'}
-        </button>
-      )}
-    </div>
+    </Screen>
   );
 }

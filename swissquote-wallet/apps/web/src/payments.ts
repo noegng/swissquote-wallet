@@ -54,7 +54,7 @@ export async function preparePayment(wallet: StoredWallet, to: string, amount: b
 }
 
 /** Approbation par passkey (Windows Hello, Touch ID, Face ID) liée à une opération précise. */
-export async function approve(walletId: string, purpose: 'cosign' | 'cancel', payload: string) {
+export async function approve(walletId: string, purpose: 'cosign' | 'cancel' | 'unfreeze', payload: string) {
   const optionsJSON = await sq('/webauthn/operation/options', { walletId, purpose, payload });
   return startAuthentication({ optionsJSON });
 }

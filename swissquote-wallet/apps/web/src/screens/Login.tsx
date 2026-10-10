@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { sq, type Session } from '../api';
+import { Brand, Btn, Icon, Screen, Title } from '../ui';
 
 export function Login({ onLogin, onExit }: { onLogin: (s: Session) => void; onExit: () => void }) {
   const [clientId, setClientId] = useState('client-demo');
@@ -21,24 +22,31 @@ export function Login({ onLogin, onExit }: { onLogin: (s: Session) => void; onEx
   }
 
   return (
-    <form className="screen" onSubmit={submit}>
-      <p className="eyebrow">Espace client Swissquote</p>
-      <h1>Connexion</h1>
-      <p>Connectez-vous à votre compte pour ouvrir votre wallet Bitcoin en self-custody.</p>
+    <Screen
+      onSubmit={submit}
+      footer={
+        <>
+          <Btn disabled={busy || clientId.trim().length < 3}>{busy ? 'Logging in…' : 'Log in'}</Btn>
+          <Btn type="button" kind="text" onClick={onExit}>
+            Swissquote unavailable? Use your exit kit
+          </Btn>
+        </>
+      }
+    >
+      <Brand large />
+      <Title title="Log in" lead="Use your Swissquote login to access your Bitcoin wallet." />
       <label className="field">
-        <span>Identifiant client</span>
+        <span>Client ID</span>
         <input value={clientId} onChange={(e) => setClientId(e.target.value)} autoComplete="username" />
       </label>
       {error && <p className="error">{error}</p>}
-      <button className="primary" disabled={busy || clientId.trim().length < 3}>
-        {busy ? 'Connexion…' : 'Se connecter'}
-      </button>
-      <p className="note">
-        MOCK : connexion simulée. Votre identité est supposée déjà vérifiée par Swissquote (KYC).
-      </p>
-      <button type="button" className="secondary" onClick={onExit}>
-        Swissquote est indisponible ? Sortir mes fonds
-      </button>
-    </form>
+      <div className="info">
+        <Icon name="check" size={16} stroke={2.5} />
+        <p className="note">
+          Your wallet is linked to your Swissquote account, so there is no new identity check. Mock login: your
+          identity is assumed to be verified already.
+        </p>
+      </div>
+    </Screen>
   );
 }

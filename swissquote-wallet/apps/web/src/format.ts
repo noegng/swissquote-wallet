@@ -6,15 +6,17 @@ export function formatBtc(sats: bigint | string): string {
 }
 
 export function formatSats(sats: bigint | string): string {
-  return `${BigInt(sats).toLocaleString('fr-CH')} sats`;
+  return `${BigInt(sats).toLocaleString('en-US')} sats`;
 }
 
 /** « 0.001 » (BTC) → sats. Lève une erreur si la saisie est invalide. */
 export function parseBtc(input: string): bigint {
   const s = input.trim().replace(',', '.');
-  if (!/^\d+(\.\d{1,8})?$/.test(s)) throw new Error('Montant invalide (BTC, 8 décimales maximum)');
+  if (!/^\d+(\.\d{1,8})?$/.test(s)) throw new Error('Invalid amount (BTC, up to 8 decimals)');
   const [whole, frac = ''] = s.split('.');
   return BigInt(whole) * 100_000_000n + BigInt(frac.padEnd(8, '0'));
 }
 
 export const shortAddress = (a: string) => `${a.slice(0, 10)}…${a.slice(-8)}`;
+
+export const shortId = (id: string) => `${id.slice(0, 12)}…${id.slice(-9)}`;

@@ -1,17 +1,13 @@
 // Saisie de la part CLIENT : papier (20 mots) ou copie cloud (fichier C2 + phrase de passe).
-import { useState } from 'react';
+// Renvoie les champs et l'action de validation, pour que l'écran place le bouton dans son pied.
+import { useState, type ReactNode } from 'react';
 import { clientShareFromFile, clientShareFromWords } from '../shareInput';
+import { Segmented } from '../ui';
 
-export function ClientShareInput({
-  busy,
-  submitLabel,
-  onShare,
-}: {
-  busy: boolean;
-  submitLabel: string;
+export function useClientShareInput(
   /** Reçoit la part validée ; l'appelant l'utilise puis l'oublie. */
-  onShare: (share: string) => void;
-}) {
+  onShare: (share: string) => void,
+): { fields: ReactNode; ready: boolean; submit: () => Promise<void> } {
   const [mode, setMode] = useState<'paper' | 'cloud'>('paper');
   const [words, setWords] = useState('');
   const [file, setFile] = useState<File | null>(null);
@@ -31,37 +27,42 @@ export function ClientShareInput({
   }
 
   const ready = mode === 'paper' ? words.trim().split(/\s+/).length >= 20 : !!file && !!passphrase;
-  return (
+  const fields = (
     <>
-      <div className="tabs">
-        <button className={mode === 'paper' ? 'tab active' : 'tab'} onClick={() => setMode('paper')}>
-          Papier (20 mots)
-        </button>
-        <button className={mode === 'cloud' ? 'tab active' : 'tab'} onClick={() => setMode('cloud')}>
-          Copie cloud
-        </button>
-      </div>
+      <Segmented
+        value={mode}
+        onChange={setMode}
+        options={[
+          ['paper', 'Paper copy'],
+          ['cloud', 'Encrypted copy'],
+        ]}
+      />
       {mode === 'paper' ? (
         <label className="field">
-          <span>Les 20 mots, dans l’ordre</span>
-          <textarea rows={4} value={words} onChange={(e) => setWords(e.target.value)} autoComplete="off" />
+          <span>Your 20 words, in order</span>
+          <textarea
+            rows={4}
+            value={words}
+            onChange={(e) => setWords(e.target.value)}
+            autoComplete="off"
+            autoCapitalize="none"
+          />
         </label>
       ) : (
-        <>
+        <div className="fields">
           <label className="field">
-            <span>Fichier de sauvegarde C2</span>
+            <span>Encrypted backup file</span>
             <input type="file" accept="application/json" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
           </label>
           <label className="field">
-            <span>Phrase de passe</span>
+            <span>Passphrase</span>
             <input type="password" value={passphrase} onChange={(e) => setPassphrase(e.target.value)} />
           </label>
-        </>
+        </div>
       )}
       {error && <p className="error">{error}</p>}
-      <button className="primary" disabled={busy || !ready} onClick={submit}>
-        {submitLabel}
-      </button>
+      <p className="note">Your words stay on this phone. They are not sent to Swissquote or to our partner.</p>
     </>
   );
+  return { fields, ready, submit };
 }

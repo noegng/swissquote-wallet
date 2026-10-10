@@ -28,6 +28,17 @@ export function saveSession(session: Session | null): void {
   }
 }
 
+/** Erreur renvoyée par un service : garde le code HTTP pour distinguer un refus (403, 423) d'une panne. */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
 async function call<T>(base: string, name: string, path: string, body?: unknown, token?: string): Promise<T> {
   const headers: Record<string, string> = {};
   if (body !== undefined) headers['Content-Type'] = 'application/json';
@@ -40,10 +51,10 @@ async function call<T>(base: string, name: string, path: string, body?: unknown,
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
-    throw new Error(`Service ${name} injoignable : lancer \`npm run dev:all\``);
+    throw new Error(`${name} service unreachable: run \`npm run dev:all\``);
   }
   const json = await res.json();
-  if (!res.ok) throw new Error(json.error ?? json.reason ?? `Erreur ${res.status}`);
+  if (!res.ok) throw new ApiError(json.error ?? json.reason ?? `Error ${res.status}`, res.status);
   return json as T;
 }
 
@@ -51,4 +62,4 @@ export const sq = <T = any>(path: string, body?: unknown, token?: string) =>
   call<T>(config.swissquoteUrl, 'Swissquote', path, body, token);
 
 export const partner = <T = any>(path: string, body?: unknown) =>
-  call<T>(config.partnerUrl, 'partenaire', path, body);
+  call<T>(config.partnerUrl, 'Partner', path, body);

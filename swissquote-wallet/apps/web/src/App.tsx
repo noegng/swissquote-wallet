@@ -9,6 +9,7 @@ import { Passkey } from './screens/Passkey';
 import { Recover } from './screens/Recover';
 import { Send } from './screens/Send';
 import { remoteWallets, type RemoteWallet } from './recovery';
+import { Screen } from './ui';
 
 // Parcours : connexion Swissquote (mock) → passkey → création du wallet → accueil ⇄ envoi.
 // Nouvel appareil (wallet existant chez Swissquote, absent ici) → récupération.
@@ -46,6 +47,12 @@ export function App() {
     setSession(s);
   }
 
+  const loading = (
+    <Screen>
+      <p className="note">Loading…</p>
+    </Screen>
+  );
+
   let screen;
   if (!session && view === 'exit') {
     // Sortie sans Swissquote : aucune session, aucun appel au service Swissquote.
@@ -55,9 +62,9 @@ export function App() {
   } else if (!session.hasPasskey) {
     screen = <Passkey session={session} onDone={() => updateSession({ ...session, hasPasskey: true })} />;
   } else if (wallet === undefined) {
-    screen = <p className="note">Chargement…</p>;
+    screen = loading;
   } else if (wallet === null && remote === undefined) {
-    screen = <p className="note">Chargement…</p>;
+    screen = loading;
   } else if (wallet === null && remote && !createInstead) {
     screen = (
       <Recover session={session} remote={remote} onRecovered={setWallet} onCreateInstead={() => setCreateInstead(true)} />
@@ -67,13 +74,30 @@ export function App() {
   } else if (view === 'send') {
     screen = <Send wallet={wallet} onBack={() => setView('home')} />;
   } else {
-    screen = <Home wallet={wallet} onSend={() => setView('send')} onLogout={() => updateSession(null)} />;
+    screen = (
+      <Home wallet={wallet} session={session} onSend={() => setView('send')} onLogout={() => updateSession(null)} />
+    );
   }
 
   return (
-    <div className="phone">
-      <div className="mock-banner">PROTOTYPE · services Swissquote et partenaire MOCKÉS</div>
-      <main>{screen}</main>
+    <div className="stage">
+      <p className="mock-banner">Prototype. The Swissquote and partner services are mocked.</p>
+      <div className="phone">
+        <div className="statusbar" aria-hidden="true">
+          <span>9:41</span>
+          <span className="indicators">
+            <span className="signal">
+              {[5, 7, 9, 11].map((h) => (
+                <i key={h} style={{ height: h }} />
+              ))}
+            </span>
+            <span className="battery">
+              <i />
+            </span>
+          </span>
+        </div>
+        {screen}
+      </div>
     </div>
   );
 }
