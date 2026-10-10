@@ -16,7 +16,7 @@ Règles : P0 et P1 terminés avant tout bonus. Points d'étape à **H10, H20, H2
 ## H0–H3 : spike
 
 - [x] **A** Descripteur 2 sur 3, adresse, PSBT signée par 2 clés, diffusion regtest (`npm run spike`, 10/10)
-- [ ] **A** Même chose sur **signet** : premier txid public noté dans `preuves.md` (adresse prête, en attente du faucet : `BTC_NETWORK=signet npm run spike`)
+- [x] **A** Même chose sur **signet** : premier txid public dans `preuves.md` (`npm run spike:signet`, 10/10)
 - [x] **A** SLIP-39 : `shamir-mnemonic-ts` passe les 45 vecteurs officiels ; fonctionne dans le navigateur avec `vite-plugin-node-polyfills`
 - [x] **A** Interop avec la référence Python ; test I2 (Swissquote + partenaire ne restaurent pas)
 - [ ] **B** Squelette Vite + React, mise en page téléphone, bannière MOCK

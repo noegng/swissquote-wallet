@@ -1,6 +1,6 @@
 // Spike H0 : vraie transaction 2 sur 3 (clé téléphone + clé Swissquote) sur regtest ou signet.
 // Usage : npm run spike            (BTC_NETWORK du .env, regtest par défaut)
-//         BTC_NETWORK=signet npm run spike
+//         npm run spike:signet     (force signet, quel que soit le terminal)
 // Les graines de test sont gardées dans scripts/.spike/<réseau>.json (gitignoré) pour pouvoir
 // financer l'adresse via un faucet puis relancer le script. Réseaux de test uniquement.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -28,7 +28,7 @@ try {
   process.loadEnvFile(join(import.meta.dirname, '../.env'));
 } catch {}
 
-const name = (process.env.BTC_NETWORK ?? 'regtest') as BtcNetworkName;
+const name = (process.argv[2] ?? process.env.BTC_NETWORK ?? 'regtest') as BtcNetworkName;
 const cfg = networkConfig(
   name,
   name === 'signet' ? process.env.ESPLORA_URL_SIGNET : process.env.ESPLORA_URL_REGTEST,
@@ -73,7 +73,7 @@ if (utxos.length === 0) {
     }
   } else {
     console.log(`\nAucun fonds. Envoyer des sats signet à ${receive.address}`);
-    console.log('Faucet : https://bitcoinsignetfaucet.com — puis relancer : BTC_NETWORK=signet npm run spike');
+    console.log('Faucet : https://bitcoinsignetfaucet.com — puis relancer : npm run spike:signet');
     process.exit(0);
   }
 }
@@ -88,8 +88,11 @@ const destination = deriveAddress(
   0,
   cfg.network,
 ).address;
-const amount = balance > 20_000n ? 5_000n : balance / 4n;
-const feeRate = await esplora.feeRate();
+// Petit solde (faucet signet : souvent 1 000 sats) : 400 sats, juste au-dessus de la poussière (330).
+const amount = balance > 20_000n ? 5_000n : 400n;
+// Les estimations signet sont parfois aberrantes (68 sat/vB constaté le 10/10) : avec un petit
+// solde on fixe 2 sat/vB, la confirmation peut alors prendre quelques blocs.
+const feeRate = balance > 20_000n ? await esplora.feeRate() : 2;
 const { psbt, fee, change } = buildSpend({
   policy,
   network: cfg.network,
