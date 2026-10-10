@@ -19,8 +19,8 @@ Règles : P0 et P1 terminés avant tout bonus. Points d'étape à **H10, H20, H2
 - [x] **A** Même chose sur **signet** : premier txid public dans `preuves.md` (`npm run spike:signet`, 10/10)
 - [x] **A** SLIP-39 : `shamir-mnemonic-ts` passe les 45 vecteurs officiels ; fonctionne dans le navigateur avec `vite-plugin-node-polyfills`
 - [x] **A** Interop avec la référence Python ; test I2 (Swissquote + partenaire ne restaurent pas)
-- [ ] **B** Squelette Vite + React, mise en page téléphone, bannière MOCK
-- [ ] **B** Passkey : enregistrement et authentification contre le service Swissquote ; test PRF
+- [x] **B** Squelette Vite + React, mise en page téléphone, bannière MOCK
+- [x] **B** Passkey : écrans connexion (mock) + création de passkey, vérification par le service ; défi lié à chaque opération (10/10). PRF reporté (facultatif)
 - [x] **C** Service Swissquote : `/wallets`, `/cosign` avec vérification indépendante de la PSBT, stockage propre (fait par Claude, 10/10)
 - [ ] **C** Service partenaire minimal : dépôt et libération d'une part, stockage propre
 
@@ -31,7 +31,7 @@ Règles : P0 et P1 terminés avant tout bonus. Points d'étape à **H10, H20, H2
 - [ ] **B** Onboarding : connexion mockée → passkey → clés → cérémonie C1 / C2 → enregistrement
 - [ ] **B** Écran Envoyer : résumé clair, palier affiché, lien explorateur
 - [x] **C** Règles du cosignataire : plafond quotidien, palier 2 (délai + notification annulable), sanctions (`npm run demo:cosign`)
-- [ ] **B + C** Brancher la passkey sur `/cosign` et `/cosign/:id/cancel` (marqué `TODO(passkey)`, la réponse indique `authEnforced: false`)
+- [x] **B + C** Passkey exigée sur `/cosign` et `/cosign/:id/cancel` ; attaques sans passkey, PSBT échangée et rejeu refusées (`npm run demo:cosign`)
 - [ ] **C** Registre des wallets (Travel Rule), KYC mocké, journal d'audit
 - [ ] **Point d'étape H10** : création → envoi de bout en bout sur regtest
 
