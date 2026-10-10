@@ -101,7 +101,7 @@ npm run typecheck    # vérification des types TypeScript
 | Je veux… | Commande |
 |---|---|
 | Démarrer ma session | Ouvrir Docker Desktop, puis `npm run regtest:up` et `npm run dev:all` |
-| Remettre la démo à zéro | `npm run reset` (services lancés) |
+| Remettre la démo à zéro | `npm run reset` (services lancés), puis dans le navigateur : F12 → Application → Clear site data (efface le wallet local) |
 | Arrêter le Bitcoin local | `npm run regtest:down` |
 | Repartir d'une chaîne vierge | `npm run regtest:down`, supprimer `tools/regtest/volumes/`, `npm run regtest:up` |
 | Récupérer le travail des autres | `git pull`, puis `npm install` si `package.json` a changé |

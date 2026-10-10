@@ -1,13 +1,24 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { loadSession, saveSession, type Session } from './api';
+import { loadWallet, type StoredWallet } from './keystore';
+import { CreateWallet } from './screens/CreateWallet';
+import { Home } from './screens/Home';
 import { Login } from './screens/Login';
-import { Passkey, type PasskeyInfo } from './screens/Passkey';
+import { Passkey } from './screens/Passkey';
 
-// Parcours : connexion Swissquote (mock) → passkey → création du wallet (à venir) → envoi → récupération.
+// Parcours : connexion Swissquote (mock) → passkey → création du wallet → accueil.
+// À venir : envoi, récupération, sortie sans Swissquote.
 
 export function App() {
   const [session, setSession] = useState<Session | null>(loadSession);
-  const [passkey, setPasskey] = useState<PasskeyInfo | null>(null);
+  const [wallet, setWallet] = useState<StoredWallet | null | undefined>(undefined);
+
+  useEffect(() => {
+    if (!session) return setWallet(undefined);
+    loadWallet(session.clientId)
+      .then((w) => setWallet(w ?? null))
+      .catch(() => setWallet(null));
+  }, [session]);
 
   function updateSession(s: Session | null) {
     saveSession(s);
@@ -18,33 +29,13 @@ export function App() {
   if (!session) {
     screen = <Login onLogin={updateSession} />;
   } else if (!session.hasPasskey) {
-    screen = (
-      <Passkey
-        session={session}
-        onDone={(info) => {
-          setPasskey(info);
-          updateSession({ ...session, hasPasskey: true });
-        }}
-      />
-    );
+    screen = <Passkey session={session} onDone={() => updateSession({ ...session, hasPasskey: true })} />;
+  } else if (wallet === undefined) {
+    screen = <p className="note">Chargement…</p>;
+  } else if (wallet === null) {
+    screen = <CreateWallet session={session} onCreated={setWallet} />;
   } else {
-    screen = (
-      <div className="screen">
-        <p className="eyebrow">Bonjour {session.clientId}</p>
-        <h1>Passkey prête</h1>
-        <p>
-          {passkey
-            ? passkey.synced
-              ? 'Passkey créée. Elle est synchronisée par votre compte Apple ou Google (chiffrée de bout en bout).'
-              : 'Passkey créée et liée à cet appareil.'
-            : 'Votre passkey est enregistrée chez Swissquote.'}
-        </p>
-        <p className="note">Prochaine étape : création de votre wallet Bitcoin 2 sur 3.</p>
-        <button className="secondary" onClick={() => updateSession(null)}>
-          Se déconnecter
-        </button>
-      </div>
-    );
+    screen = <Home wallet={wallet} onLogout={() => updateSession(null)} />;
   }
 
   return (

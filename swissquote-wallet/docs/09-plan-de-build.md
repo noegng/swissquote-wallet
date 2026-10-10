@@ -26,13 +26,13 @@ Règles : P0 et P1 terminés avant tout bonus. Points d'étape à **H10, H20, H2
 
 ## H3–H10 : création et envoi
 
-- [ ] **A** `backup.ts` (split / combine), `sealing.ts` (chiffrement pour un appareil), `summary.ts` (résumé clair)
+- [x] **A** `backup.ts` (split / combine), `sealing.ts` (ECDH + HKDF + AES-GCM, et PBKDF2 pour C2), `summary.ts` (résumé vérifié), `onboarding.ts` (matériel d'un nouveau wallet)
 - [ ] **A** Tests des invariants I1 à I5
-- [ ] **B** Onboarding : connexion mockée → passkey → clés → cérémonie C1 / C2 → enregistrement
+- [x] **B** Onboarding : connexion mockée → passkey → clés → Swissquote → part TIERS scellée au partenaire → C1 + vérification de 2 mots → C2 chiffrée et téléchargée ; accueil (solde, adresse, faucet regtest, kit de sortie). Testé dans Chrome jusqu'au téléchargement de C2
 - [ ] **B** Écran Envoyer : résumé clair, palier affiché, lien explorateur
 - [x] **C** Règles du cosignataire : plafond quotidien, palier 2 (délai + notification annulable), sanctions (`npm run demo:cosign`)
 - [x] **B + C** Passkey exigée sur `/cosign` et `/cosign/:id/cancel` ; attaques sans passkey, PSBT échangée et rejeu refusées (`npm run demo:cosign`)
-- [ ] **C** Registre des wallets (Travel Rule), KYC mocké, journal d'audit
+- [x] **C** Registre des wallets (Travel Rule), KYC mocké, journal d'audit ; service partenaire : clé publique, dépôt de la part TIERS (`npm run demo:create`)
 - [ ] **Point d'étape H10** : création → envoi de bout en bout sur regtest
 
 ## H10–H18 : récupération

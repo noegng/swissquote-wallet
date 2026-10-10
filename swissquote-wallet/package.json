@@ -17,7 +17,8 @@
     "reset": "node scripts/reset.mjs",
     "spike": "tsx scripts/spike-multisig.ts",
     "spike:signet": "tsx scripts/spike-multisig.ts signet",
-    "demo:cosign": "tsx scripts/demo-cosign.ts"
+    "demo:cosign": "tsx scripts/demo-cosign.ts",
+    "demo:create": "tsx scripts/demo-create.ts"
   },
   "devDependencies": {
     "@levischuck/tiny-cbor": "0.2.11",

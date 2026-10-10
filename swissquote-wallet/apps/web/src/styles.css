@@ -142,3 +142,84 @@ button:disabled {
   color: var(--accent) !important;
   font-weight: 600;
 }
+
+.keys {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.keys li,
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.keys span,
+.label {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.progress {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  line-height: 1.4;
+}
+
+.words {
+  margin: 0;
+  padding: 14px 14px 14px 40px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-family: ui-monospace, 'Cascadia Mono', monospace;
+  font-size: 15px;
+}
+
+.balance {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 18px 0;
+}
+
+.balance span,
+.balance small {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.balance strong {
+  font-size: 30px;
+}
+
+.address {
+  font-size: 13px;
+  word-break: break-all;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.warning {
+  border-color: var(--accent);
+}
+
+.warning span {
+  font-size: 14px;
+  line-height: 1.4;
+}

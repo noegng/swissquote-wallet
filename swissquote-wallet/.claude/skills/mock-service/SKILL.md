@@ -35,6 +35,8 @@ Règles de `/cosign`, dans cet ordre : assertion passkey valide → change vers 
 
 ## services/partner (part TIERS)
 
+État au 10/10 : `GET /public-key`, `POST /shares` (vérifie que la part est scellée pour le partenaire, sans la journaliser), `GET /shares/:walletId` (statut seulement). Stockage : `data/partner-key.json`, `shares.json`, `audit.jsonl`. Reste : libération (`/release`).
+
 | Route | Rôle |
 |---|---|
 | `POST /shares` | Dépôt de la part TIERS à la création (chiffrée pour le partenaire) |

@@ -21,7 +21,8 @@ Réseau choisi par `BTC_NETWORK=regtest|signet` dans `.env` (voir `.env.example`
 
 ```bash
 HIGH_VALUE_DELAY_SECONDS=8 npm run start -w services/swissquote   # délai court pour tester (PowerShell : $env:HIGH_VALUE_DELAY_SECONDS=8)
-npm run demo:cosign      # paliers 1 et 2, annulation, sanctions, fonds d'un autre wallet, I1
+npm run demo:create      # création complète : passkey, wallet, part TIERS chez le partenaire, C2
+npm run demo:cosign      # paliers 1 et 2, annulation, sanctions, fonds d'un autre wallet, attaques passkey, I1
 npm run spike:signet     # transaction publique 2 sur 3 sur signet
 ```
 

@@ -33,6 +33,9 @@ Swissquote : aucune part
 
 ## Cycle de vie
 
+État au 10/10 : `sealing.ts` (`sealFor`/`openSealed`, `sealWithPassphrase`/`openWithPassphrase`) et `onboarding.ts` (`createWalletMaterial`, `backupRootFromShares`) sont écrits et testés ; l'écran `apps/web/src/screens/CreateWallet.tsx` les utilise ; `npm run demo:create` joue la création sans navigateur. Le fichier C2 téléchargé a le type `swissquote-wallet/backup-c2`.
+
+
 1. **Création** : l'app génère le secret, découpe, affiche C1, chiffre C2, chiffre TIERS pour le partenaire, envoie TIERS au service partenaire, puis **efface** secret et parts en mémoire.
 2. **Récupération** : l'app obtient C1 (saisie) ou C2 (déchiffrée) + TIERS (déchiffrée avec la clé éphémère) → `combine` → clé de secours en mémoire → signature du transfert vers un nouveau jeu de clés → nouvelle clé de secours re-découpée → l'ancienne est effacée.
 3. Jamais : persister la clé reconstituée, la logger, l'envoyer à un service.
