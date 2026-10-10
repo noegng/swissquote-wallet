@@ -20,7 +20,7 @@ Exigence du brief : un détenteur de part mocké tourne comme **processus sépar
 
 ## services/swissquote (cosignataire)
 
-État au 10/10 : `/wallets`, `/wallets/:id`, `/cosign`, `/cosign/:id`, `/cosign/:id/cancel`, `/notifications/:walletId`, `/rules`, `/admin/sanctions`, `/admin/reset` sont écrits (`src/server.ts`, règles dans `src/rules.ts`, clé dans `src/signer.ts`). Ajoutés ensuite : `/kyc/login` (session), `/webauthn/register/options|verify`, `/webauthn/operation/options` (défi lié à l'opération), dans `src/auth.ts`. Récupération dans `src/recovery.ts` : `GET /clients/me/wallets`, `GET /wallets/:id/recovery`, `POST /recovery` (exige `deviceCredentialId`, gèle le wallet), `GET /recovery/:id`, `POST /recovery/:id/cancel` (passkey), `/new-wallet`, `/sweep` (exige la signature de la clé de secours, sorties vers le nouveau wallet uniquement, révoque les autres passkeys). Contexte partagé dans `src/context.ts`. Gel et dégel : `POST /wallets/:id/freeze` (session ou passkey, annule les paiements en attente) et `POST /wallets/:id/unfreeze` (passkey uniquement). Annulations acceptées par session ou passkey (`authorizeProtective`). Stockage : `data/sessions.json`, `credentials.json`, `challenges.json`, `master-key.json`, `wallets.json`, `requests.json`, `spends.json`, `notifications.json`, `sanctions.json`, `recoveries.json`, `audit.jsonl`. Le `.env` est chargé par `src/env.ts` sans écraser l'environnement.
+État au 10/10 : `/wallets`, `/wallets/:id`, `/cosign`, `/cosign/:id`, `/cosign/:id/cancel`, `/notifications/:walletId`, `/rules`, `/admin/sanctions`, `/admin/reset` sont écrits (`src/server.ts`, règles dans `src/rules.ts`, clé dans `src/signer.ts`). Ajoutés ensuite : `/kyc/login` (session), `/webauthn/register/options|verify`, `/webauthn/operation/options` (défi lié à l'opération), dans `src/auth.ts`. Récupération dans `src/recovery.ts` : `GET /clients/me/wallets`, `GET /wallets/:id/recovery`, `POST /recovery` (exige `deviceCredentialId`, gèle le wallet), `GET /recovery/:id`, `POST /recovery/:id/cancel` (passkey), `/new-wallet`, `/sweep` (exige la signature de la clé de secours, sorties vers le nouveau wallet uniquement, révoque les autres passkeys ; recosigne aux mêmes conditions après la clôture, pour une diffusion échouée ou des fonds arrivés plus tard). `GET /wallets/:id/limit` : plafond et montant déjà dépensé sur 24 h. Un gel demandé pendant une récupération survit à son annulation. Contexte partagé dans `src/context.ts`. Gel et dégel : `POST /wallets/:id/freeze` (session ou passkey, annule les paiements en attente) et `POST /wallets/:id/unfreeze` (passkey uniquement). Annulations acceptées par session ou passkey (`authorizeProtective`). Stockage : `data/sessions.json`, `credentials.json`, `challenges.json`, `master-key.json`, `wallets.json`, `requests.json`, `spends.json`, `notifications.json`, `sanctions.json`, `recoveries.json`, `audit.jsonl`. Le `.env` est chargé par `src/env.ts` sans écraser l'environnement.
 
 | Route | Rôle |
 |---|---|
@@ -35,7 +35,7 @@ Règles de `/cosign`, dans cet ordre : wallet actif (ni gelé ni récupéré) �
 
 ## services/partner (part TIERS)
 
-État au 10/10 : `GET /public-key`, `POST /shares` (vérifie que la part est scellée pour le partenaire, sans la journaliser), `GET /shares/:walletId` (statut seulement). Stockage : `data/partner-key.json`, `shares.json`, `audit.jsonl`. Libération : `POST /release`, `GET /release/:id` (part re-scellée pour la clé de l'appareil), `POST /release/:id/cancel`, `GET /notifications/:walletId` ; stockage `releases.json`, `notifications.json`.
+État au 10/10 : `GET /public-key`, `POST /shares` (vérifie que la part est scellée pour le partenaire, sans la journaliser), `GET /shares/:walletId` (statut seulement). Stockage : `data/partner-key.json`, `shares.json`, `audit.jsonl`. Libération : `POST /release`, `GET /release/:id` (part re-scellée pour la clé de l'appareil), `POST /release/:id/cancel`, `POST /releases/cancel` (toutes les libérations en cours d'un wallet, appelée par l'app quand une récupération est annulée), `GET /notifications/:walletId` ; stockage `releases.json`, `notifications.json`.
 
 | Route | Rôle |
 |---|---|
@@ -43,6 +43,7 @@ Règles de `/cosign`, dans cet ordre : wallet actif (ni gelé ni récupéré) �
 | `POST /release` | Contrôle d'identité mocké, ouverture d'un délai, notification au client |
 | `GET /release/:id` | Statut ; après le délai, renvoie la part **chiffrée pour la clé éphémère de l'appareil** |
 | `POST /release/:id/cancel` | Annulation par le client |
+| `POST /releases/cancel` | Annulation de toute libération en cours d'un wallet (`walletId`, `clientId`) |
 
 Personne de confiance (D22, ajout du 10/10) : `POST /invitations`, `GET /invitations/:id`, `POST /invitations/:id/accept|confirm|collected|cancel`, `POST /release/:id/fulfil` ; stockage `invitations.json`. Après `collected`, `shares.json` ne contient plus la part (champ `trustee` à la place) et `GET /release/:id` attend l'approbation de cette personne (`awaiting: 'trustee'`). L'identifiant d'invitation n'est jamais renvoyé par `GET /shares/:walletId`. Preuve : `npm run demo:trustee`.
 
