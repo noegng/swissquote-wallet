@@ -85,6 +85,22 @@ export const savePending = (walletId: string, p: PendingPayment) => put(`pending
 export const loadPending = (walletId: string) => get<PendingPayment>(`pending:${walletId}`);
 export const clearPending = (walletId: string) => tx('readwrite', (s) => s.delete(`pending:${walletId}`));
 
+/** Récupération en cours sur ce nouvel appareil (survit à un rechargement). La clé de l'appareil
+ *  est non exportable : elle sert à ouvrir la part du partenaire, scellée pour elle seule. */
+export interface RecoveryState {
+  oldWalletId: string;
+  oldPolicy: WalletPolicy;
+  recoveryId: string;
+  releaseId: string;
+  /** Clé privée ECDH de l'appareil (non exportable). */
+  deviceKey: CryptoKey;
+  credentialId: string;
+}
+
+export const saveRecovery = (clientId: string, r: RecoveryState) => put(`recovery:${clientId}`, r);
+export const loadRecovery = (clientId: string) => get<RecoveryState>(`recovery:${clientId}`);
+export const clearRecovery = (clientId: string) => tx('readwrite', (s) => s.delete(`recovery:${clientId}`));
+
 /** Déchiffre la graine de la clé téléphone, juste le temps de signer. */
 export async function unlockPhoneSeed(wallet: StoredWallet): Promise<Uint8Array> {
   const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: wallet.phoneSeed.iv }, await deviceKey(), wallet.phoneSeed.ct);

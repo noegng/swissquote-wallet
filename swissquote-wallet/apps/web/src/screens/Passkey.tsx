@@ -10,6 +10,8 @@ import { sq, type Session } from '../api';
 export interface PasskeyInfo {
   credentialDeviceType: string;
   synced: boolean;
+  /** Identifiant de la passkey créée sur cet appareil (déclaré à Swissquote en récupération). */
+  credentialId: string;
 }
 
 function explain(err: unknown): string {
@@ -23,7 +25,15 @@ function explain(err: unknown): string {
   return (err as Error).message;
 }
 
-export function Passkey({ session, onDone }: { session: Session; onDone: (info: PasskeyInfo) => void }) {
+export function Passkey({
+  session,
+  onDone,
+  title = 'Créez votre passkey',
+}: {
+  session: Session;
+  onDone: (info: PasskeyInfo) => void;
+  title?: string;
+}) {
   const [platform, setPlatform] = useState<boolean | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -38,8 +48,8 @@ export function Passkey({ session, onDone }: { session: Session; onDone: (info: 
     try {
       const optionsJSON = await sq('/webauthn/register/options', {}, session.token);
       const response = await startRegistration({ optionsJSON });
-      const info = await sq<PasskeyInfo>('/webauthn/register/verify', { response }, session.token);
-      onDone(info);
+      const info = await sq<Omit<PasskeyInfo, 'credentialId'>>('/webauthn/register/verify', { response }, session.token);
+      onDone({ ...info, credentialId: response.id });
     } catch (err) {
       setError(explain(err));
     } finally {
@@ -59,7 +69,7 @@ export function Passkey({ session, onDone }: { session: Session; onDone: (info: 
   return (
     <div className="screen">
       <p className="eyebrow">Bonjour {session.clientId}</p>
-      <h1>Créez votre passkey</h1>
+      <h1>{title}</h1>
       <p>
         Votre passkey remplace le mot de passe. Elle est créée et gardée dans la puce sécurisée de cet
         appareil, et ne la quitte jamais.

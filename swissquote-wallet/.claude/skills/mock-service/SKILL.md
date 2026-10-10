@@ -20,7 +20,7 @@ Exigence du brief : un détenteur de part mocké tourne comme **processus sépar
 
 ## services/swissquote (cosignataire)
 
-État au 10/10 : `/wallets`, `/wallets/:id`, `/cosign`, `/cosign/:id`, `/cosign/:id/cancel`, `/notifications/:walletId`, `/rules`, `/admin/sanctions`, `/admin/reset` sont écrits (`src/server.ts`, règles dans `src/rules.ts`, clé dans `src/signer.ts`). Ajoutés ensuite : `/kyc/login` (session), `/webauthn/register/options|verify`, `/webauthn/operation/options` (défi lié à l'opération), dans `src/auth.ts`. Reste : récupération. Stockage : `data/sessions.json`, `credentials.json`, `challenges.json`, `master-key.json`, `wallets.json`, `requests.json`, `spends.json`, `notifications.json`, `sanctions.json`, `audit.jsonl`. Le `.env` est chargé par `src/env.ts` sans écraser l'environnement.
+État au 10/10 : `/wallets`, `/wallets/:id`, `/cosign`, `/cosign/:id`, `/cosign/:id/cancel`, `/notifications/:walletId`, `/rules`, `/admin/sanctions`, `/admin/reset` sont écrits (`src/server.ts`, règles dans `src/rules.ts`, clé dans `src/signer.ts`). Ajoutés ensuite : `/kyc/login` (session), `/webauthn/register/options|verify`, `/webauthn/operation/options` (défi lié à l'opération), dans `src/auth.ts`. Récupération dans `src/recovery.ts` : `GET /clients/me/wallets`, `GET /wallets/:id/recovery`, `POST /recovery` (exige `deviceCredentialId`, gèle le wallet), `GET /recovery/:id`, `POST /recovery/:id/cancel` (passkey), `/new-wallet`, `/sweep` (exige la signature de la clé de secours, sorties vers le nouveau wallet uniquement, révoque les autres passkeys). Contexte partagé dans `src/context.ts`. Stockage : `data/sessions.json`, `credentials.json`, `challenges.json`, `master-key.json`, `wallets.json`, `requests.json`, `spends.json`, `notifications.json`, `sanctions.json`, `recoveries.json`, `audit.jsonl`. Le `.env` est chargé par `src/env.ts` sans écraser l'environnement.
 
 | Route | Rôle |
 |---|---|
@@ -35,7 +35,7 @@ Règles de `/cosign`, dans cet ordre : assertion passkey valide → change vers 
 
 ## services/partner (part TIERS)
 
-État au 10/10 : `GET /public-key`, `POST /shares` (vérifie que la part est scellée pour le partenaire, sans la journaliser), `GET /shares/:walletId` (statut seulement). Stockage : `data/partner-key.json`, `shares.json`, `audit.jsonl`. Reste : libération (`/release`).
+État au 10/10 : `GET /public-key`, `POST /shares` (vérifie que la part est scellée pour le partenaire, sans la journaliser), `GET /shares/:walletId` (statut seulement). Stockage : `data/partner-key.json`, `shares.json`, `audit.jsonl`. Libération : `POST /release`, `GET /release/:id` (part re-scellée pour la clé de l'appareil), `POST /release/:id/cancel`, `GET /notifications/:walletId` ; stockage `releases.json`, `notifications.json`.
 
 | Route | Rôle |
 |---|---|

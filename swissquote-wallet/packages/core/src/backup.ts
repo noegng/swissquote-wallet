@@ -7,7 +7,7 @@
 //   TIERS  : une mnémonique, confiée au partenaire. Swissquote n'a aucune part.
 // Ne jamais passer à 3 groupes avec un seuil de 2 : C1 + C2 suffiraient sans partenaire.
 import { Buffer } from 'buffer';
-import { combineMnemonics, generateMnemonics } from 'shamir-mnemonic-ts';
+import { combineMnemonics, generateMnemonics, Share } from 'shamir-mnemonic-ts';
 import { randomSeed } from './keys';
 
 const GROUP_THRESHOLD = 2;
@@ -40,5 +40,17 @@ export function splitBackupSecret(secret: Uint8Array): BackupShares {
  * et ne jamais persister ni transmettre le résultat. Lève une erreur si les parts ne suffisent pas.
  */
 export function combineBackupShares(mnemonics: string[]): Uint8Array {
-  return new Uint8Array(combineMnemonics(mnemonics.map((m) => m.trim().toLowerCase())));
+  return new Uint8Array(combineMnemonics(mnemonics.map((m) => m.trim().toLowerCase().split(/\s+/).join(' '))));
+}
+
+/**
+ * Identifie une part saisie par le client (somme de contrôle SLIP-39 comprise) : 'client' ou 'tiers'.
+ * Lève une erreur si la mnémonique est invalide (mot inconnu, faute de frappe) ou d'un autre schéma.
+ */
+export function shareGroup(mnemonic: string): 'client' | 'tiers' {
+  const share = Share.fromMnemonic(mnemonic.trim().toLowerCase().split(/\s+/).join(' '));
+  if (share.groupThreshold !== GROUP_THRESHOLD || share.groupCount !== GROUPS.length) {
+    throw new Error('Part SLIP-39 valide, mais pas une part de sauvegarde Swissquote Wallet');
+  }
+  return share.groupIndex === 0 ? 'client' : 'tiers';
 }

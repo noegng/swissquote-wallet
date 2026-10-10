@@ -1,0 +1,161 @@
+// Récupération après perte du téléphone, sur un nouvel appareil (skills slip39-backup et
+// custody-invariants) :
+//   1. demande chez Swissquote (wallet gelé, délai, alertes) et chez le partenaire (son propre délai),
+//      avec une clé ECDH non exportable de cet appareil ;
+//   2. après le délai, la part du partenaire arrive scellée pour cet appareil ; le client fournit sa
+//      part (papier C1 ou copie cloud C2) ; la clé de secours est reconstituée ICI, en mémoire ;
+//   3. nouveau jeu de clés, transfert de tous les fonds signé par la clé de secours et cosigné par
+//      Swissquote, nouvelle part TIERS chez le partenaire ; la clé de secours reconstituée est oubliée.
+import {
+  accountOrigin,
+  backupRootFromShares,
+  buildSweep,
+  combinePsbts,
+  createWalletMaterial,
+  deriveAddress,
+  exportPublicJwk,
+  finalizeSpend,
+  generateSealingKeyPair,
+  openSealed,
+  openWithPassphrase,
+  sealFor,
+  shareGroup,
+  signWithRoot,
+  type PassphraseBox,
+  type SealedBox,
+  type WalletPolicy,
+} from '@sqw/core';
+import { partner, sq, type Session } from './api';
+import { btc } from './config';
+import { clearRecovery, loadWallet, saveRecovery, saveWallet, type RecoveryState, type StoredWallet } from './keystore';
+import { currentFeeRate, esplora } from './payments';
+
+export interface RemoteWallet {
+  walletId: string;
+  status: 'active' | 'frozen' | 'recovered';
+  policy: WalletPolicy;
+  createdAt: string;
+}
+
+export async function remoteWallets(session: Session): Promise<RemoteWallet[]> {
+  return (await sq<{ wallets: RemoteWallet[] }>('/clients/me/wallets', undefined, session.token)).wallets;
+}
+
+export async function startRecovery(session: Session, wallet: RemoteWallet, credentialId: string): Promise<RecoveryState> {
+  const device = await generateSealingKeyPair(false);
+  const r = await sq('/recovery', { walletId: wallet.walletId, deviceCredentialId: credentialId }, session.token);
+  const rel = await partner('/release', {
+    walletId: wallet.walletId,
+    clientId: session.clientId,
+    devicePublicKey: await exportPublicJwk(device.publicKey),
+  });
+  const state: RecoveryState = {
+    oldWalletId: wallet.walletId,
+    oldPolicy: wallet.policy,
+    recoveryId: r.recoveryId,
+    releaseId: rel.releaseId,
+    deviceKey: device.privateKey,
+    credentialId,
+  };
+  await saveRecovery(session.clientId, state);
+  return state;
+}
+
+export interface RecoveryProgress {
+  swissquote: { status: string; secondsLeft: number };
+  partner: { status: string; secondsLeft: number };
+}
+
+export async function recoveryProgress(state: RecoveryState): Promise<RecoveryProgress> {
+  const [s, p] = await Promise.all([sq(`/recovery/${state.recoveryId}`), partner(`/release/${state.releaseId}`)]);
+  return {
+    swissquote: { status: s.status, secondsLeft: s.secondsLeft ?? 0 },
+    partner: { status: p.status, secondsLeft: p.secondsLeft ?? 0 },
+  };
+}
+
+/** Part CLIENT depuis le papier (20 mots) : vérifie la somme de contrôle et le groupe. */
+export function clientShareFromWords(words: string): string {
+  const normalized = words.trim().toLowerCase().split(/\s+/).join(' ');
+  if (shareGroup(normalized) !== 'client') throw new Error('Ces mots sont une part du partenaire, pas votre part');
+  return normalized;
+}
+
+/** Part CLIENT depuis la copie cloud (fichier C2 + phrase de passe). */
+export async function clientShareFromFile(file: File, passphrase: string): Promise<string> {
+  const json = JSON.parse(await file.text()) as { type?: string; box?: PassphraseBox };
+  if (json.type !== 'swissquote-wallet/backup-c2' || !json.box) throw new Error('Fichier de sauvegarde C2 non reconnu');
+  let words: string;
+  try {
+    words = await openWithPassphrase(json.box, passphrase);
+  } catch {
+    throw new Error('Phrase de passe incorrecte');
+  }
+  return clientShareFromWords(words);
+}
+
+export async function completeRecovery(
+  session: Session,
+  state: RecoveryState,
+  clientShare: string,
+  log: (line: string) => void,
+): Promise<{ wallet: StoredWallet; newClientShare: string; txUrl: string }> {
+  const rel = await partner<{ status: string; sealedForDevice?: SealedBox }>(`/release/${state.releaseId}`);
+  if (!rel.sealedForDevice) throw new Error('La part du partenaire n’est pas encore disponible');
+  const tiers = await openSealed(rel.sealedForDevice, state.deviceKey);
+  log('Part du partenaire reçue et déchiffrée sur cet appareil');
+
+  const backupRoot = backupRootFromShares([clientShare, tiers], btc.network);
+  if (accountOrigin(backupRoot).xpub !== state.oldPolicy.keys[2].xpub) {
+    throw new Error('Cette part ne correspond pas à ce wallet');
+  }
+  log('Clé de secours reconstituée, en mémoire uniquement');
+
+  const next = createWalletMaterial(btc.network);
+  const nw = await sq<{ newWalletId: string; policy: WalletPolicy }>(
+    `/recovery/${state.recoveryId}/new-wallet`,
+    { phoneKey: next.phoneKey, backupKey: next.backupKey },
+    session.token,
+  );
+  log('Nouveau wallet créé avec de nouvelles clés (téléphone, Swissquote, secours)');
+
+  const utxos = await esplora.scanWallet(state.oldPolicy, btc.network, 20);
+  const { psbt } = buildSweep({
+    policy: state.oldPolicy,
+    network: btc.network,
+    utxos,
+    to: deriveAddress(nw.policy, 0, 0, btc.network).address,
+    feeRate: await currentFeeRate(),
+  });
+  const backupSigned = signWithRoot(psbt, backupRoot).toBase64();
+  const sweep = await sq<{ psbt: string }>(`/recovery/${state.recoveryId}/sweep`, { psbt: backupSigned }, session.token);
+  const { hex } = finalizeSpend(combinePsbts([backupSigned, sweep.psbt], btc.network));
+  const txid = await esplora.broadcast(hex);
+  log('Fonds transférés : signé par la clé de secours, cosigné par Swissquote');
+
+  await saveWallet(
+    {
+      walletId: nw.newWalletId,
+      clientId: session.clientId,
+      network: btc.name,
+      policy: nw.policy,
+      createdAt: new Date().toISOString(),
+    },
+    next.phoneSeed,
+  );
+  next.phoneSeed.fill(0);
+  const { publicKey } = await partner<{ publicKey: JsonWebKey }>('/public-key');
+  await partner('/shares', {
+    walletId: nw.newWalletId,
+    clientId: session.clientId,
+    sealedShare: await sealFor(publicKey, next.shares.tiers),
+  });
+  await clearRecovery(session.clientId);
+  log('Nouvelle part de secours confiée au partenaire ; anciennes passkeys révoquées');
+
+  return {
+    wallet: (await loadWallet(session.clientId))!,
+    newClientShare: next.shares.client,
+    txUrl: btc.explorerTxUrl(txid),
+  };
+}

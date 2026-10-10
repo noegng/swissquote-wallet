@@ -5,6 +5,7 @@ import {
   BACKUP_SECRET_BYTES,
   combineBackupShares,
   newBackupSecret,
+  shareGroup,
   splitBackupSecret,
   toHex,
 } from '../src';
@@ -54,6 +55,14 @@ describe('clé de secours : groupes CLIENT et TIERS (I2)', () => {
   it('une part d’un autre wallet ne se combine pas', () => {
     const other = splitBackupSecret(newBackupSecret());
     expect(() => combineBackupShares([client, other.tiers])).toThrow();
+  });
+
+  it('identifie le groupe d’une part et détecte une faute de frappe', () => {
+    expect(shareGroup(client)).toBe('client');
+    expect(shareGroup(tiers)).toBe('tiers');
+    const words = client.split(' ');
+    words[5] = words[5] === 'academic' ? 'acid' : 'academic';
+    expect(() => shareGroup(words.join(' '))).toThrow();
   });
 
   it('tolère majuscules et espaces autour d’une saisie manuelle de C1', () => {

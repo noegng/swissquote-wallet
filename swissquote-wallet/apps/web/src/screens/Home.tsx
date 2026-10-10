@@ -6,7 +6,7 @@ import { partner, sq } from '../api';
 import { btc } from '../config';
 import { formatBtc, formatSats } from '../format';
 import { loadPending, type PendingPayment as Pending, type StoredWallet } from '../keystore';
-import { esplora } from '../payments';
+import { approve, esplora } from '../payments';
 import { PendingPayment } from './PendingPayment';
 
 function downloadExitKit(wallet: StoredWallet) {
@@ -31,6 +31,11 @@ interface Notification {
   text: string;
 }
 
+interface RecoveryInfo {
+  status: 'active' | 'frozen' | 'recovered';
+  recovery: { recoveryId: string; secondsLeft: number } | null;
+}
+
 export function Home({
   wallet,
   onSend,
@@ -46,6 +51,8 @@ export function Home({
   const [pending, setPending] = useState<Pending | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [message, setMessage] = useState('');
+  const [recoveryInfo, setRecoveryInfo] = useState<RecoveryInfo | null>(null);
+  const [cancelling, setCancelling] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -59,6 +66,9 @@ export function Home({
       setMessage('Réseau Bitcoin injoignable (regtest lancé ? `npm run regtest:up`)');
     }
     loadPending(wallet.walletId).then((p) => setPending(p ?? null));
+    sq<RecoveryInfo>(`/wallets/${wallet.walletId}/recovery`)
+      .then(setRecoveryInfo)
+      .catch(() => setRecoveryInfo(null));
     sq<{ notifications: Notification[] }>(`/notifications/${wallet.walletId}`)
       .then((r) => setNotifications(r.notifications.slice(-3).reverse()))
       .catch(() => setNotifications([]));
@@ -72,6 +82,37 @@ export function Home({
     const timer = setInterval(refresh, 5000);
     return () => clearInterval(timer);
   }, [refresh, wallet.walletId]);
+
+  // Récupération lancée depuis un autre appareil : le vrai propriétaire l'annule avec sa passkey.
+  async function cancelRecovery(recoveryId: string) {
+    setCancelling(true);
+    try {
+      const authentication = await approve(wallet.walletId, 'cancel', recoveryId);
+      await sq(`/recovery/${recoveryId}/cancel`, { authentication });
+      setMessage('Récupération annulée : votre wallet est dégelé.');
+      refresh();
+    } catch (e) {
+      setMessage((e as Error).name === 'NotAllowedError' ? 'Annulation interrompue sur l’appareil.' : (e as Error).message);
+    } finally {
+      setCancelling(false);
+    }
+  }
+
+  if (recoveryInfo?.status === 'recovered') {
+    return (
+      <div className="screen">
+        <p className="eyebrow">Wallet récupéré</p>
+        <h1>Ce wallet a été récupéré sur un autre appareil</h1>
+        <p>
+          Les fonds ont été transférés vers un nouveau wallet et la passkey de cet appareil a été révoquée.
+          Cet appareil n’a plus accès à rien.
+        </p>
+        <button className="secondary" onClick={onLogout}>
+          Se déconnecter
+        </button>
+      </div>
+    );
+  }
 
   async function faucet() {
     setMessage('Demande au faucet regtest…');
@@ -106,7 +147,24 @@ export function Home({
         <strong>{balance === null ? '…' : formatBtc(balance)}</strong>
         <small>{balance === null ? '' : formatSats(balance)}</small>
       </div>
-      <button className="primary" disabled={!balance || !!pending} onClick={onSend}>
+      {recoveryInfo?.recovery && (
+        <div className="card warning">
+          <strong>Récupération demandée depuis un autre appareil</strong>
+          <span>
+            Votre wallet est gelé. Si c’est vous, ne faites rien. Si ce n’est pas vous, annulez : sans votre
+            part papier, personne ne peut de toute façon récupérer ce wallet.
+          </span>
+          <span className="countdown">
+            {recoveryInfo.recovery.secondsLeft > 0
+              ? `Aboutit dans ${recoveryInfo.recovery.secondsLeft} s`
+              : 'Délai écoulé : elle peut aboutir à tout moment'}
+          </span>
+          <button className="primary" disabled={cancelling} onClick={() => cancelRecovery(recoveryInfo.recovery!.recoveryId)}>
+            {cancelling ? 'Validation sur l’appareil…' : 'Ce n’est pas moi : annuler'}
+          </button>
+        </div>
+      )}
+      <button className="primary" disabled={!balance || !!pending || recoveryInfo?.status === 'frozen'} onClick={onSend}>
         Envoyer
       </button>
 

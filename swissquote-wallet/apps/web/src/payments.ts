@@ -25,6 +25,10 @@ export const esplora = new Esplora(btc);
 // plafond à 5 sat/vB sur ce réseau de test. Regtest : frais fixes.
 const MAX_SIGNET_FEE_RATE = 5;
 
+export async function currentFeeRate(): Promise<number> {
+  return btc.name === 'regtest' ? 2 : Math.min(await esplora.feeRate(), MAX_SIGNET_FEE_RATE);
+}
+
 export interface PreparedPayment {
   psbt: string;
   to: string;
@@ -42,7 +46,7 @@ export async function preparePayment(wallet: StoredWallet, to: string, amount: b
     esplora.scanWallet(wallet.policy, btc.network, 20),
     esplora.firstUnusedIndex(wallet.policy, btc.network, 1),
   ]);
-  const feeRate = btc.name === 'regtest' ? 2 : Math.min(await esplora.feeRate(), MAX_SIGNET_FEE_RATE);
+  const feeRate = await currentFeeRate();
   const { psbt } = buildSpend({ policy: wallet.policy, network: btc.network, utxos, to, amount, feeRate, changeIndex });
   // L'app vérifie sa propre PSBT avec sa clé : ce qu'elle affiche est ce qui sera signé.
   const summary = summarizeSpend(psbt, wallet.policy, btc.network, wallet.policy.keys[0]);
@@ -50,7 +54,7 @@ export async function preparePayment(wallet: StoredWallet, to: string, amount: b
 }
 
 /** Approbation par passkey (Windows Hello, Touch ID, Face ID) liée à une opération précise. */
-async function approve(walletId: string, purpose: 'cosign' | 'cancel', payload: string) {
+export async function approve(walletId: string, purpose: 'cosign' | 'cancel', payload: string) {
   const optionsJSON = await sq('/webauthn/operation/options', { walletId, purpose, payload });
   return startAuthentication({ optionsJSON });
 }

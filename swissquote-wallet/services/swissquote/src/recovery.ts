@@ -75,8 +75,16 @@ export function registerRecoveryRoutes(app: FastifyInstance): void {
     if (!deviceCredentialId || !credentialBelongsTo(clientId, deviceCredentialId)) {
       return reply.code(400).send({ mock: true, error: 'Passkey du nouvel appareil requise (deviceCredentialId)' });
     }
-    if (statusOf(wallet) !== 'active') {
-      return reply.code(409).send({ mock: true, error: `Récupération impossible : wallet ${statusOf(wallet)}` });
+    if (statusOf(wallet) === 'frozen') {
+      return reply.code(409).send({
+        mock: true,
+        error:
+          'Une récupération est déjà en cours pour ce wallet (lancée depuis un autre appareil). ' +
+          'Si ce n’est pas vous, annulez-la depuis votre téléphone ; sinon, attendez qu’elle soit annulée ou terminée.',
+      });
+    }
+    if (statusOf(wallet) === 'recovered') {
+      return reply.code(409).send({ mock: true, error: 'Ce wallet a déjà été récupéré vers un nouveau wallet' });
     }
     const ticket: RecoveryTicket = {
       id: randomUUID(),
@@ -102,6 +110,19 @@ export function registerRecoveryRoutes(app: FastifyInstance): void {
       executeAfter: new Date(ticket.executeAfter).toISOString(),
       delaySeconds: RECOVERY_DELAY_SECONDS,
       productionDelay: PRODUCTION_DELAY,
+    };
+  });
+
+  // État public d'un wallet : l'ancien appareil voit qu'une récupération est en cours et peut l'annuler.
+  app.get('/wallets/:id/recovery', async (req, reply) => {
+    const wallet = wallets()[(req.params as { id: string }).id];
+    if (!wallet) return reply.code(404).send({ mock: true, error: 'Wallet inconnu' });
+    const active = Object.values(tickets()).find((t) => t.walletId === wallet.walletId && t.status === 'pending');
+    return {
+      mock: true,
+      status: statusOf(wallet),
+      recoveredTo: wallet.recoveredTo ?? null,
+      recovery: active ? { recoveryId: active.id, secondsLeft: secondsLeft(active) } : null,
     };
   });
 

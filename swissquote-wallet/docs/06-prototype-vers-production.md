@@ -9,7 +9,7 @@ Swissquote veut porter le projet gagnant en production. L'architecture vise la p
 | Multisig | 2 sur 3 P2WSH sur signet, vraies transactions | Une seule chaîne | Taproot (MuSig2 ou script) pour la confidentialité et les frais ; audit |
 | Clé Swissquote | Service `services/swissquote`, processus séparé | **MOCK** : clé en fichier local | HSM ou enclave, double contrôle, politique de signature, journalisation |
 | Règles de cosignature | Paliers, délai, liste de sanctions | **MOCK** : liste de sanctions partielle | Fournisseur de conformité, analyse de chaîne |
-| Partenaire (part TIERS) | Service `services/partner`, processus séparé | **MOCK** : contrôle d'identité simulé | Contrat, deux partenaires indépendants, SLA, réversibilité en cas de faillite |
+| Partenaire (part TIERS) | Service `services/partner`, processus séparé ; libération avec délai, part re-scellée pour l'appareil | **MOCK** : contrôle d'identité simulé ; annulation sans authentification | Contrat, deux partenaires indépendants, SLA, réversibilité en cas de faillite ; annulation authentifiée |
 | KYC / identité | Écran de connexion simulé | **MOCK** : pas de vrai KYC | KYC renforcé, détection de pièces falsifiées et de deepfakes, formation du support |
 | Délais | 2 à 3 minutes | Raccourcis pour la démo | 7 jours pour la récupération, notifications SMS, e-mail, app |
 | Notifications | Boîte de réception dans l'app | **MOCK** : pas de vrais SMS ou e-mails | Canaux multiples et indépendants |

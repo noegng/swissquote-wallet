@@ -128,12 +128,14 @@ Clé de secours = groupe CLIENT  ET  groupe TIERS        (seuil de groupes = 2)
    - **Adresse sanctionnée** : refus.
 4. Transaction finalisée et diffusée ; lien vers l'explorateur.
 
-**Perte du téléphone**
-1. Nouvel appareil ; le client saisit C1 ou déchiffre C2.
-2. Il ouvre une récupération chez Swissquote et demande la part TIERS au partenaire. Les deux appliquent vérification d'identité, **délai** et **notifications** (le client peut annuler depuis son ancien téléphone s'il l'a encore).
-3. La part du partenaire arrive chiffrée pour l'appareil ; la clé de secours est reconstituée **sur l'appareil uniquement**.
-4. Clé de secours + Swissquote signent le **transfert vers un nouveau jeu de clés** (nouvelle clé téléphone, nouvelle clé de secours re-découpée). Les anciennes clés et parts ne protègent plus rien.
-5. **Continuité bancaire** (mockée) : pendant le délai, le client garde un accès plafonné via son compte Swissquote.
+**Perte du téléphone** (implémenté : `npm run demo:recover`, écran « Récupérer votre wallet »)
+1. Nouvel appareil : connexion Swissquote, puis **passkey de ce nouvel appareil**.
+2. Le client ouvre une récupération chez Swissquote (vérification d'identité renforcée, mockée) : le wallet est **gelé** (plus aucun paiement, même petit ; un gros paiement en attente est abandonné), alertes, **délai**. En parallèle, il demande la part TIERS au partenaire, qui applique **son propre** contrôle d'identité et **son propre** délai (il ne dépend pas de Swissquote).
+3. Pendant le délai, le vrai client peut **annuler depuis son ancien téléphone** (passkey de l'ancien appareil).
+4. Après le délai, la part du partenaire arrive **scellée pour une clé non exportable du nouvel appareil**. Le client saisit sa part papier C1 (ou ouvre sa copie C2 avec sa phrase de passe). La clé de secours est reconstituée **sur l'appareil uniquement**, en mémoire.
+5. Swissquote crée le nouveau wallet (nouvelle clé SQ), puis cosigne **une seule** transaction de transfert, à trois conditions : elle est **déjà signée par la clé de secours** (la clé du téléphone perdu ne suffit pas), elle ne paie **que** le nouveau wallet, et rien ne revient à l'ancien.
+6. Toutes les anciennes passkeys sont **révoquées** (seule celle du nouvel appareil, déclarée à l'ouverture, est conservée). Nouvelle part TIERS chez le partenaire, nouvelle cérémonie C1 / C2.
+7. **Continuité bancaire** (mockée) : pendant le délai, le client garde un accès plafonné via son compte Swissquote.
 
 **Swissquote a disparu**
 1. Le client a toujours son téléphone, C1 ou C2, et le partenaire.
@@ -171,7 +173,7 @@ Clé de secours = groupe CLIENT  ET  groupe TIERS        (seuil de groupes = 2)
 | Téléphone volé (verrouillé) | Rien d'utilisable | Clé chiffrée, déverrouillage par passkey biométrique |
 | Téléphone volé et déverrouillé, ou malware | Clé téléphone | Swissquote cosigne seulement sous le plafond ; au-dessus, délai + notification ; le client fait geler le cosignataire |
 | E-mail piraté | Notifications | Aucune clé ; notifications sur plusieurs canaux |
-| **Téléphone + e-mail** | Clé téléphone, notifications | La récupération exige une part CLIENT (C1 ou C2) qu'il n'a pas ; dépenses limitées au plafond |
+| **Téléphone + e-mail** | Clé téléphone, accès au compte | Il peut ouvrir une récupération, mais : le wallet est gelé, le vrai client est alerté et peut annuler ; sans part CLIENT la clé de secours ne se reconstitue pas ; un transfert signé avec la clé du téléphone volé est refusé (Swissquote exige la clé de secours). Démontré par `npm run demo:recover` |
 | Vol du papier C1 | Part CLIENT | Il faut aussi le partenaire (identité + délai + notification) et Swissquote |
 | Vol du papier + téléphone | Clé téléphone + part CLIENT | Partenaire : identité, délai, notification au client ; annulation possible. Risque résiduel documenté |
 | Compte cloud compromis (C2) | Copie chiffrée | Inutile sans la passkey ou la phrase de passe, et il faut le partenaire |
@@ -181,7 +183,8 @@ Clé de secours = groupe CLIENT  ET  groupe TIERS        (seuil de groupes = 2)
 | Swissquote + partenaire (collusion ou décision de justice) | Clé Swissquote + part TIERS | Il manque la part CLIENT |
 | Partenaire en faillite | Part TIERS perdue | Usage quotidien inchangé ; second partenaire en production ; re-découpage de la clé de secours |
 | Swissquote disparu | Plus de cosignataire | Téléphone + clé de secours, kit de sortie |
-| Voleur du téléphone qui annule une récupération légitime | Blocage temporaire | Récupération relancée en revue manuelle (identité renforcée) ; documenté |
+| Voleur du téléphone qui annule une récupération légitime | Blocage temporaire | Récupération relancée en revue manuelle (identité renforcée) ; documenté. Côté partenaire, l'annulation n'est pas authentifiée dans le mock (simple retard, jamais de perte) |
+| Passkey du téléphone perdu après récupération | Tentative d'approuver ou d'annuler | Révoquée à la fin de la récupération : « Passkey inconnue » |
 | Récupérations répétées (déni de service) | Notifications en boucle | Une récupération active à la fois, délai avant relance |
 | Client qui perd téléphone, C1 et C2 | — | Fonds perdus : c'est le prix pour que personne d'autre ne puisse les prendre. Rappels annuels de vérification de C1 |
 | Interface de signature compromise | Transaction malveillante présentée au client | Résumé clair, le cosignataire vérifie destinataire et montant indépendamment de l'app |
