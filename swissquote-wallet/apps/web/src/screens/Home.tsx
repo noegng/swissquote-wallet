@@ -286,6 +286,7 @@ export function Home({
       {tab === 'wallet' ? (
         <div className="home-head" key="head">
           <Brand />
+          <h1 className="web-title">Wallet</h1>
           <button
             type="button"
             className="avatar"

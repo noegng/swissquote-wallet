@@ -48,6 +48,28 @@ textarea {
   padding: 16px;
 }
 
+/* Bandeau au-dessus de l'app : mention du prototype et choix de la présentation (app ou web). */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.topbar-row {
+  display: contents;
+}
+
+.topbar .brand,
+.web-title {
+  display: none;
+}
+
+.layout-switch button {
+  padding: 3px 12px;
+  font-size: 13px;
+  line-height: 20px;
+}
+
 .mock-banner {
   margin: 0;
   font-size: 13px;
@@ -59,7 +81,7 @@ textarea {
 .phone {
   width: 390px;
   height: 844px;
-  max-height: calc(100dvh - 72px);
+  max-height: calc(100dvh - 84px);
   display: flex;
   flex-direction: column;
   background: var(--grey-200);
@@ -118,8 +140,11 @@ textarea {
     gap: 0;
     justify-content: flex-start;
   }
+  .topbar,
   .mock-banner {
     width: 100%;
+  }
+  .mock-banner {
     padding: 4px 12px;
     background: var(--ink);
     color: var(--white);
@@ -136,6 +161,13 @@ textarea {
   .statusbar,
   .footer::after,
   .tabbar::after {
+    display: none;
+  }
+}
+
+/* La version web demande un grand écran : en dessous, seule la présentation app existe. */
+@media (max-width: 900px) {
+  .layout-switch {
     display: none;
   }
 }
@@ -1166,4 +1198,123 @@ button.row:disabled .t {
 /* Onglets sans barre de navigation : le titre respire sous la barre d'état. */
 .body > .title:first-child {
   padding-top: 12px;
+}
+
+/* ---- Version web : mêmes écrans et mêmes composants, sans cadre de téléphone. Barre d'en-tête
+   avec la marque et les onglets, contenu dans une colonne centrée, la page défile. */
+@media (min-width: 901px) {
+  .stage.web {
+    justify-content: flex-start;
+    gap: 0;
+    padding: 0;
+    background: var(--grey-200);
+  }
+
+  .web .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+  }
+
+  .web .mock-banner {
+    padding: 4px 12px;
+    background: var(--ink);
+    color: var(--white);
+    font-size: 12px;
+    line-height: 20px;
+  }
+
+  .web .topbar-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 64px;
+    padding: 0 32px;
+    background: var(--white);
+    border-bottom: 1px solid var(--grey-300);
+  }
+
+  .web .topbar .brand {
+    display: inline-flex;
+  }
+
+  /* La marque est déjà dans l'en-tête. */
+  .web .brand.large,
+  .web .home-head .brand {
+    display: none;
+  }
+
+  .web .web-title {
+    display: block;
+    margin: 0;
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 30px;
+    text-transform: uppercase;
+  }
+
+  .web .phone {
+    flex: 1;
+    width: min(100%, 640px);
+    height: auto;
+    max-height: none;
+    border-radius: 0;
+    outline: none;
+    background: none;
+    overflow: visible;
+  }
+
+  .web .statusbar,
+  .web .footer::after,
+  .web .tabbar::after {
+    display: none;
+  }
+
+  .web .screen {
+    padding: 28px 0 56px;
+  }
+
+  .web .body {
+    flex: none;
+    overflow: visible;
+  }
+
+  .web .footer {
+    padding: 0 20px;
+    border: 0;
+    background: none;
+  }
+
+  /* Les onglets montent dans l'en-tête (28px : hauteur du bandeau prototype). */
+  .web .tabbar {
+    position: fixed;
+    top: 28px;
+    left: 50%;
+    z-index: 3;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 64px;
+    padding: 0;
+    border: 0;
+    background: none;
+  }
+
+  .web .tabbar .tab {
+    flex-direction: row;
+    gap: 8px;
+    padding: 9px 16px;
+    border-radius: 48px;
+    font-size: 15px;
+    line-height: 22px;
+  }
+
+  .web .tabbar .tab.on {
+    background: var(--primary-50);
+  }
 }
