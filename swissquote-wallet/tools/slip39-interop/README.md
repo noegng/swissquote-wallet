@@ -1,14 +1,13 @@
 # Interop SLIP-39
 
-Vérifie que la bibliothèque JS retenue est compatible avec la référence Python de Trezor (`shamir-mnemonic`), dans les deux sens, et qu'elle passe les vecteurs officiels. Porte d'entrée du spike (voir la skill `slip39-backup`).
+Vérifie que notre wrapper `packages/core/src/backup.ts` (bibliothèque `shamir-mnemonic-ts`) est compatible avec la référence Python de Trezor (`shamir-mnemonic`), dans les deux sens. Les 45 vecteurs officiels sont testés côté JS par `npm test`.
+
+**Validé le 10/10/2026** : JS → Python et Python → JS, avec refus d'une part de groupe seule.
 
 ```bash
-python -m venv .venv && .venv/Scripts/activate   # Windows (Git Bash) ; source .venv/bin/activate ailleurs
-pip install -r requirements.txt
-python check.py
+python -m venv .venv
+.venv/Scripts/python -m pip install -r requirements.txt   # macOS / Linux : .venv/bin/python
+.venv/Scripts/python check.py
 ```
 
-`check.py` est à écrire au spike :
-1. Télécharger `vectors.json` depuis https://github.com/trezor/python-shamir-mnemonic et le faire passer par la bibliothèque JS (test vitest dans `packages/core`).
-2. Générer des parts avec notre configuration (seuil de groupes 2, groupes CLIENT et TIERS) côté JS, les restaurer côté Python, et inversement.
-3. Vérifier qu'une seule part de groupe ne restaure rien.
+`slip39` (ilap) a été écartée : elle modifie `String.prototype` et `Array.prototype`.

@@ -14,7 +14,8 @@
     "regtest:up": "docker compose -f tools/regtest/docker-compose.yml up -d",
     "regtest:down": "docker compose -f tools/regtest/docker-compose.yml down",
     "regtest:faucet": "node scripts/regtest-faucet.mjs",
-    "reset": "node scripts/reset.mjs"
+    "reset": "node scripts/reset.mjs",
+    "spike": "tsx scripts/spike-multisig.ts"
   },
   "devDependencies": {
     "@types/node": "22.20.4",

@@ -12,3 +12,6 @@ tools/regtest/volumes/
 # Python
 __pycache__/
 .venv/
+
+# Graines de test du spike (réseaux de test uniquement)
+scripts/.spike/

@@ -11,9 +11,9 @@
     "@bitcoinerlab/secp256k1": "2.0.0",
     "bip32": "5.0.1",
     "bitcoinjs-lib": "7.0.2",
+    "buffer": "6.0.3",
     "ecpair": "3.0.2",
-    "shamir-mnemonic-ts": "1.2.0",
-    "slip39": "0.1.9"
+    "shamir-mnemonic-ts": "1.2.0"
   },
   "devDependencies": {
     "vitest": "5.0.2"

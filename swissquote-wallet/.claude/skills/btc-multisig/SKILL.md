@@ -25,13 +25,13 @@ description: Conventions et pièges du code Bitcoin du Swissquote Wallet (descri
 
 | | Signet | Regtest (Nigiri) |
 |---|---|---|
-| Base | `https://mempool.space/signet/api` | `http://localhost:3000` (Chopsticks, `ESPLORA_URL_REGTEST` du `.env`) |
+| Base | `https://blockstream.info/signet/api` (défaut ; mempool.space injoignable sur certains réseaux) | `http://localhost:3000` (Chopsticks, `ESPLORA_URL_REGTEST` du `.env`) |
 | UTXO | `GET /address/:a/utxo` | idem |
 | Diffusion | `POST /tx`, corps = hex brut, `Content-Type: text/plain` | idem |
 | Statut | `GET /tx/:txid/status` | idem |
-| Frais | `GET /v1/fees/recommended` | frais fixes (ex. 2 sat/vB) |
+| Frais | `GET /fee-estimates` (blockstream) ou `/v1/fees/recommended` (mempool.space) ; déjà géré par `Esplora.feeRate()` | frais fixes (2 sat/vB) |
 
-Explorateur : `https://mempool.space/signet/tx/<txid>`.
+Explorateur : `NetworkConfig.explorerTxUrl(txid)` (blockstream.info ou mempool.space selon l'API). Modules existants : `keys.ts`, `descriptor.ts`, `psbt.ts`, `esplora.ts` dans `packages/core/src` ; exemple complet : `scripts/spike-multisig.ts`.
 
 ## Financement
 

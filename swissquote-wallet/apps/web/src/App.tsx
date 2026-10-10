@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { runCoreSpike } from './spikeCore';
 
 // Écrans à construire pendant le hackathon (docs/09-plan-de-build.md) :
 // Onboarding, Accueil, Envoyer, Récupération, Kit de sortie, panneau Démo.
@@ -10,6 +11,13 @@ const SERVICES = [
 
 export function App() {
   const [status, setStatus] = useState<Record<string, boolean>>({});
+  const [coreSpike] = useState(() => {
+    try {
+      return runCoreSpike();
+    } catch (e) {
+      return `ÉCHEC : ${String(e)}`;
+    }
+  });
 
   useEffect(() => {
     for (const s of SERVICES) {
@@ -32,6 +40,7 @@ export function App() {
               {s.name} : {status[s.name] === undefined ? '…' : status[s.name] ? 'en ligne' : 'hors ligne'}
             </li>
           ))}
+          <li data-testid="core-spike">Cœur : {coreSpike}</li>
         </ul>
       </main>
     </div>

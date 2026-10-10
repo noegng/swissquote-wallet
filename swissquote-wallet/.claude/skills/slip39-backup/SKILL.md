@@ -21,7 +21,7 @@ Swissquote : aucune part
 
 ## Bibliothèque
 
-- Candidates : `shamir-mnemonic-ts`, `slip39` (ilap). Référence : `shamir-mnemonic` (Python, Trezor).
+- **Retenue : `shamir-mnemonic-ts`** (45 vecteurs officiels et interop Python validés le 10/10). Référence : `shamir-mnemonic` (Python, Trezor). Dans le navigateur, elle a besoin de `vite-plugin-node-polyfills` (déjà configuré dans `apps/web/vite.config.ts`).
 - **Porte d'entrée** (spike) : la bibliothèque JS doit passer les vecteurs officiels `vectors.json` de https://github.com/trezor/python-shamir-mnemonic, et ses parts doivent se restaurer avec la référence Python (et inversement). Commande : `python tools/slip39-interop/check.py`.
 - Toujours passer par le wrapper `packages/core/src/backup.ts` : le reste du code n'importe jamais la bibliothèque directement (changement de bibliothèque possible sans toucher au reste).
 

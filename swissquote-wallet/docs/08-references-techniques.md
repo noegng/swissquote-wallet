@@ -15,13 +15,13 @@ Relevées le 10 octobre 2026. **Toujours vérifier par un test avant de s'appuye
 
 | Usage | Signet | Regtest (Nigiri) |
 |---|---|---|
-| Base | `https://mempool.space/signet/api` | `http://localhost:3000` (à confirmer à l'installation) |
+| Base | `https://blockstream.info/signet/api` (mempool.space injoignable depuis certains réseaux) | `http://localhost:3000` (Chopsticks) |
 | UTXO d'une adresse | `GET /address/:address/utxo` | idem |
 | Diffuser | `POST /tx` avec le hex brut en `Content-Type: text/plain` | idem |
 | Statut | `GET /tx/:txid/status` | idem |
-| Frais | `GET /v1/fees/recommended` (signet) | frais fixes en regtest |
+| Frais | `GET /fee-estimates` (blockstream) ou `GET /v1/fees/recommended` (mempool.space) | frais fixes en regtest |
 
-Explorateur signet : `https://mempool.space/signet/tx/<txid>`.
+Explorateur signet : `https://blockstream.info/signet/tx/<txid>` (ou mempool.space selon le réseau).
 
 Faucet signet : `https://bitcoinsignetfaucet.com` (1 000 à 10 000 sats par demande, 5 demandes par 24 h par IP et adresse). Préfinancer plusieurs adresses avant la démo.
 
@@ -32,7 +32,7 @@ Faucet signet : `https://bitcoinsignetfaucet.com` (1 000 à 10 000 sats par dema
 | PSBT, scripts | `bitcoinjs-lib` | Les versions récentes utilisent des `bigint` pour les montants ; vérifier la version installée |
 | Dérivation | `bip32` | Avec `@bitcoinerlab/secp256k1` (JS pur, sans WASM : plus simple dans Vite) |
 | Clés | `ecpair` | Idem |
-| SLIP-39 | `shamir-mnemonic-ts` ou `slip39` (ilap) | Choix au spike : vecteurs officiels (`vectors.json` de trezor/python-shamir-mnemonic) + interop Python |
+| SLIP-39 | `shamir-mnemonic-ts` | **Retenue** : 45 vecteurs officiels + interop Python validés. Utilise le module `crypto` de Node : dans le navigateur, `vite-plugin-node-polyfills` |
 | SLIP-39 référence | `shamir-mnemonic` (Python, Trezor) | Interop uniquement |
 | Passkeys | `@simplewebauthn/browser`, `@simplewebauthn/server` | Extension PRF à tester sur les navigateurs de l'équipe |
 | Chiffrement des parts | WebCrypto (ECDH P-256 + HKDF + AES-GCM) | Natif navigateur et Node 22 |
