@@ -1,0 +1,21 @@
+{
+  "name": "@sqw/core",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@bitcoinerlab/secp256k1": "2.0.0",
+    "bip32": "5.0.1",
+    "bitcoinjs-lib": "7.0.2",
+    "ecpair": "3.0.2",
+    "shamir-mnemonic-ts": "1.2.0",
+    "slip39": "0.1.9"
+  },
+  "devDependencies": {
+    "vitest": "5.0.2"
+  }
+}

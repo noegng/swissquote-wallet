@@ -1,21 +1,23 @@
 # Différenciation
 
-Risque : la plupart des équipes arriveront à Safe + passkey + gardiens + paymaster. La technologie de base doit rester standard pour que le flux de bout en bout marche (35 points techniques et 20 points de bonus). La différenciation vient de ce que les autres traiteront en surface.
+Beaucoup d'équipes proposeront un smart account EVM ou un split backup simple. Notre base (multisig Bitcoin 2 sur 3, modèle Bitkey) est éprouvée ; la différenciation vient de ce qu'on démontre et de la façon dont on répond aux questions pièges du brief.
 
-## Les trois axes, par priorité
+## Les axes, par priorité
 
-1. **Démo d'attaques qui échouent.** En plus du chemin heureux, trois attaques rejouées en direct et rejetées par le contrat, visibles sur l'explorateur :
-   - téléphone volé qui tente de vider le compte ;
-   - téléphone et e-mail piratés qui tentent une récupération ;
-   - banque ou gardien malveillant qui agit seul.
-   Coût faible : les tests Foundry servent de base. Vise les 20 points de sécurité.
-2. **Veto indépendant.** Clé de veto enregistrée à l'avance sur un second appareil, qui peut geler ou annuler une récupération mais jamais déplacer des fonds. Comble une limite du module Candide (annulation réservée au propriétaire).
-3. **Continuité bancaire.** Pendant le délai de récupération, accès plafonné via le compte bancaire (fiat, carte). Mocké en démo. Pèse sur le business case et le pitch. À coupler avec le récit juridique (FINMA, LBA, KYC déjà réalisé par la banque).
+1. **Démo d'attaques refusées**, rejouées en direct avec la raison du refus :
+   - voleur avec le téléphone déverrouillé qui tente de tout vider → palier 2, délai, le client annule ;
+   - attaquant avec le **téléphone et l'e-mail** qui lance une récupération → pas de part CLIENT, refus (crédit bonus explicite du brief) ;
+   - Swissquote + partenaire qui tentent de restaurer la clé de secours → combinaison SLIP-39 rejetée.
+2. **« Swissquote a disparu » montré en direct** : on arrête le service Swissquote pendant la démo, le client sort avec téléphone + clé de secours. Le brief l'exige ; peu d'équipes le montreront vraiment.
+3. **Invariants de custody testés automatiquement** (I1 à I7, voir `03-decisions.md`) : le modèle de menaces est exécutable, pas seulement écrit.
+4. **Split backup utilisé là où il est sûr** : Swissquote n'a aucune part, la clé de secours n'est reconstituée que sur l'appareil du client. On répond aux deux questions pièges du brief au lieu de les subir.
+5. **Continuité bancaire** pendant le délai de récupération (mockée) : accès plafonné via le compte Swissquote. Seul un acteur bancaire peut l'offrir.
+6. **Travel Rule automatique** : Swissquote co-crée le wallet, donc la propriété est prouvée dès la création.
 
 ## À éviter
 
-MPC, preuves ZK, multi-chaînes : coût élevé, risque de casser le flux de bout en bout, et ce n'est pas ce que Swissquote cherche à mettre en production.
+MPC, preuves ZK, multi-chaînes au cœur du projet : coût élevé, risque de casser l'histoire de bout en bout.
 
 ## Phrase de positionnement
 
-« Une récupération de wallet où la banque est un gardien borné, dont chaque action est vérifiable en chaîne, et que nous avons attaqué en direct pour le prouver. »
+« Vos bitcoins, vos clés, à un pas de votre compte : Swissquote vous protège sans jamais pouvoir agir sans vous, et si Swissquote disparaît, vous partez avec vos fonds. »

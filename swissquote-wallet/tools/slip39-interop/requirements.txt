@@ -1,0 +1,1 @@
+shamir-mnemonic==0.3.0

@@ -1,9 +1,13 @@
 # Précédents : projets proches et leçons
 
-Recherche faite avec Exa le 10 octobre 2026. Aucun projet ne couvre exactement notre cas (wallet de banque, récupération avec KYC). Chacun couvre une partie du problème.
+Recherche faite avec Exa le 10 octobre 2026, complétée le même jour après le passage au multisig Bitcoin (Bitkey, Casa, Ledger Recover, Liana). Les projets EVM ci-dessous restent utiles pour l'option USDC. Aucun projet ne couvre exactement notre cas (wallet de banque, récupération avec KYC). Chacun couvre une partie du problème.
 
 | Projet | Approche | Ce qu'on en retient |
 |---|---|---|
+| **Bitkey** (Block) | Multisig 2 sur 3 : clé app, clé matérielle, clé serveur en enclave. Plafond sans matériel. Récupération « Delay + Notify » de 7 jours, puis transfert vers un nouveau jeu de clés. Kit de sortie si Block disparaît | **Modèle de référence depuis le 10/10/2026** : délai + notification, transfert, kit de sortie |
+| **Casa, Unchained, Nunchuk** | Garde collaborative multisig : le client détient 2 clés, le prestataire 1 | Modèle économique par abonnement, argument de non-garde |
+| **Ledger Recover** (2023) | Seed découpée en 3 parts (Ledger, Coincover, EscrowTech), récupération par vérification d'identité | Contre-exemple : collusion entre prestataires, seed qui quitte l'appareil |
+| **Liana** (Wizardsardine) | Miniscript avec chemin de récupération après timelock | Piste pour un dernier recours (point ouvert) |
 | ENSignv2 | La récupération peut seulement ajouter une clé. Gardiens désignés par noms ENS. Le propriétaire peut annuler dans une courte fenêtre. Gas sponsorisé par Pimlico | Borner ce que la récupération permet |
 | [AAStarCommunity/airaccount-contract](https://github.com/AAStarCommunity/airaccount-contract) | Limites par palier selon le montant. Gardiens passkey P-256. Cycle proposer / approuver / exécuter / annuler. Timelock sur l'installation de modules | Le plus proche de notre cible. Paliers et timelock à reprendre |
 | [openfort-xyz/openfort-7702-account](https://github.com/openfort-xyz/openfort-7702-account/) | Gel du wallet par un gardien, récupération avec timelock, clés de session avec plafonds | Gel d'urgence |

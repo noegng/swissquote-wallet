@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.env
+*.log
+
+# Stockage propre de chaque service mocké (jamais versionné)
+services/*/data/
+
+# Données du regtest Docker
+tools/regtest/volumes/
+
+# Python
+__pycache__/
+.venv/

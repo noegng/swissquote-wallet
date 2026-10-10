@@ -1,0 +1,25 @@
+{
+  "name": "swissquote-wallet",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*",
+    "services/*"
+  ],
+  "scripts": {
+    "dev:all": "concurrently -n sq,partner,web -c red,blue,green \"npm run dev -w services/swissquote\" \"npm run dev -w services/partner\" \"npm run dev -w apps/web\"",
+    "test": "npm test -w packages/core",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "regtest:up": "docker compose -f tools/regtest/docker-compose.yml up -d",
+    "regtest:down": "docker compose -f tools/regtest/docker-compose.yml down",
+    "regtest:faucet": "node scripts/regtest-faucet.mjs",
+    "reset": "node scripts/reset.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.4",
+    "concurrently": "10.0.5",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2"
+  }
+}

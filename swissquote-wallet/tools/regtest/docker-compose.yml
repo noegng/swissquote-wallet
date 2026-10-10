@@ -1,0 +1,76 @@
+# Regtest Bitcoin local pour le développement, repris de Nigiri (vulpemventures/nigiri,
+# cmd/nigiri/resources/docker-compose.yml), réduit au strict nécessaire.
+# Chopsticks expose l'API esplora sur http://localhost:3000, plus POST /faucet {"address": "..."}
+# et un minage automatique à chaque POST /tx.
+# Lancement : npm run regtest:up   (Docker Desktop doit être démarré)
+
+services:
+  bitcoin:
+    image: ghcr.io/getumbrel/docker-bitcoind:v30.0
+    container_name: sqw-bitcoin
+    restart: on-failure
+    stop_grace_period: 30s
+    ports:
+      - 18443:18443
+    volumes:
+      - ./bitcoin.conf:/data/.bitcoin/bitcoin.conf:ro
+      - ./volumes/bitcoin:/data/.bitcoin/regtest
+
+  electrs:
+    image: ghcr.io/vulpemventures/electrs:latest
+    container_name: sqw-electrs
+    entrypoint:
+      - /build/electrs
+    command:
+      - -vvvv
+      - --network
+      - regtest
+      - --daemon-dir
+      - /config
+      - --daemon-rpc-addr
+      - bitcoin:18443
+      - --cookie
+      - admin1:123
+      - --http-addr
+      - 0.0.0.0:30000
+      - --electrum-rpc-addr
+      - 0.0.0.0:50000
+      - --cors
+      - "*"
+      - --jsonrpc-import
+    depends_on:
+      - bitcoin
+    volumes:
+      - ./volumes/bitcoin:/config/regtest
+    restart: unless-stopped
+
+  chopsticks:
+    image: ghcr.io/vulpemventures/nigiri-chopsticks:latest
+    container_name: sqw-chopsticks
+    command:
+      - --use-faucet
+      - --use-mining
+      - --use-logger
+      - --rpc-addr
+      - bitcoin:18443
+      - --electrs-addr
+      - electrs:30000
+      - --addr
+      - 0.0.0.0:3000
+    depends_on:
+      - bitcoin
+      - electrs
+    ports:
+      - 3000:3000
+    restart: unless-stopped
+
+  esplora:
+    image: ghcr.io/vulpemventures/esplora:latest
+    container_name: sqw-esplora
+    depends_on:
+      - chopsticks
+    environment:
+      API_URL: http://localhost:3000
+    ports:
+      - 5000:5000
+    restart: unless-stopped

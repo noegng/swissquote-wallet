@@ -1,3 +1,5 @@
+> **Document remplacé le 10 octobre 2026.** La conception à jour (multisig Bitcoin 2 sur 3 + clé de secours SLIP-39) est dans `../../swissquote-wallet-projet.md`, et les décisions dans `03-decisions.md`. Ce fichier décrit l'ancienne approche (smart account ERC-4337) et n'est plus maintenu.
+
 # Swissquote Self-Custody Wallet — Cadrage du projet
 
 > Hackathon BSA — Swissquote Wallet Prize. Équipe de 3, durée 33 h.

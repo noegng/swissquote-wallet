@@ -1,0 +1,15 @@
+{
+  "name": "@sqw/service-partner",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@fastify/cors": "11.3.0",
+    "@sqw/core": "*",
+    "fastify": "5.12.5"
+  }
+}

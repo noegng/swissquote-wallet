@@ -1,27 +1,55 @@
 # Références techniques
 
-Adresses relevées dans les documentations officielles lors de la recherche. **À revérifier sur Etherscan (Base Sepolia, id 84532) avant de les utiliser.**
+Relevées le 10 octobre 2026. **Toujours vérifier par un test avant de s'appuyer dessus.**
 
-| Brique | Adresse |
+## Bitcoin
+
+| Élément | Valeur |
 |---|---|
-| EntryPoint v0.7 | `0x0000000071727De22E5E9d8BAf0edAc6f37da032` |
-| Candide SocialRecoveryModule, délai 3 minutes (tests) | `0x949d01d424bE050D09C16025dd007CB59b3A8c66` |
-| Candide SocialRecoveryModule, 3 jours | `0x38275826E1933303E508433dD5f289315Da2541c` |
-| Candide SocialRecoveryModule, 7 jours | `0x088f6cfD8BB1dDb1BB069CCb3fc1A98927D233f2` |
-| Candide SocialRecoveryModule, 14 jours | `0x9BacD92F4687Db306D7ded5d4513a51EA05df25b` |
-| Safe passkeys v0.2.1, SafeWebAuthnSharedSigner | `0x94a4F6affBd8975951142c3999aEAB7ecee555c2` |
-| Safe passkeys v0.2.1, SignerSingleton | `0x4E27b51350e6c2083EE19011120F50DAfEc5CA50` |
-| Safe passkeys v0.2.1, SignerFactory | `0x1d31F259eE307358a26dFb23EB365939E8641195` |
-| DaimoP256Verifier | `0xc2b78104907F722DABAc4C69f826a522B2754De4` |
-| Zodiac Roles 2.1.1, mastercopy | `0xF2964CE6161ce0e75964Fe7927cE114cb0B283D5` |
-| Module Proxy Factory 1.2.0 | `0x000000000000aDdB49795b0f9bA5BC298cDda236` |
-| Pimlico, paymaster ERC-20 | `0x777777777777AeC03fd955926DbF81597e66834C` |
-| USDC (Base Sepolia) | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` |
+| Script du wallet | `wsh(sortedmulti(2, xpub_téléphone, xpub_swissquote, xpub_secours))` (P2WSH, clés triées) |
+| Chemin de dérivation | BIP-48 multisig : `m/48'/1'/0'/2'` sur testnet, signet et regtest (coin type 1, script type 2 = P2WSH) |
+| Préfixe d'adresse | `tb1…` (signet et testnet), `bcrt1…` (regtest) |
+| Seuil de poussière P2WSH | 330 sats |
 
-## Notes techniques
+## API esplora (mempool.space)
 
-- Précompile P-256 (RIP-7212 / EIP-7951) à l'adresse `0x100`. Présent sur Base depuis Fjord ; à confirmer sur Base Sepolia par une vraie UserOp, car un `eth_call` statique peut donner de faux positifs sur testnet.
-- Safe passkeys : le module partagé lie l'adresse à une passkey qui peut être perdue ; prévoir un second moyen d'accès.
-- Candide SocialRecoveryModule : confirmer / exécuter / finaliser (appelable par n'importe qui) / annuler (réservé au compte).
-- Zodiac Roles v2.1.1 et Delay Modifier : composition Safe → Delay → Roles. Les rôles ne s'appliquent pas aux propriétaires du Safe.
-- Argent : approche à retenir pour la vérification par emojis.
+| Usage | Signet | Regtest (Nigiri) |
+|---|---|---|
+| Base | `https://mempool.space/signet/api` | `http://localhost:3000` (à confirmer à l'installation) |
+| UTXO d'une adresse | `GET /address/:address/utxo` | idem |
+| Diffuser | `POST /tx` avec le hex brut en `Content-Type: text/plain` | idem |
+| Statut | `GET /tx/:txid/status` | idem |
+| Frais | `GET /v1/fees/recommended` (signet) | frais fixes en regtest |
+
+Explorateur signet : `https://mempool.space/signet/tx/<txid>`.
+
+Faucet signet : `https://bitcoinsignetfaucet.com` (1 000 à 10 000 sats par demande, 5 demandes par 24 h par IP et adresse). Préfinancer plusieurs adresses avant la démo.
+
+## Bibliothèques
+
+| Besoin | Bibliothèque | Remarque |
+|---|---|---|
+| PSBT, scripts | `bitcoinjs-lib` | Les versions récentes utilisent des `bigint` pour les montants ; vérifier la version installée |
+| Dérivation | `bip32` | Avec `@bitcoinerlab/secp256k1` (JS pur, sans WASM : plus simple dans Vite) |
+| Clés | `ecpair` | Idem |
+| SLIP-39 | `shamir-mnemonic-ts` ou `slip39` (ilap) | Choix au spike : vecteurs officiels (`vectors.json` de trezor/python-shamir-mnemonic) + interop Python |
+| SLIP-39 référence | `shamir-mnemonic` (Python, Trezor) | Interop uniquement |
+| Passkeys | `@simplewebauthn/browser`, `@simplewebauthn/server` | Extension PRF à tester sur les navigateurs de l'équipe |
+| Chiffrement des parts | WebCrypto (ECDH P-256 + HKDF + AES-GCM) | Natif navigateur et Node 22 |
+
+## SLIP-39
+
+- Spec : https://github.com/satoshilabs/slips/blob/master/slip-0039.md
+- Deux niveaux : seuil de groupes, puis seuil de membres dans chaque groupe.
+- Un groupe de seuil 1 doit avoir une seule part (sinon les parts ne diffèrent que par l'index).
+- Notre configuration : seuil de groupes 2, groupes `[[1,1], [1,1]]` = CLIENT, TIERS.
+
+## Pièges connus
+
+- `POST /tx` de mempool.space attend du `text/plain`, pas du JSON ; la bibliothèque `mempool.js` a eu un bug de nom de champ (`txhex`).
+- PSBT P2WSH : fournir `witnessUtxo` et `witnessScript` sur chaque entrée.
+- Signer avec deux clés dans deux processus : combiner les PSBT (`Psbt.combine`) avant `finalizeAllInputs`.
+
+## Ancienne approche (EVM, pour mémoire)
+
+Les adresses Base Sepolia (EntryPoint v0.7, Candide, Safe passkeys, Zodiac, Pimlico, USDC) relevées pour l'ancienne approche sont dans l'historique git de ce fichier (commit `12269d0`). Elles ne servent plus que pour l'option USDC.
