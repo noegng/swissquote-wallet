@@ -1,15 +1,15 @@
-// Lecture de la part CLIENT saisie par le client : papier (20 mots) ou copie cloud (fichier C2 +
-// phrase de passe). Utilisé par la récupération et par la sortie sans Swissquote.
+// Reads the CLIENT share entered by the client: paper (20 words) or cloud copy (C2 file +
+// passphrase). Used by the recovery and by the exit without Swissquote.
 import { openWithPassphrase, shareGroup, type PassphraseBox } from '@sqw/core';
 
-/** Part CLIENT depuis le papier : vérifie la somme de contrôle SLIP-39 et le groupe. */
+/** CLIENT share from paper: checks the SLIP-39 checksum and the group. */
 export function clientShareFromWords(words: string): string {
   const normalized = words.trim().toLowerCase().split(/\s+/).join(' ');
   if (shareGroup(normalized) !== 'client') throw new Error('These words are our partner’s share, not yours');
   return normalized;
 }
 
-/** Part CLIENT depuis la copie cloud (fichier C2 + phrase de passe). */
+/** CLIENT share from the cloud copy (C2 file + passphrase). */
 export async function clientShareFromFile(file: File, passphrase: string): Promise<string> {
   const json = JSON.parse(await file.text()) as { type?: string; box?: PassphraseBox };
   if (json.type !== 'swissquote-wallet/backup-c2' || !json.box) throw new Error('This is not an encrypted backup file');

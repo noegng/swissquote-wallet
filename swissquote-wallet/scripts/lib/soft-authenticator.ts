@@ -1,8 +1,8 @@
-// Authentificateur WebAuthn LOGICIEL, pour les scripts de test uniquement (jamais dans l'app :
-// dans l'app, c'est le navigateur et la puce de l'appareil qui jouent ce rôle).
-// Il permet de tester le vrai chemin de vérification du service (SimpleWebAuthn) sans navigateur.
-// Signature et empreintes : WebCrypto (ECDSA P-256, SHA-256). Encodage CBOR : @levischuck/tiny-cbor
-// (la bibliothèque utilisée par SimpleWebAuthn). Seule la mise en forme DER de la signature est ici.
+// SOFTWARE WebAuthn authenticator, for the test scripts only (never in the app:
+// in the app, the browser and the device's chip play this role).
+// It tests the service's real verification path (SimpleWebAuthn) without a browser.
+// Signatures and hashes: WebCrypto (ECDSA P-256, SHA-256). CBOR encoding: @levischuck/tiny-cbor
+// (the library SimpleWebAuthn uses). Only the DER formatting of the signature lives here.
 import { encodeCBOR } from '@levischuck/tiny-cbor';
 import type {
   AuthenticationResponseJSON,
@@ -26,7 +26,7 @@ const concat = (...parts: Uint8Array[]) => {
 };
 const uint32 = (n: number) => new Uint8Array([(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255]);
 
-/** Signature ECDSA brute (r || s, 64 octets, format WebCrypto) → DER, format attendu par WebAuthn. */
+/** Raw ECDSA signature (r || s, 64 bytes, WebCrypto format) → DER, the format WebAuthn expects. */
 function rawToDer(raw: Uint8Array): Uint8Array {
   const integer = (bytes: Uint8Array) => {
     let i = 0;

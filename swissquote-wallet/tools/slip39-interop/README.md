@@ -1,13 +1,13 @@
-# Interop SLIP-39
+# SLIP-39 interop
 
-Vérifie que notre wrapper `packages/core/src/backup.ts` (bibliothèque `shamir-mnemonic-ts`) est compatible avec la référence Python de Trezor (`shamir-mnemonic`), dans les deux sens. Les 45 vecteurs officiels sont testés côté JS par `npm test`.
+Checks that our wrapper `packages/core/src/backup.ts` (library `shamir-mnemonic-ts`) is compatible with Trezor's Python reference (`shamir-mnemonic`), in both directions. The 45 official vectors are tested on the JS side by `npm test`.
 
-**Validé le 10/10/2026** : JS → Python et Python → JS, avec refus d'une part de groupe seule.
+**Validated on 10/10/2026**: JS → Python and Python → JS, including the refusal of a single group's share.
 
 ```bash
 python -m venv .venv
-.venv/Scripts/python -m pip install -r requirements.txt   # macOS / Linux : .venv/bin/python
+.venv/Scripts/python -m pip install -r requirements.txt   # macOS / Linux: .venv/bin/python
 .venv/Scripts/python check.py
 ```
 
-`slip39` (ilap) a été écartée : elle modifie `String.prototype` et `Array.prototype`.
+`slip39` (ilap) was rejected: it modifies `String.prototype` and `Array.prototype`.

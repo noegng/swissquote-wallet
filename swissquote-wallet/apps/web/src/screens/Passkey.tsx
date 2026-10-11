@@ -12,7 +12,7 @@ import { Btn, Group, Icon, Row, Screen, Title } from '../ui';
 export interface PasskeyInfo {
   credentialDeviceType: string;
   synced: boolean;
-  /** Identifiant de la passkey créée sur cet appareil (déclaré à Swissquote en récupération). */
+  /** Id of the passkey created on this device (declared to Swissquote during a recovery). */
   credentialId: string;
 }
 
@@ -37,9 +37,9 @@ export function Passkey({
   session: Session;
   onDone: (info: PasskeyInfo) => void;
   title?: string;
-  /** Récupération : si l'appareil a déjà une passkey du client, proposer de l'utiliser. */
+  /** Recovery: if the device already holds one of the client's passkeys, offer to use it. */
   allowExisting?: boolean;
-  /** Retour à l’écran précédent (connexion, ou début de la récupération). */
+  /** Back to the previous screen (login, or start of the recovery). */
   onBack?: () => void;
 }) {
   const [platform, setPlatform] = useState<boolean | null>(null);
@@ -126,7 +126,7 @@ export function Passkey({
       {platform === false && (
         <p className="note">
           No biometric sensor found on this device: Chrome will offer a security key or a phone instead. For the
-          demo, see the virtual authenticator in docs/00-demarrage.md.
+          demo, see the virtual authenticator in docs/00-getting-started.md.
         </p>
       )}
       {error && <p className="error">{error}</p>}

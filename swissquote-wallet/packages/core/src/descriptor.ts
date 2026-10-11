@@ -1,12 +1,12 @@
-// Descripteur du wallet : wsh(sortedmulti(2, téléphone, swissquote, secours)).
+// Wallet descriptor: wsh(sortedmulti(2, phone, swissquote, backup)).
 import { payments, type Network } from 'bitcoinjs-lib';
 import { bip32, fromHex, type KeyOrigin } from './keys';
 
-export type Chain = 0 | 1; // 0 = réception, 1 = change
+export type Chain = 0 | 1; // 0 = receive, 1 = change
 
 export interface WalletPolicy {
   threshold: 2;
-  /** Ordre fixe : [téléphone, swissquote, secours]. Le script trie les clés de toute façon. */
+  /** Fixed order: [phone, swissquote, backup]. The script sorts the keys anyway. */
   keys: [phone: KeyOrigin, swissquote: KeyOrigin, backup: KeyOrigin];
 }
 
@@ -45,7 +45,7 @@ export function deriveAddress(
     pubkey: bip32.fromBase58(k.xpub, network).derive(chain).derive(index).publicKey,
     path: `${k.path}/${chain}/${index}`,
   }));
-  // sortedmulti (BIP-67) : clés publiques triées par ordre lexicographique des octets.
+  // sortedmulti (BIP-67): public keys sorted by lexicographic byte order.
   const pubkeys = bip32Derivation.map((d) => d.pubkey).sort(compareBytes);
   const p2wsh = payments.p2wsh({
     redeem: payments.p2ms({ m: policy.threshold, pubkeys, network }),
@@ -62,8 +62,8 @@ export function deriveAddress(
 }
 
 /**
- * Descripteur lisible (sans checksum), pour le kit de sortie et le registre Travel Rule.
- * Bitcoin Core calcule le checksum avec `getdescriptorinfo`.
+ * Readable descriptor (without checksum), for the exit kit and the Travel Rule registry.
+ * Bitcoin Core computes the checksum with `getdescriptorinfo`.
  */
 export function descriptorString(policy: WalletPolicy, chain: Chain): string {
   const keys = policy.keys

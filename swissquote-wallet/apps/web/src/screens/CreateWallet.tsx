@@ -1,6 +1,6 @@
-// Création du wallet (skills slip39-backup et custody-invariants).
-// Tout est généré sur l'appareil. La part TIERS part scellée chez le partenaire, la part CLIENT est
-// montrée (C1) puis chiffrée par phrase de passe (C2), et les deux sont oubliées à la fin.
+// Wallet creation (skills slip39-backup and custody-invariants).
+// Everything is generated on the device. The PARTNER share goes sealed to the partner, the CLIENT share is
+// shown (C1) then encrypted with a passphrase (C2), and both are forgotten at the end.
 import { useRef, useState } from 'react';
 import { createWalletMaterial, sealFor, type NewWalletMaterial, type WalletPolicy } from '@sqw/core';
 import { partner, sq, type Session } from '../api';
@@ -16,17 +16,17 @@ export function CreateWallet({
 }: {
   session: Session;
   onCreated: (w: StoredWallet) => void;
-  /** Retour : vers la récupération si le client en venait, sinon vers la connexion. */
+  /** Back: to the recovery if the client came from there, otherwise to the login. */
   onBack: () => void;
 }) {
   const [step, setStep] = useState<'intro' | 'working' | 'backup'>('intro');
   const [progress, setProgress] = useState<string[]>([]);
   const [error, setError] = useState('');
   const [walletId, setWalletId] = useState('');
-  // Part CLIENT : gardée en mémoire uniquement le temps de la sauvegarde, puis oubliée.
+  // CLIENT share: kept in memory only for the time of the backup, then forgotten.
   const [clientShare, setClientShare] = useState<string | null>(null);
-  // Étapes déjà réussies : « Try again » reprend où l'erreur s'est produite, au lieu de tout recréer
-  // (sinon chaque essai laisserait chez Swissquote un wallet orphelin, sans part chez le partenaire).
+  // Steps already done: "Try again" resumes where the error happened instead of recreating everything
+  // (otherwise each attempt would leave an orphan wallet at Swissquote, with no share at the partner).
   const done = useRef<{ m?: NewWalletMaterial; created?: { walletId: string; policy: WalletPolicy }; deposited?: boolean }>({});
 
   async function create() {

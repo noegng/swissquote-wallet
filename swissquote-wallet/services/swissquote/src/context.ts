@@ -1,4 +1,4 @@
-// [MOCK] État partagé du service Swissquote : réseau, clé, registre des wallets, notifications.
+// [MOCK] Shared state of the Swissquote service: network, key, wallet registry, notifications.
 import {
   descriptorString,
   networkConfig,
@@ -12,7 +12,7 @@ import { SwissquoteSigner } from './signer';
 import { audit, readJson, writeJson } from './store';
 
 export const cfg = networkConfig(
-  process.env.BTC_NETWORK as BtcNetworkName, // validé par env.ts
+  process.env.BTC_NETWORK as BtcNetworkName, // validated by env.ts
   process.env.BTC_NETWORK === 'signet' ? process.env.ESPLORA_URL_SIGNET : process.env.ESPLORA_URL_REGTEST,
 );
 
@@ -20,7 +20,7 @@ let signer = new SwissquoteSigner(cfg);
 export const getSigner = () => signer;
 export const resetSigner = () => (signer = new SwissquoteSigner(cfg));
 
-/** active : cosignature normale ; frozen : récupération en cours, aucun paiement ; recovered : fonds transférés. */
+/** active: normal cosigning; frozen: recovery in progress or client freeze, no payment; recovered: funds moved. */
 export type WalletStatus = 'active' | 'frozen' | 'recovered';
 
 export interface WalletRecord {
@@ -32,7 +32,7 @@ export interface WalletRecord {
   descriptor: string;
   createdAt: string;
   status?: WalletStatus;
-  /** Qui a gelé : une récupération en cours, ou le client lui-même (téléphone volé). */
+  /** Who froze it: a recovery in progress, or the client themselves (stolen phone). */
   frozenBy?: 'recovery' | 'client';
   recoveredTo?: string;
 }
@@ -44,7 +44,7 @@ export function saveWallet(record: WalletRecord): void {
   writeJson('wallets.json', { ...wallets(), [record.walletId]: record });
 }
 
-/** Crée un wallet 2 sur 3 pour ce client : Swissquote dérive une clé dédiée (nouveau compte BIP-48). */
+/** Creates a 2-of-3 wallet for this client: Swissquote derives a dedicated key (new BIP-48 account). */
 export function createWalletRecord(clientId: string, phoneKey: KeyOrigin, backupKey: KeyOrigin): WalletRecord {
   const account = Object.keys(wallets()).length + 1;
   const policy: WalletPolicy = { threshold: 2, keys: [phoneKey, signer.keyForAccount(account), backupKey] };
@@ -62,7 +62,7 @@ export function createWalletRecord(clientId: string, phoneKey: KeyOrigin, backup
   return record;
 }
 
-/** Montant lisible dans une alerte : « 0.0008 BTC », zéros de fin retirés. */
+/** Readable amount in an alert: "0.0008 BTC", trailing zeros removed. */
 export function btcAmount(sats: bigint | string | number | unknown): string {
   const v = BigInt(sats as bigint | string | number);
   const frac = (v % 100_000_000n).toString().padStart(8, '0').replace(/0+$/, '');

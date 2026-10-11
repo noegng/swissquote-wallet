@@ -1,9 +1,9 @@
-// « Swissquote a disparu » (invariant I3), en deux phases, avec le service Swissquote VRAIMENT arrêté :
-//   npm run demo:exit -- create   (services lancés) : crée et finance un wallet, garde l'état de test
-//   … arrêter le service Swissquote (port 4001) …
-//   npm run demo:exit -- exit     : sortie avec téléphone + secours ; vérifie que Swissquote ne répond plus
-// L'état de test (graine téléphone, part papier) est écrit dans scripts/.demo-exit.json (gitignoré,
-// regtest uniquement) : il joue le rôle du téléphone et du papier du client.
+// "Swissquote is gone" (invariant I3), in two phases, with the Swissquote service REALLY stopped:
+//   npm run demo:exit -- create   (services running): creates and funds a wallet, keeps the test state
+//   … stop the Swissquote service (port 4001) …
+//   npm run demo:exit -- exit     : exit with phone + backup key; checks that Swissquote no longer answers
+// The test state (phone seed, paper share) is written to scripts/.demo-exit.json (gitignored,
+// regtest only): it plays the role of the client's phone and paper.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
@@ -67,17 +67,17 @@ async function create() {
     paperC1: m.shares.client,
   };
   writeFileSync(STATE, JSON.stringify(state, null, 2));
-  console.log(`Wallet ${state.walletId} créé et financé : ${await balanceOf(state.policy)} sats`);
-  console.log('Arrêtez maintenant le service Swissquote, puis : npm run demo:exit -- exit');
+  console.log(`Wallet ${state.walletId} created and funded: ${await balanceOf(state.policy)} sats`);
+  console.log('Now stop the Swissquote service, then: npm run demo:exit -- exit');
 }
 
 async function exit() {
-  if (!existsSync(STATE)) throw new Error('Lancer d’abord : npm run demo:exit -- create');
+  if (!existsSync(STATE)) throw new Error('Run first: npm run demo:exit -- create');
   const s: ExitTestState = JSON.parse(readFileSync(STATE, 'utf8'));
 
   const sqAlive = await fetch(`${SQ}/health`).then(() => true, () => false);
-  console.log(`Service Swissquote joignable : ${sqAlive}`);
-  if (sqAlive) throw new Error('Le service Swissquote répond encore : arrêtez-le pour une vraie démonstration');
+  console.log(`Swissquote service reachable: ${sqAlive}`);
+  if (sqAlive) throw new Error('The Swissquote service still answers: stop it for a real demonstration');
 
   const device = await generateSealingKeyPair();
   const rel = await call('POST', `${PARTNER}/release`, {
@@ -85,17 +85,17 @@ async function exit() {
     clientId: s.clientId,
     devicePublicKey: await exportPublicJwk(device.publicKey),
   });
-  console.log(`Libération demandée au partenaire (sans Swissquote) : ${rel.json.releaseId}`);
+  console.log(`Release requested from the partner (without Swissquote): ${rel.json.releaseId}`);
   let released;
   for (let i = 0; i < 300; i++) {
     released = (await call('GET', `${PARTNER}/release/${rel.json.releaseId}`)).json;
     if (released.status === 'released') break;
-    if (i % 5 === 0) console.log(`  … délai du partenaire : ${released.secondsLeft} s`);
+    if (i % 5 === 0) console.log(`  … partner delay: ${released.secondsLeft} s`);
     await sleep(1000);
   }
   const tiers = await openSealed(released.sealedForDevice, device.privateKey);
   const backupRoot = backupRootFromShares([s.paperC1, tiers], cfg.network);
-  console.log(`Clé de secours reconstituée : ${accountOrigin(backupRoot).xpub === s.policy.keys[2].xpub}`);
+  console.log(`Backup key rebuilt: ${accountOrigin(backupRoot).xpub === s.policy.keys[2].xpub}`);
 
   const other = rootFromSeed(randomSeed(), cfg.network);
   const destination = deriveAddress(
@@ -110,14 +110,14 @@ async function exit() {
   signWithRoot(psbt, backupRoot);
   const { hex } = finalizeSpend(psbt);
   const txid = await esplora.broadcast(hex);
-  console.log(`Sortie signée téléphone + secours, diffusée : ${cfg.explorerTxUrl(txid)}`);
+  console.log(`Exit signed by phone + backup key, broadcast: ${cfg.explorerTxUrl(txid)}`);
   for (let i = 0; i < 20 && (await esplora.addressUtxos(destination)).length === 0; i++) await sleep(1000);
   const arrived = (await esplora.addressUtxos(destination)).reduce((t, u) => t + u.value, 0);
-  console.log(`Ancien wallet : ${await balanceOf(s.policy)} sats ; destination : ${arrived} sats`);
-  console.log('Swissquote n’a été contacté à aucun moment de la sortie.');
+  console.log(`Old wallet: ${await balanceOf(s.policy)} sats; destination: ${arrived} sats`);
+  console.log('Swissquote was not contacted at any point of the exit.');
 }
 
 const phase = process.argv[2];
 if (phase === 'create') await create();
 else if (phase === 'exit') await exit();
-else console.log('Usage : npm run demo:exit -- create | exit');
+else console.log('Usage: npm run demo:exit -- create | exit');

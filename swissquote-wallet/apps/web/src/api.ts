@@ -1,5 +1,5 @@
-// Clients HTTP des services mockés (Swissquote, partenaire). La session Swissquote est gardée en
-// mémoire et, si possible, dans sessionStorage (survit à un rechargement de page).
+// HTTP clients of the mocked services (Swissquote, partner). The Swissquote session is kept in
+// memory and, when possible, in sessionStorage (survives a page reload).
 import { config } from './config';
 
 export interface Session {
@@ -24,11 +24,11 @@ export function saveSession(session: Session | null): void {
     if (session) sessionStorage.setItem(KEY, JSON.stringify(session));
     else sessionStorage.removeItem(KEY);
   } catch {
-    // stockage indisponible (navigation privée) : la session reste en mémoire
+    // storage unavailable (private browsing): the session stays in memory
   }
 }
 
-/** Erreur renvoyée par un service : garde le code HTTP pour distinguer un refus (403, 423) d'une panne. */
+/** Error returned by a service: keeps the HTTP status to tell a refusal (403, 423) from an outage. */
 export class ApiError extends Error {
   constructor(
     message: string,

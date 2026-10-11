@@ -1,70 +1,72 @@
-# swissquote-wallet
+# swissquote-wallet (code)
 
-Wallet self-custody que Swissquote pourrait lancer pour ses clients. Projet d'une équipe de 3 pour le hackathon BSA (DoraHacks), parcours **Swissquote Wallet Prize**, durée 33 h.
+The code of the self-custody wallet Swissquote could launch for its clients. A team of 3 for the BSA hackathon (DoraHacks), **Swissquote Wallet Prize** track, 33 hours.
 
-> Présentation pour le jury (anglais) : [README à la racine du dépôt](../README.md) et rédaction complète [`docs/10-soumission-dorahacks.md`](docs/10-soumission-dorahacks.md). Ce fichier et le reste de `docs/` sont la documentation de travail de l'équipe, en français.
+> Presentation for the jury: the [README at the repository root](../README.md) and the full write-up [`docs/10-dorahacks-submission.md`](docs/10-dorahacks-submission.md). This file is the entry point for developers.
 
-Histoire démontrée : création → connexion et signature → perte du téléphone → récupération, avec de vraies transactions sur **Bitcoin signet**, et la sortie du client si Swissquote disparaît.
+Demonstrated story: creation → login and signing → lost phone → recovery, with real transactions on **Bitcoin signet**, and the client's exit if Swissquote disappears.
 
-## Idée en une phrase
+## The idea in one sentence
 
-Multisig Bitcoin 2 sur 3 où le client détient deux clés (téléphone et clé de secours) et Swissquote une seule (cosignataire avec plafonds et délais). La clé de secours est sauvegardée en SLIP-39 de sorte que ni Swissquote, ni Swissquote avec le partenaire, ne puisse la reconstituer.
+A 2-of-3 Bitcoin multisig where the client holds two keys (phone and backup key) and Swissquote only one (a cosigner with limits and delays). The backup key is stored with SLIP-39 so that neither Swissquote, nor Swissquote together with the partner, can rebuild it.
 
 ## Architecture
 
-![Architecture : téléphone (réel), Swissquote et partenaire (mockés, processus séparés), réseau Bitcoin (réel)](docs/architecture.svg)
+![Architecture: phone (real), Swissquote and partner (mocked, separate processes), Bitcoin network (real)](docs/architecture.svg)
 
-Vert : réel. Jaune : mocké (processus séparé avec son propre stockage). Version éditable : [FigJam](https://www.figma.com/board/K9aqAWBiat2GuFXFnHhvN5).
+Green: real. Yellow: mocked (separate process with its own storage). Rendered diagram with the data flows: [root README](../README.md#2-architecture).
 
-## Ce qui est réel et ce qui est mocké
+## What is real and what is mocked
 
-| Composant | Statut |
+| Component | Status |
 |---|---|
-| Multisig 2 sur 3, PSBT, signatures, transactions signet | Réel |
-| Sauvegarde SLIP-39 à groupes, chiffrement des parts | Réel (bibliothèque validée par les vecteurs officiels) |
-| Passkeys WebAuthn | Réel |
-| Service Swissquote (KYC, cosignataire, notifications) | **MOCK**, processus séparé, stockage propre, clé en fichier local |
-| Service partenaire (part TIERS) | **MOCK**, processus séparé, stockage propre |
-| Liste de sanctions, cloud de C2, continuité bancaire | **MOCK** |
+| 2-of-3 multisig, PSBTs, signatures, signet transactions | Real |
+| SLIP-39 backup with groups, share encryption | Real (library validated against the official vectors) |
+| WebAuthn passkeys | Real |
+| Swissquote service (KYC, cosigner, notifications) | **MOCK**, separate process, own storage, key in a local file |
+| Partner service (PARTNER share) | **MOCK**, separate process, own storage |
+| Sanctions list, cloud storage of C2, banking continuity | **MOCK** |
 
-Détail et exigences de production : `docs/06-prototype-vers-production.md`.
+Details and production requirements: `docs/06-prototype-to-production.md`.
 
-## Contenu
+## Contents
 
-| Chemin | Rôle |
+| Path | Role |
 |---|---|
-| `CLAUDE.md` | Contexte pour les sessions Claude |
-| `docs/01-brief-hackathon.md` | Brief officiel et barème |
-| `docs/03-decisions.md` | Décisions, invariants de custody, spike (**fait foi**) |
-| `docs/04-precedents.md` | Projets proches (Bitkey, Casa, Ledger Recover…) |
-| `docs/05-differenciation.md` | Comment se démarquer |
-| `docs/06-prototype-vers-production.md` | Démontré, mocké, requis en production |
-| `docs/07-connecteurs-et-outils.md` | Connecteurs, skills, outils |
-| `docs/08-references-techniques.md` | API signet, bibliothèques, pièges connus |
-| `docs/09-plan-de-build.md` | Tâches par personne et par phase |
-| `docs/10-soumission-dorahacks.md` | Rédaction de la soumission DoraHacks (anglais) |
-| `docs/preuves.md` | Transactions publiques sur signet |
-| `../swissquote-wallet-projet.md` | Document de conception complet |
-| `packages/core` | Bibliothèque partagée : clés, descripteur, PSBT, SLIP-39, chiffrement |
-| `apps/web` | Web app mobile (Vite + React) |
-| `services/swissquote` | Mock du cosignataire Swissquote |
-| `services/partner` | Mock du partenaire détenteur de la part TIERS |
-| `tools/slip39-interop` | Vérification avec la référence Python de Trezor |
-| `scripts/` | Scénarios de démo rejouables |
+| `CLAUDE.md` | Context for Claude sessions |
+| `docs/00-getting-started.md` | Step-by-step setup and troubleshooting |
+| `docs/01-hackathon-brief.md` | Official brief and scoring |
+| `docs/02-initial-design-superseded.md` | First design (ERC-4337), kept for reference |
+| `docs/03-decisions.md` | Decisions, custody invariants, spike (**authoritative**) |
+| `docs/04-prior-art.md` | Related projects (Bitkey, Casa, Ledger Recover…) |
+| `docs/05-differentiation.md` | How we stand out |
+| `docs/06-prototype-to-production.md` | Demonstrated, mocked, required in production |
+| `docs/07-connectors-and-tools.md` | Connectors, skills, tools |
+| `docs/08-technical-references.md` | Signet API, libraries, known pitfalls |
+| `docs/09-build-plan.md` | Tasks per person and per phase |
+| `docs/10-dorahacks-submission.md` | DoraHacks submission write-up |
+| `docs/proofs.md` | Public transactions on signet |
+| `../swissquote-wallet-design.md` | Full design document |
+| `packages/core` | Shared library: keys, descriptor, PSBT, SLIP-39, encryption |
+| `apps/web` | Mobile web app (Vite + React) |
+| `services/swissquote` | Mock of the Swissquote cosigner |
+| `services/partner` | Mock of the partner holding the PARTNER share |
+| `tools/slip39-interop` | Check against Trezor's Python reference |
+| `tools/regtest` | Optional local Bitcoin network (Docker) |
+| `scripts/` | Replayable demo and attack scenarios |
 
-## Barème
+## Scoring
 
-Technique 35, sécurité et custody 20, juridique 15, business 15, UX et pitch 15, plus jusqu'à 20 points de bonus si create → sign → recover marche de bout en bout.
+Technical 35, security and custody 20, legal 15, business 15, UX and pitch 15, plus up to 20 bonus points if create → sign → recover works end to end.
 
-## Démarrage
+## Getting started
 
-Guide pas à pas : `docs/00-demarrage.md`. En résumé, dans ce dossier :
+Step-by-step guide: `docs/00-getting-started.md`. In short, in this folder:
 
 ```bash
-npm install && cp .env.example .env   # BTC_NETWORK=regtest (local) ou signet (public)
-npm run regtest:up     # Docker Desktop doit être ouvert (inutile sur signet)
-npm run dev:all        # puis ouvrir http://localhost:5173
+npm install && cp .env.example .env   # BTC_NETWORK=signet by default: no Docker needed
+npm run dev:all        # then open http://localhost:5173
 npm test               # 79 tests
 ```
 
-Délais de démo : 30 s pour une récupération, 20 s pour un gros paiement (7 jours et 24 h à 7 jours en production).
+Fund the wallet from a signet faucet (*Transfers → Receive bitcoin* gives the address). Demo delays: 30 s for a recovery, 20 s for a large payment (7 days, and 24 h to 7 days, in production). For development, an optional local regtest network: `npm run regtest:up` (Docker) and `BTC_NETWORK=regtest`.

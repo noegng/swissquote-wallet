@@ -1,7 +1,7 @@
-// Côté JS de l'interop SLIP-39 (appelé par check.py, ne pas lancer seul).
-// Lit du JSON sur stdin, répond du JSON sur stdout.
+// JS side of the SLIP-39 interop (called by check.py, do not run it alone).
+// Reads JSON on stdin, answers JSON on stdout.
 //   {"op":"split"}                      → {"secret": hex, "client": m, "tiers": m}
-//   {"op":"combine","mnemonics":[...]}  → {"secret": hex} ou {"error": "..."}
+//   {"op":"combine","mnemonics":[...]}  → {"secret": hex} or {"error": "..."}
 import { combineBackupShares, newBackupSecret, splitBackupSecret, toHex } from '../../packages/core/src/index';
 
 let input = '';

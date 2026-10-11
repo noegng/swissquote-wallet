@@ -1,5 +1,5 @@
-// Génération et dérivation des clés (BIP-32 / BIP-48). Aucune primitive écrite à la main :
-// bip32 + @bitcoinerlab/secp256k1, aléa via WebCrypto (navigateur et Node).
+// Key generation and derivation (BIP-32 / BIP-48). No hand-written primitive:
+// bip32 + @bitcoinerlab/secp256k1, randomness from WebCrypto (browser and Node).
 import * as ecc from '@bitcoinerlab/secp256k1';
 import { BIP32Factory, type BIP32Interface } from 'bip32';
 import { initEccLib, type Network } from 'bitcoinjs-lib';
@@ -8,18 +8,18 @@ initEccLib(ecc);
 export const bip32 = BIP32Factory(ecc);
 export { ecc };
 
-/** Chemin de compte BIP-48 multisig P2WSH sur les réseaux de test (coin type 1, script type 2). */
+/** BIP-48 multisig P2WSH account path on test networks (coin type 1, script type 2). */
 export function accountPath(account = 0): string {
   return `m/48'/1'/${account}'/2'`;
 }
 
-/** Clé publique de compte avec son origine, telle qu'elle apparaît dans le descripteur. */
+/** Account public key with its origin, as it appears in the descriptor. */
 export interface KeyOrigin {
-  /** Empreinte de la racine (8 caractères hex). */
+  /** Root fingerprint (8 hex characters). */
   fingerprint: string;
-  /** Chemin de la racine au compte, ex. m/48'/1'/0'/2'. */
+  /** Path from the root to the account, e.g. m/48'/1'/0'/2'. */
   path: string;
-  /** xpub (tpub) du compte. */
+  /** Account xpub (tpub). */
   xpub: string;
 }
 

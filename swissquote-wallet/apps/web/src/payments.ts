@@ -1,8 +1,8 @@
-// Envoi d'un paiement (skills btc-multisig et custody-invariants) :
-//   1. l'app construit la PSBT et en vérifie elle-même le résumé (destinataire, montant, frais, change) ;
-//   2. le client approuve par passkey : le défi porte l'empreinte de cette PSBT précise ;
-//   3. l'app signe avec la clé du téléphone, Swissquote cosigne selon ses règles ;
-//   4. l'app combine, finalise et diffuse.
+// Sending a payment (skills btc-multisig and custody-invariants):
+//   1. the app builds the PSBT and checks its summary itself (recipient, amount, fee, change);
+//   2. the client approves with the passkey: the challenge carries the hash of this exact PSBT;
+//   3. the app signs with the phone key, Swissquote cosigns according to its rules;
+//   4. the app combines, finalizes and broadcasts.
 import { startAuthentication } from '@simplewebauthn/browser';
 import {
   buildSpend,
@@ -17,13 +17,14 @@ import {
   type SpendSummary,
 } from '@sqw/core';
 import { sq } from './api';
+import { chainTouched } from './chainWatch';
 import { btc } from './config';
 import { clearPending, savePending, unlockPhoneSeed, type PendingPayment, type StoredWallet } from './keystore';
 
 export const esplora = new Esplora(btc);
 
-// Les estimations de frais signet sont parfois aberrantes (68 sat/vB constaté le 10/10/2026) :
-// plafond à 5 sat/vB sur ce réseau de test. Regtest : frais fixes.
+// Signet fee estimates are sometimes absurd (68 sat/vB seen on 10/10/2026):
+// capped at 5 sat/vB on this test network. Regtest: fixed fees.
 const MAX_SIGNET_FEE_RATE = 5;
 
 export async function currentFeeRate(): Promise<number> {
@@ -48,12 +49,12 @@ export async function preparePayment(wallet: StoredWallet, to: string, amount: b
     currentFeeRate(),
   ]);
   const { psbt } = buildSpend({ policy: wallet.policy, network: btc.network, utxos, to, amount, feeRate, changeIndex });
-  // L'app vérifie sa propre PSBT avec sa clé : ce qu'elle affiche est ce qui sera signé.
+  // The app checks its own PSBT with its key: what it shows is what will be signed.
   const summary = summarizeSpend(psbt, wallet.policy, btc.network, wallet.policy.keys[0]);
   return { psbt: psbt.toBase64(), to, amount, summary, feeRate };
 }
 
-/** Approbation par passkey (Windows Hello, Touch ID, Face ID) liée à une opération précise. */
+/** Passkey approval (Windows Hello, Touch ID, Face ID) bound to one specific operation. */
 export async function approve(walletId: string, purpose: 'cosign' | 'cancel' | 'unfreeze', payload: string) {
   const optionsJSON = await sq('/webauthn/operation/options', { walletId, purpose, payload });
   return startAuthentication({ optionsJSON });
@@ -68,10 +69,12 @@ async function signWithPhone(wallet: StoredWallet, psbt: string): Promise<string
   }
 }
 
-/** Diffusion rejouable : une transaction déjà diffusée (réponse perdue) compte comme envoyée. */
+/** Replayable broadcast: a transaction already broadcast (lost response) counts as sent. */
 async function broadcast(appSigned: string, sqSigned: string) {
   const { hex, txid } = finalizeSpend(combinePsbts([appSigned, sqSigned], btc.network));
   await esplora.broadcastOnce(hex, txid);
+  // The wallet just changed: the home screen must read it again instead of trusting what it kept.
+  chainTouched();
   return { status: 'sent' as const, txid, url: btc.explorerTxUrl(txid) };
 }
 
@@ -91,7 +94,7 @@ export async function submitPayment(wallet: StoredWallet, p: PreparedPayment): P
   return { status: 'pending', pending, reason: r.reason };
 }
 
-/** Interroge Swissquote : une fois le délai écoulé (et sans annulation), le paiement est cosigné et diffusé. */
+/** Polls Swissquote: once the delay is over (and without cancellation), the payment is cosigned and broadcast. */
 export async function checkPending(
   wallet: StoredWallet,
   pending: PendingPayment,
@@ -112,8 +115,8 @@ export async function checkPending(
       await clearPending(wallet.walletId);
       return sent;
     } catch (e) {
-      // Fonds déjà dépensés par une autre transaction : ce paiement ne partira jamais, on l'abandonne
-      // au lieu de bloquer l'app. Autre erreur (réseau) : on réessaiera au prochain passage.
+      // Funds already spent by another transaction: this payment will never leave, so drop it
+      // instead of blocking the app. Any other error (network): retry on the next pass.
       if (!(e instanceof StaleTransactionError)) throw e;
       await clearPending(wallet.walletId);
       return { status: 'failed', reason: 'Its funds were already spent by another transaction, so it was not sent.' };

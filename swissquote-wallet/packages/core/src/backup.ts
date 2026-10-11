@@ -1,11 +1,11 @@
-// Sauvegarde de la clé de secours en SLIP-39 à groupes (skill slip39-backup).
-// Seul module qui importe la bibliothèque SLIP-39 : le reste du code passe par ici.
+// Backup key stored as SLIP-39 with groups (skill slip39-backup).
+// The only module that imports the SLIP-39 library: the rest of the code goes through here.
 //
-// Configuration figée (invariants I2 et I5, voir docs/03-decisions.md) :
-//   seuil de groupes 2, groupes [[1,1], [1,1]] = CLIENT et TIERS.
-//   CLIENT : une mnémonique, stockée sur papier (C1) et chiffrée dans le cloud (C2).
-//   TIERS  : une mnémonique, confiée au partenaire. Swissquote n'a aucune part.
-// Ne jamais passer à 3 groupes avec un seuil de 2 : C1 + C2 suffiraient sans partenaire.
+// Fixed configuration (invariants I2 and I5, see docs/03-decisions.md):
+//   group threshold 2, groups [[1,1], [1,1]] = CLIENT and PARTNER ("tiers").
+//   CLIENT:  one mnemonic, kept on paper (C1) and encrypted in the cloud (C2).
+//   PARTNER: one mnemonic, entrusted to the partner. Swissquote holds no share.
+// Never move to 3 groups with a threshold of 2: C1 + C2 would be enough without the partner.
 import { Buffer } from 'buffer';
 import { combineMnemonics, generateMnemonics, Share } from 'shamir-mnemonic-ts';
 import { randomSeed } from './keys';
@@ -16,13 +16,13 @@ const GROUPS: Array<[number, number]> = [
   [1, 1], // TIERS
 ];
 
-/** 16 octets = 128 bits : mnémoniques de 20 mots, seed BIP-32 valide. */
+/** 16 bytes = 128 bits: 20-word mnemonics, a valid BIP-32 seed. */
 export const BACKUP_SECRET_BYTES = 16;
 
 export interface BackupShares {
-  /** Mnémonique du groupe CLIENT (C1 papier, C2 copie chiffrée). */
+  /** Mnemonic of the CLIENT group (C1 on paper, C2 encrypted copy). */
   client: string;
-  /** Mnémonique du groupe TIERS (partenaire). */
+  /** Mnemonic of the PARTNER group. */
   tiers: string;
 }
 
@@ -36,21 +36,21 @@ export function splitBackupSecret(secret: Uint8Array): BackupShares {
 }
 
 /**
- * Reconstitue le secret de la clé de secours. À n'appeler que sur l'appareil du client (I5),
- * et ne jamais persister ni transmettre le résultat. Lève une erreur si les parts ne suffisent pas.
+ * Rebuilds the backup key secret. Call it on the client's device only (I5),
+ * and never store or send the result. Throws if the shares are not enough.
  */
 export function combineBackupShares(mnemonics: string[]): Uint8Array {
   return new Uint8Array(combineMnemonics(mnemonics.map((m) => m.trim().toLowerCase().split(/\s+/).join(' '))));
 }
 
 /**
- * Identifie une part saisie par le client (somme de contrôle SLIP-39 comprise) : 'client' ou 'tiers'.
- * Lève une erreur si la mnémonique est invalide (mot inconnu, faute de frappe) ou d'un autre schéma.
+ * Identifies a share typed by the client (SLIP-39 checksum included): 'client' or 'tiers' (partner).
+ * Throws if the mnemonic is invalid (unknown word, typo) or belongs to another scheme.
  */
 export function shareGroup(mnemonic: string): 'client' | 'tiers' {
   const share = Share.fromMnemonic(mnemonic.trim().toLowerCase().split(/\s+/).join(' '));
   if (share.groupThreshold !== GROUP_THRESHOLD || share.groupCount !== GROUPS.length) {
-    throw new Error('Part SLIP-39 valide, mais pas une part de sauvegarde Swissquote Wallet');
+    throw new Error('Valid SLIP-39 share, but not a Swissquote Wallet backup share');
   }
   return share.groupIndex === 0 ? 'client' : 'tiers';
 }

@@ -1,6 +1,6 @@
-// Analyse d'une PSBT par rapport au descripteur du client. Utilisée par le cosignataire Swissquote
-// pour vérifier la transaction indépendamment de l'app (une app compromise peut mentir), et par
-// l'app pour afficher un résumé en clair avant signature.
+// Analysis of a PSBT against the client's descriptor. Used by the Swissquote cosigner
+// to check the transaction independently of the app (a compromised app can lie), and by
+// the app to show a plain-language summary before signing.
 import type { Psbt, Network } from 'bitcoinjs-lib';
 import { deriveAddress, type Chain, type WalletPolicy } from './descriptor';
 import type { KeyOrigin } from './keys';
@@ -8,11 +8,11 @@ import { toHex } from './keys';
 
 export interface SpendSummary {
   inputTotal: bigint;
-  /** Sorties qui quittent le wallet (destinataires). */
+  /** Outputs that leave the wallet (recipients). */
   external: { address: string; value: bigint }[];
-  /** Total envoyé hors du wallet. */
+  /** Total sent out of the wallet. */
   sentExternal: bigint;
-  /** Total qui revient au wallet (change). */
+  /** Total that comes back to the wallet (change). */
   change: bigint;
   fee: bigint;
 }
@@ -21,7 +21,7 @@ function equalBytes(a?: Uint8Array, b?: Uint8Array): boolean {
   return !!a && !!b && a.length === b.length && a.every((x, i) => x === b[i]);
 }
 
-/** Retrouve (chaîne, index) d'un chemin `…/compte/chaîne/index` appartenant à cette clé. */
+/** Finds (chain, index) from a `…/account/chain/index` path that belongs to this key. */
 function chainIndexFor(
   derivations: { masterFingerprint: Uint8Array; path: string }[] | undefined,
   key: KeyOrigin,
@@ -36,9 +36,9 @@ function chainIndexFor(
 }
 
 /**
- * Vérifie que chaque entrée appartient au descripteur du client et classe chaque sortie en
- * change (vérifié par re-dérivation) ou destinataire externe. Lève une erreur sinon.
- * `ownKey` : la clé du vérificateur (ex. Swissquote), utilisée pour lire les chemins de dérivation.
+ * Checks that every input belongs to the client's descriptor and classifies each output as
+ * change (checked by re-deriving it) or external recipient. Throws otherwise.
+ * `ownKey`: the verifier's key (e.g. Swissquote), used to read the derivation paths.
  */
 export function summarizeSpend(
   psbt: Psbt,
@@ -49,13 +49,13 @@ export function summarizeSpend(
   let inputTotal = 0n;
   psbt.data.inputs.forEach((input, i) => {
     const at = chainIndexFor(input.bip32Derivation, ownKey);
-    if (!at || !input.witnessUtxo) throw new Error(`Entrée ${i} étrangère au wallet`);
+    if (!at || !input.witnessUtxo) throw new Error(`Input ${i} is foreign to the wallet`);
     const expected = deriveAddress(policy, at.chain, at.index, network);
     if (
       !equalBytes(input.witnessUtxo.script, expected.output) ||
       !equalBytes(input.witnessScript, expected.witnessScript)
     ) {
-      throw new Error(`Entrée ${i} : script différent du descripteur du client`);
+      throw new Error(`Input ${i}: script differs from the client's descriptor`);
     }
     inputTotal += input.witnessUtxo.value;
   });
@@ -69,11 +69,11 @@ export function summarizeSpend(
       at.chain === 1 &&
       equalBytes(out.script, deriveAddress(policy, 1, at.index, network).output);
     if (isChange) change += out.value;
-    else external.push({ address: out.address ?? '(script inconnu)', value: out.value });
+    else external.push({ address: out.address ?? '(unknown script)', value: out.value });
   });
 
   const sentExternal = external.reduce((s, o) => s + o.value, 0n);
   const fee = inputTotal - sentExternal - change;
-  if (fee < 0n) throw new Error('Frais négatifs : PSBT incohérente');
+  if (fee < 0n) throw new Error('Negative fee: inconsistent PSBT');
   return { inputTotal, external, sentExternal, change, fee };
 }

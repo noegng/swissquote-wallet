@@ -1,11 +1,11 @@
-// QR codes : affichage (adresse de réception, lien d'invitation) et lecture par la caméra ou depuis
-// une image (adresse du destinataire). Bibliothèques : qrcode (génération), jsqr (lecture).
+// QR codes: display (receive address, invitation link) and reading with the camera or from
+// an image (recipient address). Libraries: qrcode (generation), jsqr (reading).
 import { useEffect, useMemo, useRef, useState } from 'react';
 import jsQR from 'jsqr';
 import QRCode from 'qrcode';
 import { Btn } from './ui';
 
-/** QR code dessiné en SVG, modules sombres sur fond blanc. */
+/** QR code drawn as SVG, dark modules on a white background. */
 export function QrCode({ value, label }: { value: string; label: string }) {
   const { size, path } = useMemo(() => {
     const { modules } = QRCode.create(value, { errorCorrectionLevel: 'M' });
@@ -17,7 +17,7 @@ export function QrCode({ value, label }: { value: string; label: string }) {
     }
     return { size: modules.size, path: d };
   }, [value]);
-  // Marge de 4 modules autour du code, exigée pour une lecture fiable.
+  // A 4-module quiet zone around the code, required for reliable reading.
   return (
     <svg className="qr" viewBox={`-4 -4 ${size + 8} ${size + 8}`} role="img" aria-label={label} shapeRendering="crispEdges">
       <rect x={-4} y={-4} width={size + 8} height={size + 8} fill="#fff" />
@@ -26,12 +26,12 @@ export function QrCode({ value, label }: { value: string; label: string }) {
   );
 }
 
-/** Contenu d'un QR de paiement : adresse seule, ou URI BIP-21 « bitcoin:adresse?amount=0.001 ». */
+/** Content of a payment QR: an address alone, or a BIP-21 URI "bitcoin:address?amount=0.001". */
 export function parsePaymentCode(text: string): { address: string; amount?: string } {
   const raw = text.trim();
   const uri = /^bitcoin:([^?]+)(?:\?(.*))?$/i.exec(raw);
   let address = uri ? uri[1] : raw;
-  // Les QR en majuscules (plus compacts) portent des adresses bech32, insensibles à la casse.
+  // Uppercase QRs (more compact) carry bech32 addresses, which are case-insensitive.
   if (address === address.toUpperCase()) address = address.toLowerCase();
   const amount = uri?.[2] ? new URLSearchParams(uri[2]).get('amount') : null;
   return { address, amount: amount && /^\d+(\.\d{1,8})?$/.test(amount) ? amount : undefined };
@@ -46,13 +46,13 @@ function decode(source: CanvasImageSource, width: number, height: number, canvas
   return jsQR(ctx.getImageData(0, 0, width, height).data, width, height)?.data || null;
 }
 
-/** Lit un QR code avec la caméra de l'appareil, ou dans une image choisie par le client. */
+/** Reads a QR code with the device camera, or from an image chosen by the client. */
 export function QrScanner({ onResult }: { onResult: (text: string) => void }) {
   const video = useRef<HTMLVideoElement>(null);
   const canvas = useRef(document.createElement('canvas'));
   const file = useRef<HTMLInputElement>(null);
   const [error, setError] = useState('');
-  // Faux si la caméra est absente ou refusée : il reste le choix d'une image.
+  // False if the camera is missing or denied: choosing an image remains possible.
   const [camera, setCamera] = useState(true);
   const done = useRef(onResult);
   done.current = onResult;
@@ -103,7 +103,7 @@ export function QrScanner({ onResult }: { onResult: (text: string) => void }) {
     if (!f) return;
     try {
       const bitmap = await createImageBitmap(f);
-      // Image ramenée à 1000 px au plus : assez pour un QR, et rapide à analyser.
+      // Image scaled down to 1000 px at most: enough for a QR, and quick to analyse.
       const scale = Math.min(1, 1000 / Math.max(bitmap.width, bitmap.height));
       const text = decode(bitmap, Math.round(bitmap.width * scale), Math.round(bitmap.height * scale), canvas.current);
       if (text) done.current(text);

@@ -1,7 +1,7 @@
-// [MOCK] Connexion Swissquote (KYC déjà fait, simulé) et passkeys WebAuthn (réel, SimpleWebAuthn).
-// La passkey est créée par le navigateur dans la puce de l'appareil (Secure Enclave, TPM via
-// Windows Hello…). Chaque opération sensible exige une assertion fraîche dont le défi est lié à
-// l'opération : empreinte de la PSBT pour une cosignature, identifiant pour une annulation.
+// [MOCK] Swissquote login (KYC already done, simulated) and WebAuthn passkeys (real, SimpleWebAuthn).
+// The passkey is created by the browser in the device's chip (Secure Enclave, TPM via
+// Windows Hello…). Every sensitive operation requires a fresh assertion whose challenge is bound to
+// the operation: PSBT hash for a cosignature, request id for a cancellation.
 import { createHash, randomBytes } from 'node:crypto';
 import {
   generateAuthenticationOptions,
@@ -16,7 +16,7 @@ import { audit, readJson, writeJson } from './store';
 const RP_ID = process.env.RP_ID ?? 'localhost';
 const RP_NAME = process.env.RP_NAME ?? 'Swissquote Wallet (MOCK)';
 const ORIGINS = (process.env.ORIGIN ?? 'http://localhost:5173').split(',').map((o) => o.trim());
-// L'invite Windows Hello / Face ID peut mettre du temps à apparaître : 120 s pour l'invite, 3 min pour le défi.
+// The Windows Hello / Face ID prompt can take a while to appear: 120 s for the prompt, 3 min for the challenge.
 const WEBAUTHN_TIMEOUT_MS = 120_000;
 const CHALLENGE_TTL_MS = 3 * 60 * 1000;
 
@@ -48,7 +48,7 @@ function saveChallenge(challenge: string, record: StoredChallenge) {
   writeJson('challenges.json', { ...all, [challenge]: record });
 }
 
-/** Consomme un défi (usage unique) et vérifie qu'il correspond à ce qui est attendu. */
+/** Consumes a challenge (single use) and checks that it matches what is expected. */
 function consumeChallenge(challenge: string, expected: Omit<StoredChallenge, 'expiresAt'>): boolean {
   const all = challenges();
   const record = all[challenge];
@@ -64,14 +64,14 @@ function consumeChallenge(challenge: string, expected: Omit<StoredChallenge, 'ex
   );
 }
 
-// --- Connexion Swissquote mockée -----------------------------------------------------------
+// --- Mocked Swissquote login ---------------------------------------------------------------
 
 export function login(clientId: string): string | null {
   if (!/^[a-z0-9-]{3,40}$/.test(clientId)) return null;
   const token = randomBytes(24).toString('base64url');
   const sessions = readJson<Record<string, { clientId: string; at: string }>>('sessions.json', {});
   writeJson('sessions.json', { ...sessions, [token]: { clientId, at: new Date().toISOString() } });
-  audit('kyc.login', { clientId, note: 'MOCK : KYC supposé déjà fait par Swissquote' });
+  audit('kyc.login', { clientId, note: 'MOCK: KYC assumed to be done by Swissquote already' });
   return token;
 }
 
@@ -85,14 +85,14 @@ export function hasPasskey(clientId: string): boolean {
   return (credentials()[clientId] ?? []).length > 0;
 }
 
-// --- Enregistrement d'une passkey ----------------------------------------------------------
+// --- Passkey registration ------------------------------------------------------------------
 
 export async function registrationOptions(clientId: string) {
   const options = await generateRegistrationOptions({
     rpName: RP_NAME,
     rpID: RP_ID,
     userName: clientId,
-    userDisplayName: `Client Swissquote ${clientId}`,
+    userDisplayName: `Swissquote client ${clientId}`,
     attestationType: 'none',
     timeout: WEBAUTHN_TIMEOUT_MS,
     authenticatorSelection: { residentKey: 'preferred', userVerification: 'required' },
@@ -110,7 +110,7 @@ export async function verifyRegistration(clientId: string, response: Registratio
     expectedRPID: RP_ID,
     requireUserVerification: true,
   });
-  if (!result.verified) throw new Error('Passkey refusée');
+  if (!result.verified) throw new Error('Passkey rejected');
   const { credential, credentialDeviceType, credentialBackedUp } = result.registrationInfo;
   const all = credentials();
   (all[clientId] ??= []).push({
@@ -121,7 +121,7 @@ export async function verifyRegistration(clientId: string, response: Registratio
     createdAt: new Date().toISOString(),
   });
   writeJson('credentials.json', all);
-  // credentialBackedUp = passkey synchronisée (ex. iCloud Keychain) : à traiter différemment en production.
+  // credentialBackedUp = synced passkey (e.g. iCloud Keychain): to be handled differently in production.
   audit('passkey.registered', { clientId, credentialDeviceType, synced: credentialBackedUp });
   return { credentialDeviceType, synced: credentialBackedUp };
 }
@@ -131,9 +131,9 @@ export function credentialBelongsTo(clientId: string, credentialId: string): boo
 }
 
 /**
- * Fin de récupération : révoque toutes les passkeys du client sauf celle du nouvel appareil
- * (celle du téléphone perdu ne doit plus pouvoir annuler ni approuver quoi que ce soit).
- * Renvoie le nombre de passkeys révoquées.
+ * End of recovery: revokes all of the client's passkeys except the new device's
+ * (the lost phone's must no longer be able to cancel or approve anything).
+ * Returns the number of revoked passkeys.
  */
 export function revokeCredentialsExcept(clientId: string, keepId: string): number {
   const all = credentials();
@@ -145,14 +145,14 @@ export function revokeCredentialsExcept(clientId: string, keepId: string): numbe
   return revoked;
 }
 
-// --- Actions de protection ------------------------------------------------------------------
+// --- Protective actions -----------------------------------------------------------------------
 
 /**
- * Annuler un paiement, annuler une récupération ou geler le wallet sont des actions qui PROTÈGENT
- * les fonds : on les accepte avec la passkey OU avec la session de l'espace client Swissquote. Un
- * client dont le téléphone (donc la passkey) a été volé doit pouvoir réagir depuis un ordinateur.
- * Au pire, un attaquant qui a la session retarde ou gèle : il ne peut rien déplacer.
- * Ce qui ASSOUPLIT (dégeler) exige la passkey.
+ * Cancelling a payment, cancelling a recovery or freezing the wallet are actions that PROTECT
+ * the funds: they are accepted with the passkey OR with the Swissquote client-area session. A
+ * client whose phone (and so passkey) was stolen must be able to react from a computer.
+ * At worst, an attacker with the session delays or freezes: they cannot move anything.
+ * Whatever RELAXES the protection (unfreezing) requires the passkey.
  */
 export async function authorizeProtective(
   walletClientId: string,
@@ -165,7 +165,7 @@ export async function authorizeProtective(
   return 'passkey';
 }
 
-// --- Authentification liée à une opération -------------------------------------------------
+// --- Authentication bound to an operation ---------------------------------------------------
 
 export async function operationOptions(clientId: string, purpose: Purpose, payload: string) {
   const options = await generateAuthenticationOptions({
@@ -185,8 +185,8 @@ export async function operationOptions(clientId: string, purpose: Purpose, paylo
 }
 
 /**
- * Vérifie qu'une assertion passkey approuve exactement cette opération pour ce client.
- * Lève une erreur sinon (passkey inconnue, défi expiré, déjà utilisé, ou opération différente).
+ * Checks that a passkey assertion approves exactly this operation for this client.
+ * Throws otherwise (unknown passkey, expired or already used challenge, or a different operation).
  */
 export async function verifyOperation(
   clientId: string,
@@ -194,10 +194,10 @@ export async function verifyOperation(
   payload: string,
   response: AuthenticationResponseJSON | undefined,
 ): Promise<void> {
-  if (!response?.id) throw new Error('Authentification passkey requise');
+  if (!response?.id) throw new Error('Passkey authentication required');
   const all = credentials();
   const credential = (all[clientId] ?? []).find((c) => c.id === response.id);
-  if (!credential) throw new Error('Passkey inconnue pour ce client');
+  if (!credential) throw new Error('Unknown passkey for this client');
   let challengeOk = true;
   let result;
   try {
@@ -217,22 +217,22 @@ export async function verifyOperation(
     });
   } catch (e) {
     if (!challengeOk) {
-      throw new Error('Défi passkey invalide : expiré, déjà utilisé, ou émis pour une autre opération');
+      throw new Error('Invalid passkey challenge: expired, already used, or issued for another operation');
     }
     throw e;
   }
-  if (!result.verified) throw new Error('Assertion passkey invalide');
+  if (!result.verified) throw new Error('Invalid passkey assertion');
   credential.counter = result.authenticationInfo.newCounter;
   writeJson('credentials.json', all);
 }
 
-// --- Passkey déjà présente sur l'appareil -----------------------------------------------------
+// --- Passkey already on the device ------------------------------------------------------------
 
 /**
- * Un appareil qui possède déjà une passkey du client (passkey synchronisée par iCloud ou Google, ou
- * même authentificateur) ne peut pas en créer une deuxième : le navigateur refuse. Il prouve alors
- * qu'il la détient par une assertion, et cette passkey devient « la passkey de l'appareil » pour la
- * récupération. Limite documentée : une passkey synchronisée existe aussi sur l'ancien téléphone.
+ * A device that already holds one of the client's passkeys (synced by iCloud or Google, or the
+ * same authenticator) cannot create a second one: the browser refuses. It then proves
+ * that it holds it with an assertion, and that passkey becomes "the device passkey" for the
+ * recovery. Documented limit: a synced passkey also exists on the old phone.
  */
 export function deviceProofOptions(clientId: string) {
   return operationOptions(clientId, 'device', `device:${clientId}`);

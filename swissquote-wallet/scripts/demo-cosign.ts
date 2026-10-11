@@ -1,7 +1,7 @@
-// Scénarios du cosignataire Swissquote, contre le service lancé (npm run dev -w services/swissquote).
-// Usage : npm run demo:cosign            (regtest)
-// L'app (ce script) ne détient que la clé téléphone et la clé de secours ; la clé Swissquote
-// reste dans le service (invariant I4).
+// Swissquote cosigner scenarios, against the running service (npm run dev -w services/swissquote).
+// Usage: npm run demo:cosign            (regtest)
+// The app (this script) only holds the phone key and the backup key; the Swissquote key
+// stays in the service (invariant I4).
 import { join } from 'node:path';
 import {
   Esplora,
@@ -35,7 +35,7 @@ async function call(method: string, path: string, body?: unknown) {
   return { code: res.status, json: (await res.json()) as any };
 }
 
-// Authentificateur logiciel : joue le rôle de Windows Hello / Face ID pour ce script.
+// Software authenticator: plays the role of Windows Hello / Face ID for this script.
 const passkey = await SoftAuthenticator.create(process.env.ORIGIN?.split(',')[0], process.env.RP_ID);
 let walletId = '';
 async function approve(purpose: 'cosign' | 'cancel' | 'unfreeze', payload: string) {
@@ -55,16 +55,16 @@ const externalAddress = () => {
   ).address;
 };
 
-// --- Connexion Swissquote (KYC simulé) et création de la passkey.
-step('Connexion et passkey');
+// --- Swissquote login (simulated KYC) and passkey creation.
+step('Login and passkey');
 const session = await call('POST', '/kyc/login', { clientId: `client-demo-${Date.now()}` });
 token = session.json.token;
 const regOptions = await call('POST', '/webauthn/register/options');
 const reg = await call('POST', '/webauthn/register/verify', { response: await passkey.register(regOptions.json) });
-console.log(`Passkey enregistrée : ${reg.json.verified}`);
+console.log(`Passkey registered: ${reg.json.verified}`);
 
-// --- Création du wallet : l'app génère ses deux clés, Swissquote fournit la sienne.
-step('Création du wallet');
+// --- Wallet creation: the app generates its two keys, Swissquote provides its own.
+step('Wallet creation');
 const phone = rootFromSeed(randomSeed(), cfg.network);
 const backup = rootFromSeed(randomSeed(), cfg.network);
 const created = await call('POST', '/wallets', {
@@ -74,7 +74,7 @@ const created = await call('POST', '/wallets', {
 walletId = created.json.walletId;
 const policy: WalletPolicy = created.json.policy;
 console.log(`walletId ${walletId}`);
-console.log(`adresse  ${created.json.firstAddress}`);
+console.log(`address  ${created.json.firstAddress}`);
 
 await fetch(`${cfg.esploraUrl}/faucet`, {
   method: 'POST',
@@ -86,7 +86,7 @@ for (let i = 0; i < 30 && utxos.length === 0; i++) {
   await sleep(1000);
   utxos = await esplora.scanWallet(policy, cfg.network, 2);
 }
-console.log(`solde    ${utxos.reduce((s, u) => s + u.value, 0n)} sats`);
+console.log(`balance  ${utxos.reduce((s, u) => s + u.value, 0n)} sats`);
 
 let changeIndex = 0;
 async function prepare(amount: bigint, to = externalAddress(), feeRate = 2) {
@@ -97,11 +97,11 @@ async function prepare(amount: bigint, to = externalAddress(), feeRate = 2) {
 async function finishAndBroadcast(appSigned: string, sqSigned: string) {
   const { hex } = finalizeSpend(combinePsbts([appSigned, sqSigned], cfg.network));
   const txid = await esplora.broadcast(hex);
-  console.log(`diffusée ${cfg.explorerTxUrl(txid)}`);
+  console.log(`broadcast ${cfg.explorerTxUrl(txid)}`);
 }
 
-// --- Palier 1 : petit paiement, cosigné immédiatement.
-step('Palier 1 : petit paiement (10 000 sats)');
+// --- Tier 1: small payment, cosigned at once.
+step('Tier 1: small payment (10,000 sats)');
 {
   const { psbt, appSigned } = await prepare(10_000n);
   const r = await call('POST', '/cosign', {
@@ -109,19 +109,19 @@ step('Palier 1 : petit paiement (10 000 sats)');
     psbt: psbt.toBase64(),
     authentication: await approve('cosign', psbt.toBase64()),
   });
-  console.log(`Swissquote : ${r.code} ${r.json.status} (palier ${r.json.tier})`);
+  console.log(`Swissquote: ${r.code} ${r.json.status} (tier ${r.json.tier})`);
   await finishAndBroadcast(appSigned, r.json.psbt);
 }
 
-// --- Attaques sur l'authentification.
-step('Attaque : cosignature sans passkey');
+// --- Attacks on authentication.
+step('Attack: cosigning without a passkey');
 {
   const { psbt } = await prepare(5_000n);
   const r = await call('POST', '/cosign', { walletId, psbt: psbt.toBase64() });
-  console.log(`Swissquote : ${r.code} ${r.json.status} — ${r.json.reason}`);
+  console.log(`Swissquote: ${r.code} ${r.json.status} — ${r.json.reason}`);
 }
 
-step('Attaque : la passkey approuve une transaction, l’app compromise en envoie une autre');
+step('Attack: the passkey approves one transaction, the compromised app sends another');
 {
   const { psbt: shown } = await prepare(5_000n);
   const { psbt: swapped } = await prepare(5_000n, externalAddress());
@@ -130,20 +130,20 @@ step('Attaque : la passkey approuve une transaction, l’app compromise en envoi
     psbt: swapped.toBase64(),
     authentication: await approve('cosign', shown.toBase64()),
   });
-  console.log(`Swissquote : ${r.code} ${r.json.status} — ${r.json.reason}`);
+  console.log(`Swissquote: ${r.code} ${r.json.status} — ${r.json.reason}`);
 }
 
-step('Attaque : rejouer une assertion déjà utilisée');
+step('Attack: replaying an assertion already used');
 {
   const { psbt } = await prepare(5_000n);
   const authentication = await approve('cosign', psbt.toBase64());
   const first = await call('POST', '/cosign', { walletId, psbt: psbt.toBase64(), authentication });
   const replay = await call('POST', '/cosign', { walletId, psbt: psbt.toBase64(), authentication });
-  console.log(`Première : ${first.code} ${first.json.status} ; rejeu : ${replay.code} ${replay.json.status} — ${replay.json.reason}`);
+  console.log(`First: ${first.code} ${first.json.status}; replay: ${replay.code} ${replay.json.status} — ${replay.json.reason}`);
 }
 
-// --- I1 : la signature Swissquote seule ne suffit pas.
-step('I1 : Swissquote seul ne peut pas finaliser');
+// --- I1: the Swissquote signature alone is not enough.
+step('I1: Swissquote alone cannot finalize');
 {
   const { psbt } = await prepare(5_000n);
   const r = await call('POST', '/cosign', {
@@ -153,13 +153,13 @@ step('I1 : Swissquote seul ne peut pas finaliser');
   });
   try {
     finalizeSpend(psbtFromBase64(r.json.psbt, cfg.network));
-    console.log('ÉCHEC : la transaction a été finalisée avec la seule clé Swissquote');
+    console.log('FAIL: the transaction was finalized with the Swissquote key alone');
   } catch {
-    console.log('Finalisation refusée : il manque une deuxième signature (téléphone ou secours)');
+    console.log('Finalization refused: a second signature is missing (phone or backup)');
   }
 }
-// --- Attaque : voleur du téléphone qui tente un gros retrait → mis en attente, le client annule.
-step('Attaque : voleur du téléphone, gros retrait (200 000 sats)');
+// --- Attack: a phone thief tries a large withdrawal → held, the client cancels.
+step('Attack: phone thief, large withdrawal (200,000 sats)');
 {
   const { psbt } = await prepare(200_000n);
   const r = await call('POST', '/cosign', {
@@ -167,19 +167,19 @@ step('Attaque : voleur du téléphone, gros retrait (200 000 sats)');
     psbt: psbt.toBase64(),
     authentication: await approve('cosign', psbt.toBase64()),
   });
-  console.log(`Swissquote : ${r.code} ${r.json.status} — ${r.json.reason}`);
+  console.log(`Swissquote: ${r.code} ${r.json.status} — ${r.json.reason}`);
   const inbox = await call('GET', `/notifications/${walletId}`);
-  console.log(`Notification au client : « ${inbox.json.notifications.at(-1).text} »`);
+  console.log(`Notification to the client: "${inbox.json.notifications.at(-1).text}"`);
   const c = await call('POST', `/cosign/${r.json.requestId}/cancel`, {
     authentication: await approve('cancel', r.json.requestId),
   });
-  console.log(`Le client annule : ${c.json.status}`);
+  console.log(`The client cancels: ${c.json.status}`);
   const after = await call('GET', `/cosign/${r.json.requestId}`);
-  console.log(`Statut final : ${after.json.status} (aucune signature Swissquote)`);
+  console.log(`Final status: ${after.json.status} (no Swissquote signature)`);
 }
 
-// --- Palier 2 légitime : gros paiement signé après le délai.
-step('Palier 2 : gros paiement légitime (150 000 sats), signé après le délai');
+// --- Legitimate tier 2: large payment signed after the delay.
+step('Tier 2: legitimate large payment (150,000 sats), signed after the delay');
 {
   const { psbt, appSigned } = await prepare(150_000n);
   const r = await call('POST', '/cosign', {
@@ -187,19 +187,19 @@ step('Palier 2 : gros paiement légitime (150 000 sats), signé après le délai
     psbt: psbt.toBase64(),
     authentication: await approve('cosign', psbt.toBase64()),
   });
-  console.log(`Swissquote : ${r.code} ${r.json.status}, exécution après ${r.json.executeAfter}`);
+  console.log(`Swissquote: ${r.code} ${r.json.status}, runs after ${r.json.executeAfter}`);
   let s = await call('GET', `/cosign/${r.json.requestId}`);
   while (s.json.status === 'pending') {
-    process.stdout.write(`  attente… ${s.json.secondsLeft} s\r`);
+    process.stdout.write(`  waiting… ${s.json.secondsLeft} s\r`);
     await sleep(2000);
     s = await call('GET', `/cosign/${r.json.requestId}`);
   }
-  console.log(`Swissquote : ${s.json.status} (palier ${s.json.tier})           `);
+  console.log(`Swissquote: ${s.json.status} (tier ${s.json.tier})           `);
   await finishAndBroadcast(appSigned, s.json.psbt);
 }
 
-// --- Sanctions : destinataire sur la liste mockée → refus.
-step('Destinataire sanctionné');
+// --- Sanctions: recipient on the mocked list → refused.
+step('Sanctioned recipient');
 {
   const banned = externalAddress();
   await call('POST', '/admin/sanctions', { address: banned });
@@ -209,11 +209,11 @@ step('Destinataire sanctionné');
     psbt: psbt.toBase64(),
     authentication: await approve('cosign', psbt.toBase64()),
   });
-  console.log(`Swissquote : ${r.code} ${r.json.status} — ${r.json.reason}`);
+  console.log(`Swissquote: ${r.code} ${r.json.status} — ${r.json.reason}`);
 }
 
-// --- Attaque : PSBT qui dépense les fonds d'un autre wallet → refus.
-step('Attaque : faire signer les fonds d’un autre wallet');
+// --- Attack: a PSBT spending another wallet's funds → refused.
+step('Attack: getting another wallet’s funds signed');
 {
   const other = rootFromSeed(randomSeed(), cfg.network);
   const otherPolicy: WalletPolicy = {
@@ -234,11 +234,11 @@ step('Attaque : faire signer les fonds d’un autre wallet');
     psbt: psbt.toBase64(),
     authentication: await approve('cosign', psbt.toBase64()),
   });
-  console.log(`Swissquote : ${r.code} ${r.json.status} — ${r.json.reason}`);
+  console.log(`Swissquote: ${r.code} ${r.json.status} — ${r.json.reason}`);
 }
 
-// --- Bug corrigé : les frais comptent dans le plafond.
-step('Attaque : 1 000 sats envoyés, environ 900 000 sats de frais (détruire les fonds)');
+// --- Fixed bug: fees count toward the limit.
+step('Attack: 1,000 sats sent, about 900,000 sats of fees (destroying the funds)');
 let feeAttackId = '';
 {
   const { psbt } = await prepare(1_000n, externalAddress(), 4_500);
@@ -248,31 +248,31 @@ let feeAttackId = '';
     authentication: await approve('cosign', psbt.toBase64()),
   });
   feeAttackId = r.json.requestId;
-  console.log(`Swissquote : ${r.code} ${r.json.status} — ${r.json.reason}`);
-  console.log(`Frais vus par Swissquote : ${r.json.summary?.fee} sats`);
+  console.log(`Swissquote: ${r.code} ${r.json.status} — ${r.json.reason}`);
+  console.log(`Fee seen by Swissquote: ${r.json.summary?.fee} sats`);
 }
 
-// --- Bug corrigé : le client dont le téléphone est volé réagit depuis son espace client.
-step('Victime sans téléphone : annulation depuis l’espace client (session, sans passkey)');
+// --- Fixed bug: a client whose phone was stolen reacts from their client area.
+step('Victim without a phone: cancellation from the client area (session, no passkey)');
 {
   const r = await call('POST', `/cosign/${feeAttackId}/cancel`, {});
-  console.log(`Annulation : ${r.code} ${r.json.status} via ${r.json.via}`);
+  console.log(`Cancellation: ${r.code} ${r.json.status} via ${r.json.via}`);
 }
 
-step('Gel d’urgence depuis l’espace client, dégel seulement avec la passkey');
+step('Emergency freeze from the client area, unfreeze only with the passkey');
 {
   const f = await call('POST', `/wallets/${walletId}/freeze`, {});
-  console.log(`Gel : ${f.code} ${f.json.status} via ${f.json.via}`);
+  console.log(`Freeze: ${f.code} ${f.json.status} via ${f.json.via}`);
   const { psbt } = await prepare(1_000n);
   const r = await call('POST', '/cosign', {
     walletId,
     psbt: psbt.toBase64(),
     authentication: await approve('cosign', psbt.toBase64()),
   });
-  console.log(`Paiement pendant le gel : ${r.code} ${r.json.reason}`);
+  console.log(`Payment during the freeze: ${r.code} ${r.json.reason}`);
   const u1 = await call('POST', `/wallets/${walletId}/unfreeze`, {});
-  console.log(`Dégel avec la seule session : ${u1.code} ${u1.json.reason}`);
+  console.log(`Unfreeze with the session only: ${u1.code} ${u1.json.reason}`);
   const u2 = await call('POST', `/wallets/${walletId}/unfreeze`, { authentication: await approve('unfreeze', walletId) });
-  console.log(`Dégel avec la passkey : ${u2.code} ${u2.json.status}`);
+  console.log(`Unfreeze with the passkey: ${u2.code} ${u2.json.status}`);
 }
-console.log('\nScénarios terminés.');
+console.log('\nScenarios complete.');

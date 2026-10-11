@@ -1,4 +1,4 @@
-// Petit client HTTP des services mockés pour les scripts (renvoie le code et le JSON, sans lever).
+// Small HTTP client of the mocked services for the scripts (returns the status and the JSON, never throws).
 import { join } from 'node:path';
 
 try {

@@ -8,7 +8,7 @@ describe('networkConfig', () => {
     expect(cfg.explorerTxUrl('abc')).toBe('https://blockstream.info/signet/tx/abc');
   });
 
-  it('pointe regtest vers le regtest Docker local', () => {
+  it('points regtest to the local Docker regtest', () => {
     expect(networkConfig('regtest').esploraUrl).toBe('http://localhost:3000');
   });
 });

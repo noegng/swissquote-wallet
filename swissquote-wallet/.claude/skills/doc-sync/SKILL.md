@@ -1,40 +1,40 @@
 ---
 name: doc-sync
-description: Garder la documentation du Swissquote Wallet cohérente après une décision ou un changement de conception (ordre de mise à jour des fichiers, règles de style en français), et préparer la soumission DoraHacks (checklist des six sujets obligatoires, outils d'IA utilisés). À charger quand une décision change, quand on modifie un document de docs/ ou le document projet, ou quand on rédige la description de soumission ou le pitch.
+description: Keep the Swissquote Wallet documentation consistent after a decision or a design change (order in which files are updated, writing rules, everything in English), and prepare the DoraHacks submission (checklist of the six required topics, AI tools used). Load it when a decision changes, when a document in docs/ or the design document is edited, or when writing the submission or the pitch.
 ---
 
-# Synchroniser les documents
+# Keeping the documents in sync
 
-## Ordre de mise à jour après une décision
+## Update order after a decision
 
-1. `docs/03-decisions.md` : **fait foi**. Modifier la ligne de la décision avec la date et la raison ; déplacer l'ancien choix dans « Décisions remplacées ».
-2. `../swissquote-wallet-projet.md` : sections touchées (solution, menaces, périmètre, production, questions du jury).
-3. `CLAUDE.md` : résumé du modèle et règles, si elles changent.
-4. `README.md` : tableau réel / mocké.
-5. `docs/06-prototype-vers-production.md` : tout nouveau mock.
-6. `docs/09-plan-de-build.md` : tâches ajoutées, retirées ou cochées.
-7. Si un invariant change : la skill `custody-invariants` et les tests de `packages/core/test/` (`multisig.test.ts`, `backup.test.ts`, `onboarding.test.ts`).
-8. La présentation pour le jury : `../README.md` (racine du dépôt, anglais) et `docs/10-soumission-dorahacks.md`.
+1. `docs/03-decisions.md`: **authoritative**. Change the decision's row with the date and the reason; move the former choice to "Superseded decisions".
+2. `../swissquote-wallet-design.md`: the affected sections (solution, threats, scope, production, jury questions).
+3. `CLAUDE.md`: summary of the model and rules, if they change.
+4. `README.md`: real / mocked table.
+5. `docs/06-prototype-to-production.md`: any new mock.
+6. `docs/09-build-plan.md`: tasks added, removed or ticked.
+7. If an invariant changes: the `custody-invariants` skill and the tests in `packages/core/test/` (`multisig.test.ts`, `backup.test.ts`, `onboarding.test.ts`).
+8. What the jury reads: `../README.md` (repository root) and `docs/10-dorahacks-submission.md`.
 
-Puis relire les fichiers modifiés pour vérifier qu'aucun ne contredit `03-decisions.md` (rechercher les anciens termes : « Safe », « ERC-4337 », « Base Sepolia », « Candide », « gardien »).
+Then re-read the changed files to check that none contradicts `03-decisions.md` (search for the former terms: "Safe", "ERC-4337", "Base Sepolia", "Candide", "guardian").
 
-## Style
+## Writing rules
 
-- Français, phrases courtes, vocabulaire non technique quand c'est possible.
-- Étiqueter : **Décidé**, **Proposé**, **À valider**. Le juridique est toujours une hypothèse.
-- Ne jamais affirmer que le prototype est prêt pour la production ; ne pas inventer de chiffres (marché, revenus) : les marquer comme hypothèses.
+- **English** for everything in the repository (documents, code, messages, file names). Short sentences, non-technical words when possible.
+- Label: **Decided**, **Proposed**, **To validate**. Legal points are always assumptions.
+- Never claim the prototype is ready for production; do not invent figures (market, revenue): mark them as assumptions.
 
-## Checklist de soumission DoraHacks
+## DoraHacks submission checklist
 
-La description doit couvrir (exigences du brief) :
+The description must cover (brief requirements):
 
-- [ ] Modèle de custody choisi, pour et contre, mini modèle de menaces (qui peut voler, qui peut bloquer, Swissquote seul ou avec un partenaire)
-- [ ] Schéma d'architecture (lien FigJam), parties mockées marquées
-- [ ] Création du wallet : où les clés et parts sont générées et stockées, lien avec l'identité Swissquote
-- [ ] Authentification : passkey, différence petit / gros montant
-- [ ] Récupération : qui, combien de temps, ce qui arrête un attaquant, **sortie si Swissquote disparaît**, refus de l'attaquant téléphone + e-mail
-- [ ] Custody et Travel Rule (section juridique)
-- [ ] Business case concret
-- [ ] Bonus traités
-- [ ] **Outils d'IA utilisés et pour quoi** (tableau en bas de `docs/09-plan-de-build.md`)
-- [ ] Liens : dépôt, vidéo, txid signet (`docs/preuves.md`)
+- [ ] Chosen custody model, pros and cons, short threat model (who can steal, who can lock out, Swissquote alone or with a partner)
+- [ ] Architecture diagram (Mermaid in the root README, FigJam link), mocked parts marked
+- [ ] Wallet creation: where keys and shares are generated and stored, link with the Swissquote identity
+- [ ] Authentication: passkey, small vs large amount
+- [ ] Recovery: who, how long, what stops an attacker, **exit if Swissquote disappears**, refusal of the phone + email attacker
+- [ ] Custody and Travel Rule (legal section)
+- [ ] Concrete business case
+- [ ] Bonus topics covered
+- [ ] **AI tools used and what for** (table at the bottom of `docs/09-build-plan.md`)
+- [ ] Links: repository, video, signet txids (`docs/proofs.md`)

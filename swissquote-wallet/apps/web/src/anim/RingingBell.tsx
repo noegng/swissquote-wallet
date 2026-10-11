@@ -1,6 +1,6 @@
-// Cloche qui sonne quand de nouvelles alertes arrivent, avec un compteur qui apparaît en rebondissant
-// et dont les chiffres défilent. Adapté de « Notification Bell » (Rare UI, licence MIT) : même ressort
-// de balancier et même colonne de chiffres, appliqués à l'icône de l'onglet Activity.
+// Bell that rings when new alerts arrive, with a count that bounces in
+// and whose digits roll. Adapted from "Notification Bell" (Rare UI, MIT licence): same pendulum
+// spring and same digit column, applied to the Activity tab icon.
 import { useEffect, useRef, type ReactNode } from 'react';
 import {
   animate,
@@ -14,12 +14,12 @@ import {
   type AnimationPlaybackControls,
 } from 'motion/react';
 
-// Amortissement faible : la cloche balance un moment.
+// Low damping: the bell keeps swinging for a while.
 const SWING = { type: 'spring', stiffness: 220, damping: 10, mass: 1, restDelta: 0.01 } as const;
 const COLUMN = { stiffness: 400, damping: 30, mass: 0.9 };
 const ENTER = { type: 'spring', stiffness: 600, damping: 20 } as const;
 const FADE = { duration: 0.15 } as const;
-// Degrés par seconde.
+// Degrees per second.
 const IMPULSE = 500;
 const MAX_VELOCITY = 900;
 const BURST = 5;
@@ -31,7 +31,7 @@ const ROLL_VELOCITY = 9;
 const clamp = (v: number, limit: number) => Math.max(-limit, Math.min(limit, v));
 const digitOf = (v: number) => ((v % 10) + 10) % 10;
 
-/** Balancier : chaque hausse du compteur donne une impulsion, plus forte si plusieurs alertes arrivent. */
+/** Pendulum: each rise of the count gives an impulse, stronger when several alerts arrive. */
 function useBellRing(total: number, reduced: boolean) {
   const swing = useMotionValue(0);
   const previous = useRef(total);
@@ -51,7 +51,7 @@ function useBellRing(total: number, reduced: boolean) {
   return swing;
 }
 
-/** Une colonne de chiffres qui roule dans le sens où le compteur a bougé. */
+/** A digit column that rolls in the direction the count moved. */
 function DigitColumn({ value, reduced }: { value: number; reduced: boolean }) {
   const position = useSpring(value, COLUMN);
   const y = useTransform(position, (p) => `${-p * 100}%`);
@@ -95,7 +95,7 @@ export function RingingBell({ count, max = 9, children }: { count: number; max?:
 
   return (
     <span className="bell">
-      {/* La cloche pend par le haut : elle pivote autour de son anneau, pas de son centre. */}
+      {/* The bell hangs from the top: it pivots around its ring, not its centre. */}
       <motion.span className="bell-icon" style={{ rotate: swing, transformOrigin: '50% 12%' }}>
         {children}
       </motion.span>

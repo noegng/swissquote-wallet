@@ -1,6 +1,6 @@
-// Seuil de signature immédiate (« plafond journalier » du cosignataire). Ce n'est pas une limite
-// qui bloque : au-delà, le paiement part quand même, après un délai de sécurité et une alerte.
-// On montre donc ce qui reste à payer tout de suite aujourd'hui, et ce qui se passe au-delà.
+// Threshold for immediate signing (the cosigner's "daily limit"). It is not a limit
+// that blocks: above it, the payment still leaves, after a security delay and an alert.
+// So we show what can still be paid at once today, and what happens beyond that.
 import { useEffect, useState } from 'react';
 import { sq } from '../api';
 import { btcDigits, formatBtc, formatChf } from '../format';
@@ -14,7 +14,7 @@ interface Limit {
 
 export const delayLabel = (s: number) => (s < 90 ? `${s} seconds` : `${Math.round(s / 60)} minutes`);
 
-/** Seuil, montant déjà dépensé sur 24 h (frais compris) et délai de sécurité, lus chez Swissquote. */
+/** Threshold, amount already spent over 24 h (fees included) and security delay, read from Swissquote. */
 export function useInstantLimit(walletId: string, refreshKey?: unknown): Limit | null {
   const [value, setValue] = useState<Limit | null>(null);
   useEffect(() => {

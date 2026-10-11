@@ -1,5 +1,5 @@
-// Récupération sur un nouvel appareil : passkey de l'appareil → demandes (Swissquote + partenaire)
-// → délai de sécurité → part du client (papier ou copie cloud) → transfert → nouvelle sauvegarde.
+// Recovery on a new device: device passkey → requests (Swissquote + partner)
+// → security delay → client share (paper or cloud copy) → new backup → sweep.
 import { useEffect, useRef, useState } from 'react';
 import { sq, type Session } from '../api';
 import { clearRecovery, loadRecovery, saveRecovery, type RecoveryState, type StoredWallet } from '../keystore';
@@ -29,7 +29,7 @@ const STEPS = [
   { title: 'Get your new keys', desc: 'Your bitcoin moves to a new wallet and the old phone stops working.' },
 ];
 
-/** Les quatre étapes, avec l'étape `current` (0 à 3) en cours et les précédentes cochées. */
+/** The four steps, with step `current` (0 to 3) in progress and the previous ones ticked. */
 function steps(current: number, override?: Partial<TimelineItem>): TimelineItem[] {
   return STEPS.map((s, i) => ({
     ...s,
@@ -49,7 +49,7 @@ export function Recover({
   remote: RemoteWallet;
   onRecovered: (w: StoredWallet) => void;
   onCreateInstead: () => void;
-  /** Retour à la connexion. Une récupération déjà lancée continue et reprend à la prochaine connexion. */
+  /** Back to the login. A recovery already started keeps running and resumes at the next login. */
   onBack: () => void;
 }) {
   const [step, setStep] = useState<Step>('intro');
@@ -58,13 +58,13 @@ export function Recover({
   const [log, setLog] = useState<string[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  // Nouveau wallet préparé, en attente de sa cérémonie de sauvegarde (rien n'est encore enregistré).
+  // New wallet prepared, waiting for its backup ceremony (nothing is stored yet).
   const [prepared, setPrepared] = useState<{ newWallet: StoredWallet; newClientShare: string } | null>(null);
-  // Part CLIENT de l'ancien wallet : gardée en mémoire le temps de la cérémonie, pour signer le
-  // transfert juste après, puis oubliée.
+  // CLIENT share of the old wallet: kept in memory during the ceremony, to sign the
+  // sweep right after, then forgotten.
   const oldShare = useRef<string | null>(null);
   const started = useRef(false);
-  // État du wallet chez Swissquote : gel, récupération en cours lancée ailleurs.
+  // Wallet state at Swissquote: freeze, recovery in progress started elsewhere.
   const [remoteState, setRemoteState] = useState<{
     status: string;
     recovery: { recoveryId: string; secondsLeft: number } | null;
@@ -83,7 +83,7 @@ export function Recover({
     refreshRemote();
   }, [remote.walletId]);
 
-  // Actions de protection : la session de l'espace client suffit (le téléphone a pu être volé).
+  // Protective actions: the client-area session is enough (the phone may have been stolen).
   async function freeze() {
     setError('');
     try {
@@ -99,7 +99,7 @@ export function Recover({
     setError('');
     try {
       await sq(`/recovery/${recoveryId}/cancel`, {}, session.token);
-      // La part du partenaire ne doit pas partir vers l'appareil qui avait lancé cette récupération.
+      // The partner's share must not go to the device that started this recovery.
       await cancelPartnerRelease(remote.walletId, session.clientId).catch(() => {});
       setNotice('Recovery cancelled. If your phone was stolen, freeze the wallet, then start your own recovery.');
       refreshRemote();
@@ -108,7 +108,7 @@ export function Recover({
     }
   }
 
-  // Une récupération déjà lancée sur cet appareil reprend après un rechargement.
+  // A recovery already started on this device resumes after a reload.
   useEffect(() => {
     loadRecovery(session.clientId).then((r) => {
       if (r && r.oldWalletId === remote.walletId) {
@@ -127,8 +127,8 @@ export function Recover({
         if (stop) return;
         setProgress(p);
         if (p.swissquote.status === 'cancelled' || p.partner.status === 'cancelled') {
-          // Récupération annulée (d'un côté ou de l'autre) : on referme les deux et on oublie son état
-          // local, pour pouvoir en recommencer une.
+          // Recovery cancelled (on either side): close both and forget its local
+          // state, so that a new one can be started.
           if (p.swissquote.status === 'pending') {
             await sq(`/recovery/${state!.recoveryId}/cancel`, {}, session.token).catch(() => {});
           }
@@ -165,7 +165,7 @@ export function Recover({
 
   const addLog = (l: string) => setLog((x) => [...x, l]);
 
-  // Transfert des fonds, une fois le nouveau wallet sauvegardé et enregistré. Rejouable.
+  // Sweep of the funds, once the new wallet is backed up and stored. Replayable.
   async function sweep(s: RecoveryState) {
     const r = await sweepToNewWallet(session, s, oldShare.current!, addLog);
     oldShare.current = null;
@@ -180,7 +180,7 @@ export function Recover({
     oldShare.current = share;
     try {
       if (state!.newWallet) {
-        // Nouveau wallet déjà sauvegardé (transfert interrompu) : il ne reste que le transfert.
+        // New wallet already backed up (interrupted sweep): only the sweep is left.
         await sweep(state!);
       } else {
         setPrepared(await prepareNewWallet(session, state!, share, addLog));
@@ -193,7 +193,7 @@ export function Recover({
     }
   }
 
-  // Sauvegarde faite : le nouveau wallet est enregistré AVANT que les fonds bougent.
+  // Backup done: the new wallet is stored BEFORE the funds move.
   async function backupDone() {
     const next: RecoveryState = { ...state!, newWallet: { ...prepared!.newWallet, backupConfirmed: true } };
     await saveRecovery(session.clientId, next);
@@ -326,7 +326,7 @@ export function Recover({
               disabled={busy}
               onClick={() => {
                 setError('');
-                // Transfert interrompu, mots encore en mémoire : on le relance directement.
+                // Interrupted sweep, words still in memory: retry it directly.
                 if (state?.newWallet && oldShare.current) {
                   setBusy(true);
                   setLog([]);

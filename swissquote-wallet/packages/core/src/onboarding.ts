@@ -1,13 +1,13 @@
-// Matériel d'un nouveau wallet, généré sur l'appareil du client (skill slip39-backup).
-// Le secret de la clé de secours n'est jamais renvoyé : seulement ses deux parts SLIP-39 et sa
-// clé publique. L'appelant envoie la part TIERS scellée au partenaire, montre la part CLIENT,
-// puis oublie les deux (I4, I5).
+// Material for a new wallet, generated on the client's device (skill slip39-backup).
+// The backup key secret is never returned: only its two SLIP-39 shares and its
+// public key. The caller sends the sealed PARTNER share to the partner, shows the CLIENT share,
+// then forgets both (I4, I5).
 import type { Network } from 'bitcoinjs-lib';
 import { combineBackupShares, newBackupSecret, splitBackupSecret, type BackupShares } from './backup';
 import { accountOrigin, randomSeed, rootFromSeed, type KeyOrigin } from './keys';
 
 export interface NewWalletMaterial {
-  /** Graine de la clé téléphone : à chiffrer immédiatement sur l'appareil. */
+  /** Phone key seed: encrypt it on the device right away. */
   phoneSeed: Uint8Array;
   phoneKey: KeyOrigin;
   backupKey: KeyOrigin;
@@ -27,7 +27,7 @@ export function createWalletMaterial(network: Network): NewWalletMaterial {
   return material;
 }
 
-/** Reconstitue la racine de la clé de secours à partir des parts CLIENT et TIERS (appareil du client uniquement). */
+/** Rebuilds the backup key root from the CLIENT and PARTNER shares (on the client's device only). */
 export function backupRootFromShares(mnemonics: string[], network: Network) {
   const secret = combineBackupShares(mnemonics);
   try {

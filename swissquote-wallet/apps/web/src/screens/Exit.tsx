@@ -1,5 +1,5 @@
-// « Swissquote a disparu » : sortie avec la clé du téléphone et la clé de secours, sans aucun service
-// Swissquote (accessible depuis l'écran de connexion, sans session).
+// "Swissquote is gone": exit with the phone key and the backup key, without any Swissquote
+// service (reached from the login screen, with no session).
 import { useEffect, useState } from 'react';
 import { config } from '../config';
 import { exitWithoutSwissquote, partnerStatus, requestPartnerShare, walletBalance } from '../exit';
@@ -29,7 +29,7 @@ export function Exit({ onBack }: { onBack: () => void }) {
 
   useEffect(() => {
     listLocalWallets().then(setWallets).catch(() => setWallets([]));
-    // Simple constat pour la démo : le service Swissquote répond-il encore ? (rien n'en dépend)
+    // Just an observation for the demo: does the Swissquote service still answer? (nothing depends on it)
     fetch(`${config.swissquoteUrl}/health`)
       .then(() => setSwissquoteUp(true))
       .catch(() => setSwissquoteUp(false));
@@ -57,7 +57,7 @@ export function Exit({ onBack }: { onBack: () => void }) {
         if (stop) return;
         if (s.status === 'released') return setStep('share');
         if (s.status === 'cancelled') {
-          // Demande annulée : on l'oublie pour pouvoir en faire une nouvelle.
+          // Request cancelled: forget it so that a new one can be made.
           if (wallet) await clearExit(wallet.clientId);
           setState(null);
           setStep('intro');
@@ -108,7 +108,7 @@ export function Exit({ onBack }: { onBack: () => void }) {
 
   const share = useClientShareInput(exit);
 
-  // Constat pour la démo : cet écran n'appelle jamais Swissquote, qu'il réponde ou non.
+  // For the demo: this screen never calls Swissquote, whether it answers or not.
   const status =
     swissquoteUp === null ? null : swissquoteUp ? (
       <p className="note">Swissquote is reachable right now, but nothing on this screen uses it.</p>

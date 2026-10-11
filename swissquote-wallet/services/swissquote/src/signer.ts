@@ -1,6 +1,6 @@
-// [MOCK] Clé Swissquote. Une graine maître générée au premier lancement, en clair dans data/
-// (en production : HSM ou enclave, double contrôle). Chaque wallet client a son propre compte
-// BIP-48 dérivé de cette graine : la clé SQ d'un client ne signe jamais pour un autre client.
+// [MOCK] Swissquote key. A master seed generated on first start, in clear in data/
+// (in production: HSM or enclave, dual control). Each client wallet has its own BIP-48
+// account derived from this seed: one client's SQ key never signs for another client.
 import {
   accountOrigin,
   fromHex,
@@ -19,7 +19,7 @@ export class SwissquoteSigner {
     let master = readJson<{ seed?: string }>('master-key.json', {});
     if (!master.seed) {
       master = { seed: toHex(randomSeed()) };
-      writeJson('master-key.json', { ...master, warning: 'MOCK : clé en clair, HSM en production' });
+      writeJson('master-key.json', { ...master, warning: 'MOCK: key in clear, HSM in production' });
     }
     this.root = rootFromSeed(fromHex(master.seed!), cfg.network);
   }

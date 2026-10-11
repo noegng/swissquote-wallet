@@ -1,5 +1,5 @@
-// [MOCK] Stockage propre du service Swissquote : fichiers JSON dans services/swissquote/data/.
-// En production : base de données, et la clé maître dans un HSM.
+// [MOCK] The Swissquote service's own storage: JSON files in services/swissquote/data/.
+// In production: a database, and the master key in an HSM.
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 

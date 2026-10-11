@@ -1,51 +1,52 @@
 ---
 name: btc-multisig
-description: Conventions et pièges du code Bitcoin du Swissquote Wallet (descripteur 2 sur 3 P2WSH, dérivation BIP-48, PSBT créée, signée et combinée entre l'app et le cosignataire, diffusion et suivi via l'API esplora sur regtest et signet, financement par faucet). À charger dès qu'on écrit ou débogue du code dans packages/core touchant aux clés, adresses, PSBT ou à la chaîne.
+description: Conventions and pitfalls of the Swissquote Wallet's Bitcoin code (2-of-3 P2WSH descriptor, BIP-48 derivation, PSBT created, signed and combined between the app and the cosigner, broadcast and tracking through the esplora API on signet and regtest, faucet funding). Load it whenever you write or debug code in packages/core that touches keys, addresses, PSBTs or the chain.
 ---
 
-# Multisig Bitcoin 2 sur 3
+# 2-of-3 Bitcoin multisig
 
 ## Conventions
 
-- Script : `wsh(sortedmulti(2, xpub_téléphone, xpub_swissquote, xpub_secours))`. Toujours trier les clés publiques (BIP-67) : utiliser `p2ms` avec les pubkeys triées.
-- Dérivation : BIP-48 `m/48'/1'/0'/2'` (coin type 1 pour signet, testnet et regtest), puis `/0/i` (réception) et `/1/i` (change).
-- Réseau : `bitcoin.networks.testnet` pour signet (`tb1…`), `bitcoin.networks.regtest` pour regtest (`bcrt1…`). Le choix vient de `packages/core/src/network.ts`, jamais codé en dur ailleurs.
-- Bibliothèques : `bitcoinjs-lib` (`Psbt`, `payments.p2wsh`, `payments.p2ms`), `bip32` et `ecpair` initialisés avec `@bitcoinerlab/secp256k1` (`bitcoin.initEccLib(ecc)`).
-- Montants : vérifier si la version installée de bitcoinjs-lib attend des `bigint` (v7) ou des `number` (v6) et rester cohérent dans tout `packages/core`.
+- Script: `wsh(sortedmulti(2, xpub_phone, xpub_swissquote, xpub_backup))`. Always sort the public keys (BIP-67): use `p2ms` with sorted pubkeys.
+- Derivation: BIP-48 `m/48'/1'/0'/2'` (coin type 1 for signet, testnet and regtest), then `/0/i` (receive) and `/1/i` (change).
+- Address discovery: BIP-44 gap limit (20 consecutive unused addresses per chain), see `Esplora.walletState()`.
+- Network: `bitcoin.networks.testnet` for signet (`tb1…`), `bitcoin.networks.regtest` for regtest (`bcrt1…`). The choice comes from `packages/core/src/network.ts`, never hard-coded elsewhere. `BTC_NETWORK` in `.env` is validated at startup.
+- Libraries: `bitcoinjs-lib` (`Psbt`, `payments.p2wsh`, `payments.p2ms`), `bip32` and `ecpair` initialised with `@bitcoinerlab/secp256k1` (`bitcoin.initEccLib(ecc)`).
+- Amounts: `bigint` everywhere in `packages/core` (bitcoinjs-lib v7).
 
-## Rôles PSBT
+## PSBT roles
 
-1. **Créateur** (app) : sélectionne les UTXO, ajoute entrées (`witnessUtxo` + `witnessScript` + `bip32Derivation`) et sorties (destinataire + change vers `/1/i` du même descripteur).
-2. **Signataire 1** (app, clé téléphone ou clé de secours) : `signInput` puis envoie la PSBT en base64.
-3. **Signataire 2** (service Swissquote) : vérifie le résumé (montant, destinataire, change appartenant au descripteur) **indépendamment de l'app**, applique les règles, signe.
-4. **Finaliseur** : `validateSignaturesOfInput`, `finalizeAllInputs`, `extractTransaction`.
-5. Si les deux signatures ont été produites sur deux copies : `Psbt.combine` avant de finaliser.
+1. **Creator** (app): selects the UTXOs, adds inputs (`witnessUtxo` + `witnessScript` + `bip32Derivation`) and outputs (recipient + change to `/1/i` of the same descriptor).
+2. **Signer 1** (app, phone key or backup key): `signInput`, then sends the PSBT as base64.
+3. **Signer 2** (Swissquote service): checks the summary (amount, recipient, change belonging to the descriptor) **independently of the app**, applies the rules, signs.
+4. **Finalizer**: `validateSignaturesOfInput`, `finalizeAllInputs`, `extractTransaction`.
+5. If the two signatures were made on two copies: `Psbt.combine` before finalizing.
 
-## API esplora
+## esplora API
 
-| | Signet | Regtest (Nigiri) |
+| | Signet (demo) | Regtest (Nigiri, optional) |
 |---|---|---|
-| Base | `https://blockstream.info/signet/api` (défaut ; mempool.space injoignable sur certains réseaux) | `http://localhost:3000` (Chopsticks, `ESPLORA_URL_REGTEST` du `.env`) |
-| UTXO | `GET /address/:a/utxo` | idem |
-| Diffusion | `POST /tx`, corps = hex brut, `Content-Type: text/plain` | idem |
-| Statut | `GET /tx/:txid/status` | idem |
-| Frais | `GET /fee-estimates` (blockstream) ou `/v1/fees/recommended` (mempool.space) ; déjà géré par `Esplora.feeRate()` | frais fixes (2 sat/vB) |
+| Base | `https://blockstream.info/signet/api` (default; mempool.space is unreachable from some networks) | `http://localhost:3000` (Chopsticks, `ESPLORA_URL_REGTEST` in `.env`) |
+| UTXOs | `GET /address/:a/utxo` | same |
+| Broadcast | `POST /tx`, body = raw hex, `Content-Type: text/plain`; use `Esplora.broadcastOnce()` (an already known transaction counts as sent) | same |
+| Status | `GET /tx/:txid/status` | same |
+| Fees | `GET /fee-estimates` (blockstream) or `/v1/fees/recommended` (mempool.space); already handled by `Esplora.feeRate()` | fixed fees (2 sat/vB) |
 
-Explorateur : `NetworkConfig.explorerTxUrl(txid)` (blockstream.info ou mempool.space selon l'API). Modules existants : `keys.ts`, `descriptor.ts`, `psbt.ts`, `esplora.ts` dans `packages/core/src` ; exemple complet : `scripts/spike-multisig.ts`.
+Explorer: `NetworkConfig.explorerTxUrl(txid)` (blockstream.info or mempool.space depending on the API). Existing modules: `keys.ts`, `descriptor.ts`, `psbt.ts`, `esplora.ts` in `packages/core/src`; complete example: `scripts/spike-multisig.ts`.
 
-## Financement
+## Funding
 
-- Regtest : `npm run regtest:up` (Docker Compose repris de Nigiri, dans `tools/regtest/`), puis `npm run regtest:faucet -- <adresse bcrt1…>` (Chopsticks mine un bloc automatiquement à chaque `POST /tx`). Explorateur local : http://localhost:5000.
-- Signet : https://bitcoinsignetfaucet.com, 1 000 à 10 000 sats, 5 demandes par 24 h. Préfinancer plusieurs adresses avant la démo.
+- Signet: https://bitcoinsignetfaucet.com, 1,000 to 10,000 sats, 5 requests per 24 h. Fund several addresses before the demo.
+- Regtest (optional, Docker): `npm run regtest:up` (Docker Compose taken from Nigiri, in `tools/regtest/`), then `npm run regtest:faucet -- <bcrt1… address>` (Chopsticks mines a block automatically on every `POST /tx`). Local explorer: http://localhost:5000.
 
-## Pièges connus
+## Known pitfalls
 
-- `POST /tx` en JSON → erreur « TX decode failed » : envoyer du `text/plain`.
-- Oublier `witnessScript` sur une entrée P2WSH → finalisation impossible.
-- Sorties sous 330 sats (poussière P2WSH) → refusées par le réseau.
-- Estimation de taille P2WSH 2 sur 3 : environ 105 vB par entrée, 43 vB par sortie P2WSH, 11 vB de base. Prévoir une marge.
-- Le change doit retourner au descripteur du client ; le cosignataire doit le vérifier, sinon une app compromise peut détourner le change.
+- `POST /tx` with JSON → "TX decode failed" error: send `text/plain`.
+- Forgetting `witnessScript` on a P2WSH input → finalization impossible.
+- Outputs under 330 sats (P2WSH dust) → rejected by the network.
+- 2-of-3 P2WSH size estimate: about 105 vB per input, 43 vB per P2WSH output, 11 vB base. Keep a margin.
+- The change must go back to the client's descriptor; the cosigner must check it, otherwise a compromised app can divert the change.
 
-## Vérifier une affirmation
+## Checking a claim
 
-Toute supposition sur une bibliothèque ou une API se vérifie par un test regtest, ou par une recherche Exa (`mcp__claude_ai_Exa__web_search_exa`) sur la documentation officielle. Ne jamais deviner une signature de fonction : lire les types dans `node_modules`.
+Any assumption about a library or an API is checked with a regtest test, or with an Exa search (`mcp__claude_ai_Exa__web_search_exa`) on the official documentation. Never guess a function signature: read the types in `node_modules`.

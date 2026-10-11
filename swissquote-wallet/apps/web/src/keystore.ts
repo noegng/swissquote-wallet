@@ -1,17 +1,17 @@
-// Coffre local de l'appareil (IndexedDB). La graine de la clé téléphone y est chiffrée par une clé
-// AES-GCM WebCrypto **non exportable** : le script de la page peut l'utiliser, mais ne peut pas la
-// lire. En production (app native), cette clé de chiffrement vivrait dans la Secure Enclave.
-// Ni la clé de secours ni ses parts ne sont jamais stockées ici.
+// The device's local vault (IndexedDB). The phone key seed is encrypted there with a
+// **non-extractable** WebCrypto AES-GCM key: the page script can use it, but cannot
+// read it. In production (native app), this encryption key would live in the Secure Enclave.
+// Neither the backup key nor its shares are ever stored here.
 import type { BtcNetworkName, WalletPolicy } from '@sqw/core';
 import { btc } from './config';
 
 const DB_NAME = 'swissquote-wallet';
 
-// Un wallet appartient à un réseau (regtest ou signet) : les clés du coffre portent ce réseau, pour
-// qu'un wallet regtest déjà sur l'appareil ne soit jamais repris quand l'app passe sur signet.
+// A wallet belongs to one network (regtest or signet): the vault keys carry that network, so
+// that a regtest wallet already on the device is never reused when the app switches to signet.
 const NET = btc.name;
 const walletKey = (clientId: string) => `wallet:${NET}:${clientId}`;
-// Ancien format (sans réseau), encore lu tant qu'il correspond au réseau courant.
+// Old format (without network), still read as long as it matches the current network.
 const legacyWalletKey = (clientId: string) => `wallet:${clientId}`;
 const STORE = 'kv';
 
@@ -21,7 +21,7 @@ export interface StoredWallet {
   network: BtcNetworkName;
   policy: WalletPolicy;
   createdAt: string;
-  /** Faux tant que la part CLIENT n'a pas été vérifiée (C1) et chiffrée (C2). */
+  /** False until the CLIENT share has been checked (C1) and encrypted (C2). */
   backupConfirmed: boolean;
   phoneSeed: { iv: Uint8Array<ArrayBuffer>; ct: ArrayBuffer };
 }
@@ -55,7 +55,7 @@ async function deviceKey(): Promise<CryptoKey> {
   return key;
 }
 
-/** Chiffre la graine téléphone avec la clé de l'appareil, sans rien enregistrer. */
+/** Encrypts the phone seed with the device key, without storing anything. */
 export async function sealWallet(
   wallet: Omit<StoredWallet, 'phoneSeed' | 'backupConfirmed'>,
   phoneSeed: Uint8Array,
@@ -65,7 +65,7 @@ export async function sealWallet(
   return { ...wallet, backupConfirmed: false, phoneSeed: { iv, ct } };
 }
 
-/** Enregistre un wallet comme le wallet de ce client sur cet appareil. */
+/** Stores a wallet as this client's wallet on this device. */
 export const putWallet = (wallet: StoredWallet) => put(walletKey(wallet.clientId), wallet);
 
 export async function saveWallet(
@@ -82,8 +82,8 @@ export async function markBackupConfirmed(clientId: string): Promise<StoredWalle
   return updated;
 }
 
-/** Oublie le wallet de ce client sur cet appareil (graine téléphone comprise). Réservé à un wallet
- *  vide dont la sauvegarde n'a jamais été faite. */
+/** Forgets this client's wallet on this device (phone seed included). Only for an empty wallet
+ *  whose backup was never completed. */
 export async function deleteWallet(clientId: string): Promise<void> {
   await tx('readwrite', (s) => s.delete(walletKey(clientId)));
   if ((await get<StoredWallet>(legacyWalletKey(clientId)))?.network === NET) {
@@ -91,7 +91,7 @@ export async function deleteWallet(clientId: string): Promise<void> {
   }
 }
 
-/** Wallet de ce client sur cet appareil, pour le réseau courant uniquement. */
+/** This client's wallet on this device, for the current network only. */
 export async function loadWallet(clientId: string): Promise<StoredWallet | undefined> {
   const current = await get<StoredWallet>(walletKey(clientId));
   if (current) return current;
@@ -99,8 +99,8 @@ export async function loadWallet(clientId: string): Promise<StoredWallet | undef
   return legacy?.network === NET ? legacy : undefined;
 }
 
-/** Gros paiement en attente du délai de sécurité : la PSBT déjà signée par le téléphone (une seule
- *  signature sur deux, donc inutilisable seule) est gardée pour pouvoir finir après un rechargement. */
+/** Large payment waiting for the security delay: the PSBT already signed by the phone (one
+ *  signature of two, so useless on its own) is kept so that it can complete after a reload. */
 export interface PendingPayment {
   requestId: string;
   appSigned: string;
@@ -113,18 +113,18 @@ export const savePending = (walletId: string, p: PendingPayment) => put(`pending
 export const loadPending = (walletId: string) => get<PendingPayment>(`pending:${walletId}`);
 export const clearPending = (walletId: string) => tx('readwrite', (s) => s.delete(`pending:${walletId}`));
 
-/** Récupération en cours sur ce nouvel appareil (survit à un rechargement). La clé de l'appareil
- *  est non exportable : elle sert à ouvrir la part du partenaire, scellée pour elle seule. */
+/** Recovery in progress on this new device (survives a reload). The device key
+ *  is non-extractable: it opens the partner's share, sealed for it alone. */
 export interface RecoveryState {
   oldWalletId: string;
   oldPolicy: WalletPolicy;
   recoveryId: string;
   releaseId: string;
-  /** Clé privée ECDH de l'appareil (non exportable). */
+  /** The device's ECDH private key (non-extractable). */
   deviceKey: CryptoKey;
   credentialId: string;
-  /** Nouveau wallet, enregistré une fois sa sauvegarde faite et AVANT le transfert des fonds : si le
-   *  transfert échoue ou que l'appareil s'éteint, il reprend sans rien perdre. Graine chiffrée. */
+  /** New wallet, stored once its backup is done and BEFORE the funds move: if the
+   *  sweep fails or the device shuts down, it resumes without losing anything. Seed encrypted. */
   newWallet?: StoredWallet;
 }
 
@@ -132,11 +132,11 @@ export const saveRecovery = (clientId: string, r: RecoveryState) => put(`recover
 export const loadRecovery = (clientId: string) => get<RecoveryState>(`recovery:${NET}:${clientId}`);
 export const clearRecovery = (clientId: string) => tx('readwrite', (s) => s.delete(`recovery:${NET}:${clientId}`));
 
-/** Sortie sans Swissquote en cours (libération demandée au partenaire). */
+/** Exit without Swissquote in progress (release requested from the partner). */
 export interface ExitState {
   walletId: string;
   releaseId: string;
-  /** Clé privée ECDH de l'appareil (non exportable). */
+  /** The device's ECDH private key (non-extractable). */
   deviceKey: CryptoKey;
 }
 
@@ -144,7 +144,7 @@ export const saveExit = (clientId: string, e: ExitState) => put(`exit:${NET}:${c
 export const loadExit = (clientId: string) => get<ExitState>(`exit:${NET}:${clientId}`);
 export const clearExit = (clientId: string) => tx('readwrite', (s) => s.delete(`exit:${NET}:${clientId}`));
 
-/** Wallets présents sur cet appareil pour le réseau courant (accessibles sans aucun service Swissquote). */
+/** Wallets on this device for the current network (available without any Swissquote service). */
 export async function listLocalWallets(): Promise<StoredWallet[]> {
   const keys = await tx<IDBValidKey[]>('readonly', (s) => s.getAllKeys());
   const clients = new Set(
@@ -157,13 +157,13 @@ export async function listLocalWallets(): Promise<StoredWallet[]> {
   return wallets.filter((w): w is StoredWallet => !!w);
 }
 
-/** Déchiffre la graine de la clé téléphone, juste le temps de signer. */
+/** Decrypts the phone key seed, just long enough to sign. */
 export async function unlockPhoneSeed(wallet: StoredWallet): Promise<Uint8Array> {
   const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: wallet.phoneSeed.iv }, await deviceKey(), wallet.phoneSeed.ct);
   return new Uint8Array(pt);
 }
 
-/** Invitation d'une personne de confiance, côté client : le lien à lui remettre (ce n'est pas une part). */
+/** A trusted person's invitation, client side: the link to give them (it is not a share). */
 export interface TrusteeInvite {
   inviteId: string;
   trusteeName: string;
@@ -173,6 +173,6 @@ export const saveInvite = (walletId: string, i: TrusteeInvite) => put(`invite:${
 export const loadInvite = (walletId: string) => get<TrusteeInvite>(`invite:${walletId}`);
 export const clearInvite = (walletId: string) => tx('readwrite', (s) => s.delete(`invite:${walletId}`));
 
-/** Côté personne de confiance : clé privée ECDH (non exportable) qui ouvre sa part, sur son appareil. */
+/** Trusted person side: ECDH private key (non-extractable) that opens their share, on their device. */
 export const saveTrusteeKey = (inviteId: string, key: CryptoKey) => put(`trustee-key:${inviteId}`, key);
 export const loadTrusteeKey = (inviteId: string) => get<CryptoKey>(`trustee-key:${inviteId}`);

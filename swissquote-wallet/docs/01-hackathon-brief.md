@@ -1,6 +1,6 @@
-# Brief officiel du hackathon BSA (DoraHacks)
+# Official brief of the BSA hackathon (DoraHacks)
 
-Texte fourni par l'équipe, conservé tel quel. Le parcours retenu est **Swissquote**. Le parcours Belem Capital est conservé pour mémoire.
+Text provided by the team, kept as is. The chosen track is **Swissquote**. The Belem Capital track is kept for reference.
 
 ```text
 Belem Capital Track
@@ -54,15 +54,15 @@ How we will judge
 Projects will be evaluated on technical implementation (35 points), security and custody design (20 points), legal feasibility (15 points), business case (15 points), and user experience and pitch (15 points). Teams can earn up to 20 additional bonus points for well-executed gasless transactions and compliant dApp interaction, provided the core create → sign → recover experience works end to end.
 ```
 
-## Détails du track Swissquote (version complète, reçue le 10 octobre 2026)
+## Swissquote track details (full version, received on 10 October 2026)
 
-Cette version précise la précédente et **fait foi** pour le parcours Swissquote. Points nouveaux à retenir :
+This version refines the previous one and **is authoritative** for the Swissquote track. New points to keep in mind:
 
-- **Six sujets obligatoires** : modèle de custody (avec pour, contre et mini modèle de menaces), architecture (schéma, réel vs mocké), création du wallet, authentification (petit vs gros montant), récupération (dont « Swissquote a disparu »), business case.
-- **Mock d'un détenteur de part** : il doit tourner comme **processus séparé avec son propre stockage**, et l'app cliente ne doit **jamais** détenir sa part.
-- **Bonus** : jusqu'à 10 points chacun pour les transactions sans gas et l'interaction dApp conforme ; crédit en plus si la démo montre la récupération **refusant un attaquant qui a le téléphone et l'e-mail**.
-- **Juridique** : la garde dépend de qui **peut** déplacer les fonds ; un contrôle partagé Swissquote + partenaire est une zone grise. Travel Rule : la banque ne peut envoyer ou recevoir vers un wallet externe qu'après avoir vérifié son propriétaire.
-- **Soumission** : modèle de custody et menaces, schéma d'architecture avec mocks marqués, custody et Travel Rule, business, bonus traités, **outils d'IA utilisés et pour quoi**.
+- **Six required topics**: custody model (with pros, cons and a short threat model), architecture (diagram, real vs mocked), wallet creation, authentication (small vs large amount), recovery (including "Swissquote is gone"), business case.
+- **Mocked share holder**: it must run as a **separate process with its own storage**, and the client app must **never** hold its share.
+- **Bonus**: up to 10 points each for gasless transactions and compliant dApp interaction; extra credit if the demo shows the recovery **refusing an attacker who has the phone and the email**.
+- **Legal**: custody depends on who **can** move the funds; control shared by Swissquote + a partner is a grey zone. Travel Rule: the bank may only send to or receive from an external wallet after verifying its owner.
+- **Submission**: custody model and threats, architecture diagram with mocks marked, custody and Travel Rule, business, bonus topics covered, **AI tools used and what for**.
 
 ```text
 Build the Swissquote Wallet

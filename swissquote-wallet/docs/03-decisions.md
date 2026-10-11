@@ -1,74 +1,74 @@
-# Registre des décisions
+# Decision log
 
-Statuts : **Décidé** (acté par l'équipe), **Proposé** (recommandé, à confirmer), **À valider** (dépend d'un test ou d'un avis externe).
-Mettre à jour ce fichier à chaque changement, avec la date et la raison. Ce fichier **fait foi** en cas de contradiction avec un autre document.
+Statuses: **Decided** (agreed by the team), **Proposed** (recommended, to be confirmed), **To validate** (depends on a test or an outside opinion).
+Update this file on every change, with the date and the reason. This file **is authoritative** when another document contradicts it.
 
-## Changement de cap du 10 octobre 2026
+## Change of course on 10 October 2026
 
-Le brief complet du track (voir `01-brief-hackathon.md`) met le Bitcoin au centre (la grande majorité des clients crypto de Swissquote détiennent du BTC) et exige que le client récupère ses fonds si Swissquote disparaît. Le smart account Safe / ERC-4337, limité à l'EVM, n'est plus le modèle principal. L'équipe retient une **garde collaborative en multisig Bitcoin 2 sur 3**, dont la clé de secours est sauvegardée en **SLIP-39 à groupes**. Les anciennes décisions sont conservées en bas de page pour mémoire.
+The full track brief (see `01-hackathon-brief.md`) puts Bitcoin at the centre (the vast majority of Swissquote's crypto clients hold BTC) and requires that the client gets their funds back if Swissquote disappears. The Safe / ERC-4337 smart account, limited to EVM, is no longer the main model. The team chose **collaborative custody with a 2-of-3 Bitcoin multisig**, whose backup key is stored with **SLIP-39 groups**. The former decisions are kept at the bottom of the page for reference.
 
-## Décisions en vigueur
+## Current decisions
 
-| # | Sujet | Choix | Statut | Raison / condition |
+| # | Topic | Choice | Status | Reason / condition |
 |---|---|---|---|---|
-| D1 | Parcours | Swissquote Wallet (pas Belem Capital) | Décidé | Plus réaliste en 33 h à 3, et le barème récompense la sécurité, le juridique et le pitch |
-| D2 | Seed phrase en coffre chez la banque | Rejetée | Décidé | Swissquote aurait le contrôle des fonds |
-| D3 | Modèle de custody (10/10/2026) | Multisig Bitcoin natif **2 sur 3** P2WSH (`wsh(sortedmulti(2, …))`) : clé téléphone (client), clé Swissquote (cosignataire avec règles), clé de secours | Décidé | Bitcoin natif, pas de clé réassemblée pour signer, Swissquote jamais seul, client autonome avec 2 clés. Modèle éprouvé (Bitkey, Casa, Unchained) |
-| D4 | Authentification (10/10/2026) | Passkey WebAuthn de la plateforme (Secure Enclave, TEE/StrongBox, TPM via Windows Hello, gérés par le navigateur) : authentifie le client auprès du cosignataire avec un **défi lié à chaque opération** (empreinte de la PSBT ou de la demande, usage unique, 2 min). La clé Bitcoin du téléphone est chiffrée par une clé WebCrypto non exportable (PRF facultatif). Démo sur ordinateur, authentificateur virtuel de Chrome en secours | Décidé | La puce ne gère que P-256, Bitcoin utilise secp256k1 : la passkey prouve l'identité, elle ne signe pas la transaction. Accès direct à la Secure Enclave = app native, hors périmètre |
-| D5 | Chaîne (10/10/2026) | **Signet** pour la démo publique (API esplora de **blockstream.info**, mempool.space injoignable depuis le réseau de Noé), **regtest** (Docker, compose repris de Nigiri) pour le développement et les tests | Décidé | Signet est stable et a des faucets ; regtest donne des blocs instantanés. Spike regtest réussi le 10/10 |
-| D6 | Récupération (10/10/2026) | Clé de secours découpée en SLIP-39 : groupe CLIENT (une mnémonique, stockée sur papier C1 et chiffrée dans le cloud C2) **et** groupe TIERS (partenaire indépendant). Seuil de groupes = 2 | Décidé | Swissquote + partenaire ne peuvent pas restaurer (il manque le groupe CLIENT) ; Swissquote n'a aucune part de la clé de secours |
-| D7 | Délai (10/10/2026, raccourci le 11/10) | Démo : **30 s** pour la récupération (Swissquote et partenaire, en parallèle), **20 s** pour un gros paiement ; production : **7 jours** pour la récupération (comme Bitkey), 24 h à 7 jours pour un gros paiement, avec notifications | Décidé | Laisse au client légitime le temps d'annuler ; démo raccourcie pour tenir en peu de temps (réglable dans `.env`) |
-| D8 | Plafonds (10/10/2026) | Appliqués par le **cosignataire Swissquote** : palier 1 (cumul 24 h **montants + frais** sous le seuil) immédiat ; palier 2 délai + notification annulable ; adresse sanctionnée refusée. Présenté au client comme « **Instant payments** » (voir D23) | Décidé | Pas de règles on-chain en Bitcoin ; Swissquote peut refuser de cosigner mais jamais signer seul. Les frais comptent : sinon un voleur détruit les fonds par des frais énormes (bug corrigé le 10/10) |
-| D9 | Actions de protection (10/10/2026) | **Protéger** (annuler un paiement, annuler une récupération, geler le wallet) : passkey **ou** session de l'espace client. **Assouplir** (dégeler) : passkey obligatoire. Une récupération peut s'ouvrir sur un wallet gelé par le client | Décidé | Le client dont le téléphone est volé n'a plus sa passkey : il doit pouvoir réagir depuis un ordinateur (bug corrigé le 10/10). Avec la session, un attaquant ne peut que retarder ou geler, jamais déplacer des fonds |
-| D10 | Garde-fous de récupération (complété le 11/10) | Une seule récupération active par wallet, transfert obligatoire vers un **nouveau** jeu de clés. Le nouveau wallet est créé, sa part TIERS déposée et sa sauvegarde faite **avant** tout mouvement de fonds ; le transfert peut être recosigné aux mêmes conditions (signé par la clé de secours, sorties vers le nouveau wallet uniquement). Annuler une récupération annule aussi la libération chez le partenaire ; un gel demandé pendant une récupération survit à son annulation | Décidé | Révocation des anciennes clés et parts ; leçons d'Argent et de Bitkey. Audit du 11/10 : avant, des fonds pouvaient partir vers un wallet pas encore sauvegardé, ou rester bloqués après une diffusion échouée |
-| D11 | Sans gas (bonus) | Équivalent Bitcoin : Swissquote sponsorise les frais en ajoutant une entrée de son portefeuille de frais à la PSBT avant la signature du client, avec quota par client | Proposé | Seulement si create → sign → recover marche de bout en bout |
-| D12 | Interaction conforme (bonus) | Résumé clair de la transaction avant signature, filtrage des adresses contre une liste de sanctions (mock étiqueté), contrôle renforcé au-dessus d'un seuil | Proposé | Priorité basse |
-| D13 | Qui écrit le code | Écrit par Claude, relu et expliqué par l'équipe | Décidé | Chaque règle doit pouvoir être expliquée au jury |
-| D14 | Cryptographie | Aucune cryptographie maison : bitcoinjs-lib, bip32, **shamir-mnemonic-ts** (45 vecteurs officiels + interop avec la référence Python de Trezor, validés le 10/10), WebCrypto, SimpleWebAuthn | Décidé | Exigé par le brief. `slip39` (ilap) écartée : elle modifie les prototypes globaux |
-| D15 | Différenciation | Démo d'attaques refusées, « Swissquote a disparu » montré en direct, continuité bancaire pendant le délai, invariants de custody testés automatiquement | Proposé | Voir `05-differenciation.md` |
-| D16 | Cadrage juridique | Hypothèse de non-garde (Swissquote ne peut pas déplacer les fonds, seul ni avec le partenaire), à valider par un avocat suisse | À valider | Voir le document projet, section juridique |
-| D17 | MPC | Rejeté pour le hackathon | Proposé | Intégration risquée en 33 h ; en cas de faillite du fournisseur, beaucoup de wallets MPC finissent par reconstituer la clé |
-| D18 | Smart account Safe / ERC-4337 (10/10/2026) | Rétrogradé en option EVM (USDC, sans gas), hors périmètre sauf temps libre | Décidé | EVM uniquement ; le cœur est Bitcoin |
-| D19 | Rôle du split backup (10/10/2026) | SLIP-39 uniquement pour la clé de secours, jamais pour une clé utilisée au quotidien ; Swissquote n'en détient aucune part | Décidé | Évite la collusion employé Swissquote + vol du papier ; la clé de secours n'est réassemblée que sur l'appareil du client, puis abandonnée |
-| D20 | App client (10/10/2026) | Web app mobile : Vite + React + TypeScript, monorepo npm | Décidé | Le plus rapide en 33 h ; passkeys WebAuthn natives |
-| D21 | Suivi des tâches (10/10/2026) | Fichier `docs/09-plan-de-build.md` | Décidé | Rien à configurer |
-| D22 | Personne de confiance (10/10/2026) | Le client peut confier la part TIERS à une personne qu'il choisit (notaire, avocat) à la place du partenaire. Invitation par lien ou QR code, clé créée sur l'appareil de cette personne, code comparé de vive voix, puis le partenaire re-scelle la part pour cette clé et **détruit sa copie**. En récupération, cette personne vérifie l'identité du client et approuve ; le délai du partenaire s'applique toujours | Proposé | Le client choisit à qui il fait confiance ; après la remise, le partenaire ne peut plus lire la part. SLIP-39 inchangé (2 groupes, seuil 2), Swissquote n'a toujours aucune part, l'app du client ne voit jamais la part TIERS. Limites : si cette personne perd sa part, la clé de secours est perdue (les clés téléphone et Swissquote suffisent encore pour dépenser) ; après une récupération, le nouveau wallet repart chez le partenaire et il faut réinviter |
+| D1 | Track | Swissquote Wallet (not Belem Capital) | Decided | More realistic in 33 h for 3 people, and the scoring rewards security, legal and the pitch |
+| D2 | Seed phrase in a vault at the bank | Rejected | Decided | Swissquote would control the funds |
+| D3 | Custody model (10/10/2026) | Native **2-of-3** P2WSH Bitcoin multisig (`wsh(sortedmulti(2, …))`): phone key (client), Swissquote key (rule-enforcing cosigner), backup key | Decided | Native Bitcoin, no key reassembled to sign, Swissquote never alone, the client is autonomous with 2 keys. A proven model (Bitkey, Casa, Unchained) |
+| D4 | Authentication (10/10/2026) | Platform WebAuthn passkey (Secure Enclave, TEE/StrongBox, TPM through Windows Hello, managed by the browser): authenticates the client to the cosigner with a **challenge bound to each operation** (hash of the PSBT or of the request, single use, 3 min). The phone's Bitcoin key is encrypted with a non-extractable WebCrypto key (PRF optional). Demo on a computer, Chrome's virtual authenticator as a fallback | Decided | The chip only handles P-256 and Bitcoin uses secp256k1: the passkey proves identity, it does not sign the transaction. Direct Secure Enclave access = native app, out of scope |
+| D5 | Chain (10/10/2026, updated 11/10) | **Signet** for the public demo, through the **blockstream.info** esplora API (mempool.space is unreachable from Noé's network), **without Docker**. **Regtest** (Docker, compose taken from Nigiri) only for development and the scenario scripts | Decided | Signet is stable, public and has faucets; regtest gives instant blocks. Regtest spike succeeded on 10/10. The team prefers not to depend on Docker for the presentation (11/10) |
+| D6 | Recovery (10/10/2026) | Backup key split with SLIP-39: CLIENT group (one mnemonic, kept on paper C1 and encrypted in the cloud C2) **and** PARTNER group (independent partner). Group threshold = 2 | Decided | Swissquote + partner cannot restore it (the CLIENT group is missing); Swissquote holds no share of the backup key |
+| D7 | Delay (10/10/2026, shortened on 11/10) | Demo: **30 s** for recovery (Swissquote and partner, in parallel), **20 s** for a large payment; production: **7 days** for recovery (as Bitkey), 24 h to 7 days for a large payment, with notifications | Decided | Gives the legitimate client time to cancel; the demo is shortened to fit in little time (set in `.env`) |
+| D8 | Limits (10/10/2026) | Enforced by the **Swissquote cosigner**: tier 1 (24 h total of **amounts + fees** within the threshold) at once; tier 2 delay + notification, can be cancelled; sanctioned address refused. Shown to the client as "**Instant payments**" (see D23). Demo threshold on signet: 3000 sats | Decided | No on-chain rules in Bitcoin; Swissquote can refuse to cosign but never sign alone. Fees count: otherwise a thief destroys the funds with huge fees (bug fixed on 10/10) |
+| D9 | Protective actions (10/10/2026) | **Protect** (cancel a payment, cancel a recovery, freeze the wallet): passkey **or** client-area session. **Relax** (unfreeze): passkey required. A recovery can be opened on a wallet the client froze | Decided | A client whose phone was stolen no longer has their passkey: they must be able to react from a computer (bug fixed on 10/10). With the session, an attacker can only delay or freeze, never move funds |
+| D10 | Recovery safeguards (completed on 11/10) | One active recovery per wallet, mandatory sweep to a **new** set of keys. The new wallet is created, its PARTNER share deposited and its backup done **before** any funds move; the sweep can be cosigned again under the same conditions (signed by the backup key, outputs to the new wallet only). Cancelling a recovery also cancels the partner's release; a freeze requested during a recovery survives its cancellation | Decided | Revocation of the old keys and shares; lessons from Argent and Bitkey. 11/10 audit: before, funds could move to a wallet not yet backed up, or stay stuck after a failed broadcast |
+| D11 | Gasless (bonus) | Bitcoin equivalent: Swissquote sponsors the fees by adding an input from its fee wallet to the PSBT before the client signs, with a per-client quota | Proposed | Only if create → sign → recover works end to end |
+| D12 | Compliant interaction (bonus) | Plain-language summary of the transaction before signing, screening of addresses against a sanctions list (labelled mock), stronger checks above a threshold | Decided | Implemented: summary checked by the app and by Swissquote, sanctions, delay and alert |
+| D13 | Who writes the code | Written by Claude, reviewed and explained by the team | Decided | Every rule must be explainable to the jury |
+| D14 | Cryptography | No homemade cryptography: bitcoinjs-lib, bip32, **shamir-mnemonic-ts** (45 official vectors + interop with Trezor's Python reference, validated on 10/10), WebCrypto, SimpleWebAuthn | Decided | Required by the brief. `slip39` (ilap) rejected: it modifies global prototypes |
+| D15 | Differentiation | Demo of refused attacks, "Swissquote is gone" shown live, banking continuity during the delay, custody invariants tested automatically | Proposed | See `05-differentiation.md` |
+| D16 | Legal framing | Non-custody assumption (Swissquote cannot move the funds, alone or with the partner), to be validated by a Swiss lawyer | To validate | See the design document, legal section |
+| D17 | MPC | Rejected for the hackathon | Proposed | Risky integration in 33 h; when the provider fails, many MPC wallets end up rebuilding the key |
+| D18 | Safe / ERC-4337 smart account (10/10/2026) | Downgraded to an EVM option (USDC, gasless), out of scope unless there is free time | Decided | EVM only; the core is Bitcoin |
+| D19 | Role of the split backup (10/10/2026) | SLIP-39 only for the backup key, never for a key used daily; Swissquote holds no share of it | Decided | Avoids collusion between a Swissquote employee and a stolen paper; the backup key is only reassembled on the client's device, then dropped |
+| D20 | Client app (10/10/2026) | Mobile web app: Vite + React + TypeScript, npm monorepo | Decided | The fastest in 33 h; native WebAuthn passkeys |
+| D21 | Task tracking (10/10/2026) | The file `docs/09-build-plan.md` | Decided | Nothing to set up |
+| D22 | Trusted person (10/10/2026) | The client can entrust the PARTNER share to someone they choose (notary, lawyer) instead of the partner. Invitation by link or QR code, key created on that person's device, code compared by voice, then the partner re-seals the share for that key and **destroys its copy**. During a recovery, that person checks the client's identity and approves; the partner's delay still applies | Proposed | The client chooses whom to trust; after the handover the partner can no longer read the share. SLIP-39 unchanged (2 groups, threshold 2), Swissquote still holds no share, the client's app never sees the PARTNER share. Limits: if that person loses their share, the backup key is lost (the phone and Swissquote keys can still spend); after a recovery, the new wallet goes back to the partner and the person must be invited again |
+| D23 | How the limit is shown (11/10/2026) | The tier-1 threshold is shown as "**Instant payments**": amount left today, a gauge, and what happens beyond it (the payment still leaves after the delay). No more "Daily limit" | Decided | "Daily limit" suggested that payments were blocked beyond it |
+| D24 | Bitcoin network (11/10/2026) | `BTC_NETWORK` (regtest or signet) in the monorepo's `.env`, validated at startup and printed by each server; the local vault and the Swissquote registry keep wallets per network | Decided | A misspelled value or a misplaced `.env` made the app silently fall back to regtest |
+| D25 | Animations (11/10/2026) | Rare UI components (MIT licence) ported to our CSS with `motion`: rolling balance, "gooey" tabs, alert bell, step checks; switched off with `prefers-reduced-motion` | Decided | UX and pitch criterion; no Tailwind added |
+| D26 | Language (11/10/2026) | Everything in the repository is in English: code, comments, messages, documents, file names | Decided | The jury and the DoraHacks page are international. The team keeps talking in French |
 
-| D23 | Présentation du plafond (11/10/2026) | Le seuil du palier 1 s'affiche comme « **Instant payments** » : montant restant aujourd'hui, jauge, et ce qui se passe au-delà (le paiement part quand même après le délai). Plus de « Daily limit » | Décidé | « Daily limit » laissait croire que les paiements étaient bloqués au-delà |
-| D24 | Réseau Bitcoin (11/10/2026) | `BTC_NETWORK` (regtest ou signet) dans le `.env` du monorepo, validé au démarrage, affiché par chaque serveur ; le coffre local et le registre Swissquote séparent les wallets par réseau | Décidé | Une valeur mal écrite ou un `.env` mal placé faisait retomber l'app en regtest sans message |
-| D25 | Animations (11/10/2026) | Composants Rare UI (licence MIT) portés dans notre CSS avec `motion` : solde à rouleaux, onglets « gooey », cloche d'alertes, coches d'étapes ; coupés si `prefers-reduced-motion` | Décidé | Critère UX et pitch ; pas de Tailwind ajouté |
+## Custody invariants
 
-## Invariants de custody
-
-Ils traduisent les décisions en propriétés vérifiables, couvertes par les tests automatisés de `packages/core/test/` (`multisig.test.ts`, `backup.test.ts`, `onboarding.test.ts`) et par les scénarios `npm run demo:*`.
+They turn the decisions into checkable properties, covered by the automated tests in `packages/core/test/` (`multisig.test.ts`, `backup.test.ts`, `onboarding.test.ts`) and by the `npm run demo:*` scenarios.
 
 | # | Invariant |
 |---|---|
-| I1 | Swissquote seul ne peut pas déplacer les fonds |
-| I2 | Swissquote + partenaire ne peuvent pas déplacer les fonds ni restaurer la clé de secours |
-| I3 | Le client peut sortir sans Swissquote (téléphone + clé de secours) |
-| I4 | L'app ne détient jamais la clé Swissquote ni la part du partenaire (processus et stockage séparés) |
-| I5 | La clé de secours n'est réassemblée que sur l'appareil du client, puis abandonnée (transfert vers un nouveau jeu de clés) |
-| I6 | Aucune cryptographie maison |
-| I7 | Tout ce qui est mocké est étiqueté (UI, réponses des services, README) |
+| I1 | Swissquote alone cannot move the funds |
+| I2 | Swissquote + partner can neither move the funds nor restore the backup key |
+| I3 | The client can leave without Swissquote (phone + backup key) |
+| I4 | The app never holds the Swissquote key or the partner's share (separate processes and storage) |
+| I5 | The backup key is only reassembled on the client's device, then dropped (sweep to a new set of keys) |
+| I6 | No homemade cryptography |
+| I7 | Everything mocked is labelled (UI, service responses, README) |
 
-## Spike de départ (H0–H3)
+## Initial spike (H0–H3)
 
-À réaliser avant toute fonctionnalité :
+To be done before any feature:
 
-1. Descripteur 2 sur 3, adresse, financement, PSBT signée par la clé téléphone et la clé Swissquote (service séparé), broadcast sur regtest **puis sur signet**.
-2. SLIP-39 : la bibliothèque JS candidate passe les vecteurs officiels et l'interop avec la référence Python de Trezor ; test I2 (Swissquote + partenaire ne restaurent pas).
-3. Passkey : enregistrement et authentification contre le service Swissquote mocké ; test de l'extension PRF sur les navigateurs de l'équipe.
-4. Si l'étape 2 échoue : utiliser la référence Python dans les services et un module équivalent côté app, et le documenter.
+1. 2-of-3 descriptor, address, funding, PSBT signed by the phone key and the Swissquote key (separate service), broadcast on regtest **then on signet**.
+2. SLIP-39: the candidate JS library passes the official vectors and the interop with Trezor's Python reference; I2 test (Swissquote + partner cannot restore).
+3. Passkey: registration and authentication against the mocked Swissquote service; test of the PRF extension on the team's browsers.
+4. If step 2 fails: use the Python reference in the services and an equivalent module in the app, and document it.
 
-## Décisions remplacées (pour mémoire)
+## Superseded decisions (for reference)
 
-| # | Ancien choix | Remplacé par |
+| # | Former choice | Replaced by |
 |---|---|---|
-| D3 (ancien) | Smart account ERC-4337 (Safe 1.4.1 + Safe4337Module, EntryPoint v0.7) | D3, D18 |
-| D4 (ancien) | Passkey qui signe les UserOperations (P-256 on-chain) | D4 |
-| D5 (ancien) | Base Sepolia | D5 |
-| D6 (ancien) | Récupération 2 sur 3 par gardiens on-chain (Candide) | D6 |
-| D8 (ancien) | Module Solidity maison de plafonds | D8 |
-| D9 (ancien) | Clé de veto sur un second appareil | D9 |
-| D11 (ancien) | Paymaster ERC-4337 | D11 |
+| D3 (former) | ERC-4337 smart account (Safe 1.4.1 + Safe4337Module, EntryPoint v0.7) | D3, D18 |
+| D4 (former) | Passkey signing the UserOperations (P-256 on-chain) | D4 |
+| D5 (former) | Base Sepolia | D5 |
+| D6 (former) | 2-of-3 recovery by on-chain guardians (Candide) | D6 |
+| D8 (former) | Homemade Solidity limits module | D8 |
+| D9 (former) | Veto key on a second device | D9 |
+| D11 (former) | ERC-4337 paymaster | D11 |

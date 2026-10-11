@@ -1,9 +1,9 @@
-// Sortie sans Swissquote (invariant I3) : si les services Swissquote ont définitivement disparu, le
-// client dépense avec les DEUX clés qu'il contrôle :
-//   - la clé du téléphone (dans le coffre de cet appareil) ;
-//   - la clé de secours, reconstituée ici à partir de sa part (papier ou copie cloud) et de la part du
-//     partenaire, qui ne dépend pas de Swissquote (son propre délai, sa propre vérification).
-// Ce module n'appelle JAMAIS le service Swissquote : uniquement le partenaire et l'API Bitcoin.
+// Exit without Swissquote (invariant I3): if Swissquote's services are gone for good, the
+// client spends with the TWO keys they control:
+//   - the phone key (in this device's vault);
+//   - the backup key, rebuilt here from their share (paper or cloud copy) and the partner's
+//     share, which does not depend on Swissquote (its own delay, its own check).
+// This module NEVER calls the Swissquote service: only the partner and the Bitcoin API.
 import {
   accountOrigin,
   backupRootFromShares,
@@ -23,8 +23,8 @@ import { clearExit, saveExit, unlockPhoneSeed, type ExitState, type StoredWallet
 
 const esplora = new Esplora(btc);
 
-// Frais : pas de Swissquote pour conseiller ; estimation de l'API Bitcoin, plafonnée sur signet
-// (estimations parfois aberrantes sur ce réseau de test).
+// Fees: no Swissquote to advise; estimate from the Bitcoin API, capped on signet
+// (estimates are sometimes absurd on this test network).
 async function feeRate(): Promise<number> {
   return btc.name === 'regtest' ? 2 : Math.min(await esplora.feeRate(), 5);
 }
@@ -49,7 +49,7 @@ export async function partnerStatus(
   state: ExitState,
 ): Promise<{ status: string; secondsLeft: number; trusteeName?: string }> {
   const r = await partner(`/release/${state.releaseId}`);
-  // `trusteeName` : la part est chez une personne de confiance qui n'a pas encore approuvé.
+  // `trusteeName`: the share is held by a trusted person who has not approved yet.
   return {
     status: r.status,
     secondsLeft: r.secondsLeft ?? 0,
@@ -57,7 +57,7 @@ export async function partnerStatus(
   };
 }
 
-/** Transfère tous les fonds vers `to`, signés par le téléphone et la clé de secours, sans Swissquote. */
+/** Moves all funds to `to`, signed by the phone key and the backup key, without Swissquote. */
 export async function exitWithoutSwissquote(
   wallet: StoredWallet,
   state: ExitState,
