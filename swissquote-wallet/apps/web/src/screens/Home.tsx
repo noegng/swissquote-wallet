@@ -4,11 +4,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { deriveAddress, descriptorString, type WalletTx } from '@sqw/core';
 import { ApiError, sq, type Session } from '../api';
+import { chainHistory, chainMoved, chainState, chainTouched } from '../chainWatch';
 import { btc } from '../config';
 import { btcDigits, formatBtc, formatChf } from '../format';
 import { RollingNumber } from '../anim/RollingNumber';
 import { deleteWallet, loadPending, type PendingPayment as Pending, type StoredWallet } from '../keystore';
-import { approve, esplora } from '../payments';
+import { approve } from '../payments';
 import { cancelPartnerRelease } from '../recovery';
 import { useChfRate } from '../price';
 import { QrCode } from '../qr';
@@ -49,11 +50,16 @@ type ActivityItem = { at: number; key: string } & ({ tx: WalletTx } | { text: st
 
 const shortTx = (txid: string) => `${txid.slice(0, 6)}…${txid.slice(-6)}`;
 
-const NETWORK_DOWN = 'Bitcoin network unreachable (is regtest running? `npm run regtest:up`)';
+const NETWORK_DOWN =
+  btc.name === 'regtest'
+    ? 'Bitcoin network unreachable (is regtest running? `npm run regtest:up`)'
+    : 'Bitcoin network unreachable, or over its request limit. The app tries again by itself.';
 
-// Refresh: each pass queries dozens of addresses. On signet the public API
-// rate-limits requests, so passes are spaced out.
-const REFRESH_MS = btc.name === 'regtest' ? 5_000 : 20_000;
+// Local mock services (Swissquote, partner): polled often, they cost nothing.
+const LOCAL_MS = 5_000;
+// Public Bitcoin API, rate-limited on signet: a cheap check of two addresses per tick, and a full
+// read of the wallet only when something moved (see chainWatch.ts).
+const CHAIN_MS = btc.name === 'regtest' ? 5_000 : 30_000;
 
 const SIGNET_FAUCET = 'https://bitcoinsignetfaucet.com';
 
@@ -146,15 +152,18 @@ export function Home({
   // Re-read whenever the balance or the pending payment changes (a payment was just signed).
   const instant = useInstantLimit(wallet.walletId, `${balance}/${pending?.requestId}`);
 
-  const refresh = useCallback(async () => {
+  const refreshChain = useCallback(async () => {
     try {
-      const { utxos, nextReceive: index } = await esplora.walletState(wallet.policy, btc.network, 20);
+      const { utxos, nextReceive: index } = await chainState(wallet);
       setBalance(utxos.reduce((s, u) => s + u.value, 0n));
       setAddress(deriveAddress(wallet.policy, 0, index, btc.network).address);
       setMessage((m) => (m === NETWORK_DOWN ? '' : m));
     } catch {
       setMessage(NETWORK_DOWN);
     }
+  }, [wallet]);
+
+  const refreshLocal = useCallback(() => {
     loadPending(wallet.walletId).then((p) => setPending(p ?? null));
     sq<RecoveryInfo>(`/wallets/${wallet.walletId}/recovery`)
       .then((r) => {
@@ -170,6 +179,11 @@ export function Home({
       .catch(() => setNotifications([]));
   }, [wallet]);
 
+  const refresh = useCallback(async () => {
+    refreshLocal();
+    await refreshChain();
+  }, [refreshLocal, refreshChain]);
+
   useEffect(() => {
     refresh();
     shareHolder(wallet.walletId)
@@ -178,16 +192,33 @@ export function Home({
         setHolder(r);
       })
       .catch(() => setBackupDeposited(false));
-    const timer = setInterval(refresh, REFRESH_MS);
-    return () => clearInterval(timer);
-  }, [refresh, wallet.walletId]);
+    const local = setInterval(refreshLocal, LOCAL_MS);
+    // Nothing is asked of the Bitcoin API while this tab is hidden; it catches up when shown again.
+    let lastCheck = 0;
+    const watchChain = async () => {
+      // Coming back to the tab checks at once, but never more often than twice per period.
+      if (document.hidden || Date.now() - lastCheck < CHAIN_MS / 2) return;
+      lastCheck = Date.now();
+      try {
+        if (await chainMoved(wallet)) await refreshChain();
+      } catch {
+        // API unreachable for this check: the next tick tries again.
+      }
+    };
+    const chain = setInterval(watchChain, CHAIN_MS);
+    document.addEventListener('visibilitychange', watchChain);
+    return () => {
+      clearInterval(local);
+      clearInterval(chain);
+      document.removeEventListener('visibilitychange', watchChain);
+    };
+  }, [refresh, refreshLocal, refreshChain, wallet]);
 
   // History read from the chain, when the tab opens and then whenever the balance changes.
   useEffect(() => {
     if (tab !== 'activity') return;
     let stale = false;
-    esplora
-      .walletTxs(wallet.policy, btc.network, 20)
+    chainHistory(wallet)
       .then((txs) => {
         if (stale) return;
         setHistory(txs);
@@ -298,7 +329,7 @@ export function Home({
       setShowReceive(true);
       navigator.clipboard?.writeText(address).catch(() => {});
       window.open(SIGNET_FAUCET, '_blank', 'noopener,noreferrer');
-      return setMessage('Your address is copied: paste it in the signet faucet. The balance updates within about 20 seconds.');
+      return setMessage('Your address is copied: paste it in the signet faucet. The balance updates within about a minute.');
     }
     setMessage('Requesting test bitcoin from the regtest faucet…');
     try {
@@ -311,6 +342,7 @@ export function Home({
     } catch {
       return setMessage('The regtest faucet did not answer (is regtest running? `npm run regtest:up`).');
     }
+    chainTouched();
     setTimeout(async () => {
       await refresh();
       setMessage('');

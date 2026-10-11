@@ -98,12 +98,18 @@ export class Esplora {
     return Math.max(1, Math.ceil(estimates['3'] ?? estimates['6'] ?? 1));
   }
 
-  /** True if the address has already received at least one transaction (confirmed or not). */
-  async addressUsed(address: string): Promise<boolean> {
+  /** Number of transactions seen on an address (confirmed or not). One request: cheap way to
+   *  notice that an address received or spent something. */
+  async addressTxCount(address: string): Promise<number> {
     const a = await this.get<{ chain_stats: { tx_count: number }; mempool_stats: { tx_count: number } }>(
       `/address/${address}`,
     );
-    return a.chain_stats.tx_count + a.mempool_stats.tx_count > 0;
+    return a.chain_stats.tx_count + a.mempool_stats.tx_count;
+  }
+
+  /** True if the address has already received at least one transaction (confirmed or not). */
+  async addressUsed(address: string): Promise<boolean> {
+    return (await this.addressTxCount(address)) > 0;
   }
 
   /**

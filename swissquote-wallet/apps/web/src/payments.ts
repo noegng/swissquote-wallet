@@ -17,6 +17,7 @@ import {
   type SpendSummary,
 } from '@sqw/core';
 import { sq } from './api';
+import { chainTouched } from './chainWatch';
 import { btc } from './config';
 import { clearPending, savePending, unlockPhoneSeed, type PendingPayment, type StoredWallet } from './keystore';
 
@@ -72,6 +73,8 @@ async function signWithPhone(wallet: StoredWallet, psbt: string): Promise<string
 async function broadcast(appSigned: string, sqSigned: string) {
   const { hex, txid } = finalizeSpend(combinePsbts([appSigned, sqSigned], btc.network));
   await esplora.broadcastOnce(hex, txid);
+  // The wallet just changed: the home screen must read it again instead of trusting what it kept.
+  chainTouched();
   return { status: 'sent' as const, txid, url: btc.explorerTxUrl(txid) };
 }
 
