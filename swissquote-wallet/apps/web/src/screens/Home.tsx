@@ -1,6 +1,6 @@
-// Accueil du wallet, en quatre onglets qui correspondent à ce que l'app sait faire :
-//   Wallet (solde), Transfers (envoyer, recevoir), Activity (transactions lues sur la chaîne et
-//   alertes Swissquote), Recovery (clés, gel, téléphone perdu, kit de sortie).
+// Wallet home, in four tabs matching what the app can do:
+//   Wallet (balance), Transfers (send, receive), Activity (transactions read from the chain and
+//   Swissquote alerts), Recovery (keys, freeze, lost phone, exit kit).
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { deriveAddress, descriptorString, type WalletTx } from '@sqw/core';
 import { ApiError, sq, type Session } from '../api';
@@ -21,17 +21,17 @@ function downloadExitKit(wallet: StoredWallet) {
   const kit = {
     type: 'swissquote-wallet/exit-kit',
     note:
-      'Kit de sortie : importez ces descripteurs dans un wallet multisig standard (Sparrow, Bitcoin Core). ' +
-      'Avec la clé du téléphone et la clé de secours (part papier ou copie cloud + part du partenaire), ' +
-      'vous dépensez sans Swissquote.',
+      'Exit kit: import these descriptors into a standard multisig wallet (Sparrow, Bitcoin Core). ' +
+      'With the phone key and the backup key (paper share or cloud copy + the partner share), ' +
+      'you can spend without Swissquote.',
     network: wallet.network,
     receive: descriptorString(wallet.policy, 0),
     change: descriptorString(wallet.policy, 1),
     keys: { phone: wallet.policy.keys[0], swissquote: wallet.policy.keys[1], backup: wallet.policy.keys[2] },
   };
   const url = URL.createObjectURL(new Blob([JSON.stringify(kit, null, 2)], { type: 'application/json' }));
-  Object.assign(document.createElement('a'), { href: url, download: 'swissquote-wallet-kit-de-sortie.json' }).click();
-  // Révoquer tout de suite peut interrompre le téléchargement (Safari, Firefox).
+  Object.assign(document.createElement('a'), { href: url, download: 'swissquote-wallet-exit-kit.json' }).click();
+  // Revoking right away can interrupt the download (Safari, Firefox).
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
@@ -51,8 +51,8 @@ const shortTx = (txid: string) => `${txid.slice(0, 6)}…${txid.slice(-6)}`;
 
 const NETWORK_DOWN = 'Bitcoin network unreachable (is regtest running? `npm run regtest:up`)';
 
-// Rafraîchissement : chaque passage interroge des dizaines d'adresses. Sur signet, l'API publique
-// limite le débit : on espace les passages.
+// Refresh: each pass queries dozens of addresses. On signet the public API
+// rate-limits requests, so passes are spaced out.
 const REFRESH_MS = btc.name === 'regtest' ? 5_000 : 20_000;
 
 const clock = (at: number) => new Date(at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
@@ -64,7 +64,7 @@ function dayLabel(at: number): string {
   return new Date(at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' });
 }
 
-// Dernière alerte vue, par wallet : sert uniquement à la pastille de l'onglet Activity.
+// Last alert seen, per wallet: only used for the Activity tab badge.
 const seenKey = (walletId: string) => `sqw.activity.seen.${walletId}`;
 
 function readSeen(walletId: string): string {
@@ -116,20 +116,20 @@ export function Home({
   onSend: () => void;
   onTrustee: () => void;
   onLogout: () => void;
-  /** Wallet vide jamais sauvegardé abandonné : l'app propose d'en créer un nouveau. */
+  /** Empty, never backed-up wallet dropped: the app offers to create a new one. */
   onDiscard: () => void;
 }) {
   const [balance, setBalance] = useState<bigint | null>(null);
   const [address, setAddress] = useState(() => deriveAddress(wallet.policy, 0, 0, btc.network).address);
   const [backupDeposited, setBackupDeposited] = useState<boolean | null>(null);
-  // Qui détient la part TIERS : le partenaire, ou une personne de confiance choisie par le client.
+  // Who holds the PARTNER share: the partner, or a trusted person chosen by the client.
   const [holder, setHolder] = useState<ShareHolder | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [message, setMessage] = useState('');
   const [recoveryInfo, setRecoveryInfo] = useState<RecoveryInfo | null>(null);
-  // Wallet présent sur l'appareil mais inconnu du service Swissquote (données du mock réinitialisées) :
-  // aucune cosignature possible, on le dit au lieu de laisser échouer chaque paiement.
+  // Wallet on the device but unknown to the Swissquote service (mock data reset):
+  // no cosigning is possible, so say so instead of letting every payment fail.
   const [unknownRemote, setUnknownRemote] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [showReceive, setShowReceive] = useState(false);
@@ -141,7 +141,7 @@ export function Home({
   const [historyError, setHistoryError] = useState(false);
   const [seen, setSeen] = useState(() => readSeen(wallet.walletId));
   const rate = useChfRate();
-  // Relu à chaque variation du solde ou du paiement en attente (un paiement vient d'être signé).
+  // Re-read whenever the balance or the pending payment changes (a payment was just signed).
   const instant = useInstantLimit(wallet.walletId, `${balance}/${pending?.requestId}`);
 
   const refresh = useCallback(async () => {
@@ -180,7 +180,7 @@ export function Home({
     return () => clearInterval(timer);
   }, [refresh, wallet.walletId]);
 
-  // Historique lu sur la chaîne, à l'ouverture de l'onglet puis à chaque variation du solde.
+  // History read from the chain, when the tab opens and then whenever the balance changes.
   useEffect(() => {
     if (tab !== 'activity') return;
     let stale = false;
@@ -200,7 +200,7 @@ export function Home({
   }, [tab, balance, wallet]);
 
   const latestAlert = notifications[0]?.at ?? '';
-  // Alertes arrivées depuis la dernière ouverture de l'onglet Activity (compteur de la cloche).
+  // Alerts that arrived since the Activity tab was last opened (the bell's count).
   const unseen = notifications.filter((n) => n.at > seen).length;
   useEffect(() => {
     if (tab !== 'activity' || !latestAlert || latestAlert <= seen) return;
@@ -208,11 +208,11 @@ export function Home({
     try {
       localStorage.setItem(seenKey(wallet.walletId), latestAlert);
     } catch {
-      // Stockage indisponible : la pastille reviendra au prochain chargement, sans autre effet.
+      // Storage unavailable: the badge comes back on the next load, with no other effect.
     }
   }, [tab, latestAlert, seen, wallet.walletId]);
 
-  // Transactions et alertes dans un seul fil, regroupé par jour, le plus récent d'abord.
+  // Transactions and alerts in a single feed, grouped by day, most recent first.
   const days = useMemo(() => {
     const items: ActivityItem[] = [
       ...(history ?? []).map((tx) => ({ at: tx.blockTime ? tx.blockTime * 1000 : Date.now(), key: tx.txid, tx })),
@@ -228,13 +228,13 @@ export function Home({
     return groups;
   }, [history, notifications]);
 
-  // Récupération lancée depuis un autre appareil : le vrai propriétaire l'annule avec sa passkey.
+  // Recovery started from another device: the real owner cancels it with their passkey.
   async function cancelRecovery(recoveryId: string) {
     setCancelling(true);
     try {
       const authentication = await approve(wallet.walletId, 'cancel', recoveryId);
       await sq(`/recovery/${recoveryId}/cancel`, { authentication });
-      // La part du partenaire ne doit pas partir vers l'appareil qui avait lancé cette récupération.
+      // The partner's share must not go to the device that started this recovery.
       await cancelPartnerRelease(wallet.walletId, wallet.clientId).catch(() => {});
       setMessage('Recovery cancelled.');
       refresh();
@@ -245,7 +245,7 @@ export function Home({
     }
   }
 
-  // Gel : action de protection, la session suffit. Dégel : assouplit la protection, passkey exigée.
+  // Freeze: a protective action, the session is enough. Unfreeze: relaxes the protection, passkey required.
   async function freeze() {
     setBusyFreeze(true);
     try {
@@ -490,7 +490,7 @@ export function Home({
         </Group>
       )}
 
-      {/* Toujours monté, quel que soit l'onglet : une seule boucle de suivi par paiement en attente. */}
+      {/* Always mounted, whatever the tab: a single tracking loop per pending payment. */}
       {pending && (
         <div key="pending" className="stack" hidden={tab === 'recovery' || tab === 'activity'}>
           <HomePending

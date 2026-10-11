@@ -1,5 +1,5 @@
-// Récupération après perte du téléphone, et attaques, contre les services lancés (regtest).
-// Usage : délais courts conseillés, ex. RECOVERY_DELAY_SECONDS=6 pour les deux services, puis
+// Recovery after the phone is lost, and attacks, against the running services (regtest).
+// Usage: short delays recommended, e.g. RECOVERY_DELAY_SECONDS=6 for both services, then
 //         npm run demo:recover
 import {
   Esplora,
@@ -44,11 +44,11 @@ async function waitUntil(label: string, check: () => Promise<boolean>) {
     if (i % 5 === 0) console.log(`  … ${label}`);
     await sleep(1000);
   }
-  throw new Error(`Délai dépassé : ${label}`);
+  throw new Error(`Timed out: ${label}`);
 }
 
-// --- Situation de départ : un client avec un wallet financé et sa part papier (C1).
-step('Situation de départ');
+// --- Starting point: a client with a funded wallet and their paper share (C1).
+step('Starting point');
 const clientId = `client-${Date.now()}`;
 const oldPhone = await loginWithNewPasskey(clientId);
 const m = createWalletMaterial(cfg.network);
@@ -57,21 +57,21 @@ const oldWalletId: string = created.json.walletId;
 const oldPolicy: WalletPolicy = created.json.policy;
 const partnerKey = (await call('GET', `${PARTNER}/public-key`)).json.publicKey;
 await call('POST', `${PARTNER}/shares`, { walletId: oldWalletId, clientId, sealedShare: await sealFor(partnerKey, m.shares.tiers) });
-const paperC1 = m.shares.client; // ce que le client a recopié chez lui
-const oldPhoneSeed = m.phoneSeed; // ce qu'un voleur du téléphone obtiendrait
+const paperC1 = m.shares.client; // what the client wrote down at home
+const oldPhoneSeed = m.phoneSeed; // what a phone thief would get
 await fetch(`${cfg.esploraUrl}/faucet`, {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ address: created.json.firstAddress }),
 });
-await waitUntil('financement', async () => (await balanceOf(oldPolicy)) > 0n);
-console.log(`Wallet ${oldWalletId} financé : ${await balanceOf(oldPolicy)} sats`);
+await waitUntil('funding', async () => (await balanceOf(oldPolicy)) > 0n);
+console.log(`Wallet ${oldWalletId} funded: ${await balanceOf(oldPolicy)} sats`);
 
-// --- Attaque : voleur avec le téléphone (clé téléphone) et l'e-mail (accès au compte Swissquote).
-step('Attaque : téléphone + e-mail volés, le voleur lance une récupération');
-const thief = await loginWithNewPasskey(clientId); // MOCK : vérification d'identité contournée
+// --- Attack: a thief with the phone (phone key) and the email (access to the Swissquote account).
+step('Attack: phone + email stolen, the thief starts a recovery');
+const thief = await loginWithNewPasskey(clientId); // MOCK: identity check bypassed
 const thiefRecovery = await call('POST', `${SQ}/recovery`, { walletId: oldWalletId, deviceCredentialId: thief.credentialId }, thief.token);
-console.log(`Récupération ouverte par le voleur : ${thiefRecovery.json.recoveryId}`);
+console.log(`Recovery opened by the thief: ${thiefRecovery.json.recoveryId}`);
 const thiefDevice = await generateSealingKeyPair();
 const thiefRelease = await call('POST', `${PARTNER}/release`, {
   walletId: oldWalletId,
@@ -79,62 +79,62 @@ const thiefRelease = await call('POST', `${PARTNER}/release`, {
   devicePublicKey: await exportPublicJwk(thiefDevice.publicKey),
 });
 const alerts = await call('GET', `${SQ}/notifications/${oldWalletId}`);
-console.log(`Alerte au vrai client : « ${alerts.json.notifications.at(-1).text} »`);
+console.log(`Alert to the real client: "${alerts.json.notifications.at(-1).text}"`);
 
 {
-  // Pendant la récupération, le wallet est gelé : même un petit paiement est refusé.
+  // During the recovery the wallet is frozen: even a small payment is refused.
   const utxos = await esplora.scanWallet(oldPolicy, cfg.network, 20);
   const { psbt } = buildSpend({ policy: oldPolicy, network: cfg.network, utxos, to: created.json.firstAddress, amount: 1_000n, feeRate: 2, changeIndex: 0 });
   const r = await call('POST', `${SQ}/cosign`, { walletId: oldWalletId, psbt: psbt.toBase64() });
-  console.log(`Paiement pendant la récupération : ${r.code} ${r.json.reason}`);
+  console.log(`Payment during the recovery: ${r.code} ${r.json.reason}`);
 }
 
-await waitUntil('délai de sécurité (voleur)', async () => (await call('GET', `${SQ}/recovery/${thiefRecovery.json.recoveryId}`)).json.secondsLeft === 0);
+await waitUntil('security delay (thief)', async () => (await call('GET', `${SQ}/recovery/${thiefRecovery.json.recoveryId}`)).json.secondsLeft === 0);
 {
   const released = (await call('GET', `${PARTNER}/release/${thiefRelease.json.releaseId}`)).json;
   const tiers = await openSealed(released.sealedForDevice, thiefDevice.privateKey);
   try {
     backupRootFromShares([tiers], cfg.network);
-    console.log('ÉCHEC : clé de secours reconstituée sans la part CLIENT');
+    console.log('FAIL: backup key rebuilt without the CLIENT share');
   } catch {
-    console.log('Part du partenaire obtenue, mais sans la part papier du client : clé de secours impossible à reconstituer');
+    console.log('Partner share obtained, but without the client’s paper share the backup key cannot be rebuilt');
   }
-  // Dernier recours du voleur : transférer avec la clé du téléphone volé + Swissquote.
+  // The thief's last resort: sweep with the stolen phone key + Swissquote.
   const attackerKeys = createWalletMaterial(cfg.network);
   const nw = await call('POST', `${SQ}/recovery/${thiefRecovery.json.recoveryId}/new-wallet`, { phoneKey: attackerKeys.phoneKey, backupKey: attackerKeys.backupKey }, thief.token);
   const utxos = await esplora.scanWallet(oldPolicy, cfg.network, 20);
   const { psbt } = buildSweep({ policy: oldPolicy, network: cfg.network, utxos, to: deriveAddress(nw.json.policy, 0, 0, cfg.network).address, feeRate: 2 });
   signWithRoot(psbt, rootFromSeed(oldPhoneSeed, cfg.network));
   const r = await call('POST', `${SQ}/recovery/${thiefRecovery.json.recoveryId}/sweep`, { psbt: psbt.toBase64() }, thief.token);
-  console.log(`Transfert signé avec la clé du téléphone volé : ${r.code} ${r.json.status} — ${r.json.reason}`);
+  console.log(`Sweep signed with the stolen phone key: ${r.code} ${r.json.status} — ${r.json.reason}`);
 }
 
-step('Le vrai client annule depuis son téléphone (passkey de l’ancien appareil)');
+step('The real client cancels from their phone (old device passkey)');
 {
   const options = await call('POST', `${SQ}/webauthn/operation/options`, { walletId: oldWalletId, purpose: 'cancel', payload: thiefRecovery.json.recoveryId });
   const r = await call('POST', `${SQ}/recovery/${thiefRecovery.json.recoveryId}/cancel`, { authentication: await oldPhone.passkey.authenticate(options.json) });
-  console.log(`Annulation : ${r.json.status} ; fonds intacts : ${await balanceOf(oldPolicy)} sats`);
+  console.log(`Cancellation: ${r.json.status}; funds intact: ${await balanceOf(oldPolicy)} sats`);
 }
 
-step('Le client constate le vol : gel depuis son espace client, sans téléphone (session seule)');
+step('The client notices the theft: freeze from the client area, without the phone (session only)');
 const newDevice = await loginWithNewPasskey(clientId);
 {
   const f = await call('POST', `${SQ}/wallets/${oldWalletId}/freeze`, {}, newDevice.token);
-  console.log(`Gel : ${f.code} ${f.json.status} via ${f.json.via}`);
+  console.log(`Freeze: ${f.code} ${f.json.status} via ${f.json.via}`);
 }
 
-// --- Récupération légitime : le téléphone est vraiment perdu (wallet déjà gelé par le client).
-step('Récupération légitime depuis un nouvel appareil');
+// --- Legitimate recovery: the phone really is lost (wallet already frozen by the client).
+step('Legitimate recovery from a new device');
 const deviceKey = await generateSealingKeyPair();
 const recovery = await call('POST', `${SQ}/recovery`, { walletId: oldWalletId, deviceCredentialId: newDevice.credentialId }, newDevice.token);
 const release = await call('POST', `${PARTNER}/release`, { walletId: oldWalletId, clientId, devicePublicKey: await exportPublicJwk(deviceKey.publicKey) });
-console.log(`Récupération ${recovery.json.recoveryId}, libération ${release.json.releaseId} (délai ${recovery.json.delaySeconds} s)`);
-await waitUntil('délai de sécurité', async () => (await call('GET', `${SQ}/recovery/${recovery.json.recoveryId}`)).json.secondsLeft === 0);
-await waitUntil('libération du partenaire', async () => (await call('GET', `${PARTNER}/release/${release.json.releaseId}`)).json.status === 'released');
+console.log(`Recovery ${recovery.json.recoveryId}, release ${release.json.releaseId} (delay ${recovery.json.delaySeconds} s)`);
+await waitUntil('security delay', async () => (await call('GET', `${SQ}/recovery/${recovery.json.recoveryId}`)).json.secondsLeft === 0);
+await waitUntil('partner release', async () => (await call('GET', `${PARTNER}/release/${release.json.releaseId}`)).json.status === 'released');
 
 const sealed = (await call('GET', `${PARTNER}/release/${release.json.releaseId}`)).json.sealedForDevice;
 const backupRoot = backupRootFromShares([paperC1, await openSealed(sealed, deviceKey.privateKey)], cfg.network);
-console.log(`Clé de secours reconstituée sur l'appareil : ${accountOrigin(backupRoot).xpub === oldPolicy.keys[2].xpub}`);
+console.log(`Backup key rebuilt on the device: ${accountOrigin(backupRoot).xpub === oldPolicy.keys[2].xpub}`);
 
 const next = createWalletMaterial(cfg.network);
 const nw = await call('POST', `${SQ}/recovery/${recovery.json.recoveryId}/new-wallet`, { phoneKey: next.phoneKey, backupKey: next.backupKey }, newDevice.token);
@@ -143,21 +143,21 @@ const utxos = await esplora.scanWallet(oldPolicy, cfg.network, 20);
 const { psbt } = buildSweep({ policy: oldPolicy, network: cfg.network, utxos, to: deriveAddress(newPolicy, 0, 0, cfg.network).address, feeRate: 2 });
 const backupSigned = signWithRoot(psbt, backupRoot).toBase64();
 const sweep = await call('POST', `${SQ}/recovery/${recovery.json.recoveryId}/sweep`, { psbt: backupSigned }, newDevice.token);
-console.log(`Swissquote : ${sweep.code} ${sweep.json.status}, ${sweep.json.revokedPasskeys} ancienne(s) passkey(s) révoquée(s)`);
+console.log(`Swissquote: ${sweep.code} ${sweep.json.status}, ${sweep.json.revokedPasskeys} old passkey(s) revoked`);
 const { hex } = finalizeSpend(combinePsbts([backupSigned, sweep.json.psbt], cfg.network));
-console.log(`Transfert diffusé : ${cfg.explorerTxUrl(await esplora.broadcast(hex))}`);
+console.log(`Sweep broadcast: ${cfg.explorerTxUrl(await esplora.broadcast(hex))}`);
 await call('POST', `${PARTNER}/shares`, { walletId: nw.json.newWalletId, clientId, sealedShare: await sealFor(partnerKey, next.shares.tiers) });
-await waitUntil('arrivée sur le nouveau wallet', async () => (await balanceOf(newPolicy)) > 0n);
+await waitUntil('arrival on the new wallet', async () => (await balanceOf(newPolicy)) > 0n);
 
-step('Vérifications après récupération');
-console.log(`Ancien wallet : ${await balanceOf(oldPolicy)} sats ; nouveau wallet : ${await balanceOf(newPolicy)} sats`);
+step('Checks after recovery');
+console.log(`Old wallet: ${await balanceOf(oldPolicy)} sats; new wallet: ${await balanceOf(newPolicy)} sats`);
 {
-  // Le voleur tente d'approuver un paiement sur le nouveau wallet avec la passkey du téléphone perdu.
+  // The thief tries to approve a payment on the new wallet with the lost phone's passkey.
   const utxos2 = await esplora.scanWallet(newPolicy, cfg.network, 20);
   const { psbt: p } = buildSpend({ policy: newPolicy, network: cfg.network, utxos: utxos2, to: created.json.firstAddress, amount: 5_000n, feeRate: 2, changeIndex: 0 });
   const options = await call('POST', `${SQ}/webauthn/operation/options`, { walletId: nw.json.newWalletId, purpose: 'cosign', payload: p.toBase64() });
   const r = await call('POST', `${SQ}/cosign`, { walletId: nw.json.newWalletId, psbt: p.toBase64(), authentication: await oldPhone.passkey.authenticate(options.json) });
-  console.log(`Passkey du téléphone perdu sur le nouveau wallet : ${r.code} ${r.json.reason}`);
+  console.log(`Lost phone passkey on the new wallet: ${r.code} ${r.json.reason}`);
 }
 {
   const utxos2 = await esplora.scanWallet(newPolicy, cfg.network, 20);
@@ -166,6 +166,6 @@ console.log(`Ancien wallet : ${await balanceOf(oldPolicy)} sats ; nouveau wallet
   const r = await call('POST', `${SQ}/cosign`, { walletId: nw.json.newWalletId, psbt: p.toBase64(), authentication: await newDevice.passkey.authenticate(options.json) });
   const phoneSigned = signWithRoot(p.clone(), rootFromSeed(next.phoneSeed, cfg.network)).toBase64();
   const { hex: h } = finalizeSpend(combinePsbts([phoneSigned, r.json.psbt], cfg.network));
-  console.log(`Premier paiement depuis le nouvel appareil : ${r.json.status} → ${cfg.explorerTxUrl(await esplora.broadcast(h))}`);
+  console.log(`First payment from the new device: ${r.json.status} → ${cfg.explorerTxUrl(await esplora.broadcast(h))}`);
 }
-console.log('\nScénarios de récupération terminés.');
+console.log('\nRecovery scenarios complete.');

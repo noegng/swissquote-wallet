@@ -1,19 +1,19 @@
-// Choix du réseau Bitcoin et de l'API esplora. Seul endroit où le réseau est défini
-// (voir la skill btc-multisig).
+// Choice of the Bitcoin network and of the esplora API. The only place where the network is defined
+// (see the btc-multisig skill).
 import { networks, type Network } from 'bitcoinjs-lib';
 
 export type BtcNetworkName = 'regtest' | 'signet';
 
 export interface NetworkConfig {
   name: BtcNetworkName;
-  /** Paramètres bitcoinjs : signet partage ceux de testnet (adresses tb1…). */
+  /** bitcoinjs parameters: signet shares testnet's (tb1… addresses). */
   network: Network;
   esploraUrl: string;
   explorerTxUrl: (txid: string) => string;
 }
 
-// Signet : blockstream.info par défaut (mempool.space est injoignable sur certains réseaux,
-// constaté le 10/10/2026). Les deux exposent la même API esplora.
+// Signet: blockstream.info by default (mempool.space is unreachable from some networks,
+// seen on 10/10/2026). Both expose the same esplora API.
 const DEFAULT_ESPLORA: Record<BtcNetworkName, string> = {
   regtest: 'http://localhost:3000',
   signet: 'https://blockstream.info/signet/api',

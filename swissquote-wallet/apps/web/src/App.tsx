@@ -13,11 +13,11 @@ import { Trustee } from './screens/Trustee';
 import { remoteWallets, type RemoteWallet } from './recovery';
 import { Brand, Screen } from './ui';
 
-// Parcours : connexion Swissquote (mock) → passkey → création du wallet → accueil ⇄ envoi.
-// Nouvel appareil (wallet existant chez Swissquote, absent ici) → récupération.
-// Deux présentations du même parcours : cadre de téléphone (app) ou page web (grand écran).
-// Lien d'invitation (?trustee=…) : portail de la personne de confiance, sans compte Swissquote.
-// Depuis la connexion, sans session : « Swissquote a disparu » → sortie avec téléphone + secours.
+// Flow: Swissquote login (mock) → passkey → wallet creation → home ⇄ send.
+// New device (wallet known to Swissquote, missing here) → recovery.
+// Two layouts of the same flow: phone frame (app) or web page (large screen).
+// Invitation link (?trustee=…): the trusted person's portal, with no Swissquote account.
+// From the login screen, with no session: "Swissquote is gone" → exit with phone + backup key.
 
 type Layout = 'phone' | 'web';
 
@@ -37,7 +37,7 @@ export function App() {
   const [wallet, setWallet] = useState<StoredWallet | null | undefined>(undefined);
   const [view, setView] = useState<'home' | 'send' | 'exit' | 'trustee'>('home');
   const [trusteeInvite, setTrusteeInvite] = useState(() => new URLSearchParams(location.search).get('trustee'));
-  // Wallet du client connu de Swissquote mais absent de cet appareil (téléphone perdu ?).
+  // The client's wallet known to Swissquote but missing on this device (lost phone?).
   const [remote, setRemote] = useState<RemoteWallet | null | undefined>(undefined);
   const [createInstead, setCreateInstead] = useState(false);
 
@@ -53,10 +53,10 @@ export function App() {
     Promise.all([remoteWallets(session), loadRecovery(session.clientId).catch(() => undefined)])
       .then(([ws, local]) =>
         setRemote(
-          // Récupération commencée sur cet appareil : on la reprend, même si Swissquote a déjà marqué
-          // l'ancien wallet comme récupéré (transfert diffusé, mais pas encore finalisé ici).
+          // Recovery started on this device: resume it, even if Swissquote already marked
+          // the old wallet as recovered (sweep broadcast, but not finalized here yet).
           ws.find((w) => w.walletId === local?.oldWalletId) ??
-            // Sinon, le plus récent des wallets non récupérés (un client peut en avoir plusieurs).
+            // Otherwise, the most recent wallet not yet recovered (a client can have several).
             [...ws].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).find((w) => w.status !== 'recovered') ??
             null,
         ),
@@ -69,7 +69,7 @@ export function App() {
     try {
       localStorage.setItem(LAYOUT_KEY, l);
     } catch {
-      // stockage indisponible : le choix vaut pour cette visite
+      // storage unavailable: the choice lasts for this visit
     }
   }
 
@@ -77,7 +77,7 @@ export function App() {
     saveSession(s);
     setSession(s);
     if (!s) {
-      // Déconnexion : rien du parcours précédent ne doit orienter la prochaine connexion.
+      // Logout: nothing from the previous flow may steer the next login.
       setRemote(undefined);
       setCreateInstead(false);
     }
@@ -101,7 +101,7 @@ export function App() {
       />
     );
   } else if (!session && view === 'exit') {
-    // Sortie sans Swissquote : aucune session, aucun appel au service Swissquote.
+    // Exit without Swissquote: no session, no call to the Swissquote service.
     screen = <Exit onBack={() => setView('home')} />;
   } else if (!session) {
     screen = <Login onLogin={updateSession} onExit={() => setView('exit')} />;
@@ -128,7 +128,7 @@ export function App() {
       />
     );
   } else if (wallet === null) {
-    // Venu de la récupération (« créer un nouveau wallet à la place ») : la flèche y ramène.
+    // Came from the recovery ("create a new wallet instead"): the back arrow returns there.
     screen = (
       <CreateWallet
         session={session}

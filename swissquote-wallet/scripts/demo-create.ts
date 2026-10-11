@@ -1,7 +1,7 @@
-// Création d'un wallet de bout en bout, sans navigateur (services lancés : npm run dev:all).
-// Usage : npm run demo:create
-// Même enchaînement que l'app : connexion → passkey → clés → Swissquote → part TIERS scellée au
-// partenaire → C2 chiffrée par phrase de passe → vérification.
+// End-to-end wallet creation, without a browser (services running: npm run dev:all).
+// Usage: npm run demo:create
+// Same sequence as the app: login → passkey → keys → Swissquote → PARTNER share sealed for the
+// partner → C2 encrypted with a passphrase → checks.
 import { join } from 'node:path';
 import {
   backupRootFromShares,
@@ -37,12 +37,12 @@ const clientId = `client-${Date.now()}`;
 const { token } = await post(`${SQ}/kyc/login`, { clientId });
 const passkey = await SoftAuthenticator.create(process.env.ORIGIN?.split(',')[0], process.env.RP_ID);
 await post(`${SQ}/webauthn/register/verify`, { response: await passkey.register(await post(`${SQ}/webauthn/register/options`, {}, token)) }, token);
-console.log(`1. Connecté (${clientId}) et passkey enregistrée`);
+console.log(`1. Logged in (${clientId}) and passkey registered`);
 
 const m = createWalletMaterial(cfg.network);
 const created = await post(`${SQ}/wallets`, { phoneKey: m.phoneKey, backupKey: m.backupKey }, token);
 const policy: WalletPolicy = created.policy;
-console.log(`2. Wallet ${created.walletId}\n   adresse ${created.firstAddress}`);
+console.log(`2. Wallet ${created.walletId}\n   address ${created.firstAddress}`);
 
 const { publicKey } = await get(`${PARTNER}/public-key`);
 const deposit = await post(`${PARTNER}/shares`, {
@@ -50,17 +50,17 @@ const deposit = await post(`${PARTNER}/shares`, {
   clientId,
   sealedShare: await sealFor(publicKey, m.shares.tiers),
 });
-console.log(`3. Part TIERS scellée et déposée chez le partenaire : ${deposit.stored}`);
+console.log(`3. PARTNER share sealed and deposited with the partner: ${deposit.stored}`);
 
-const c2 = await sealWithPassphrase('phrase de passe de démo', m.shares.client);
-console.log(`4. C1 (papier) : ${m.shares.client.split(' ').slice(0, 3).join(' ')} … (${m.shares.client.split(' ').length} mots)`);
-console.log(`   C2 (cloud)  : boîte chiffrée ${c2.alg}, ${c2.ct.length} caractères`);
+const c2 = await sealWithPassphrase('demo passphrase', m.shares.client);
+console.log(`4. C1 (paper): ${m.shares.client.split(' ').slice(0, 3).join(' ')} … (${m.shares.client.split(' ').length} words)`);
+console.log(`   C2 (cloud): encrypted box ${c2.alg}, ${c2.ct.length} characters`);
 
-// Vérifications
+// Checks
 const sqKnowsBackup = JSON.stringify(policy.keys[2]) === JSON.stringify(m.backupKey);
-const restored = backupRootFromShares([await openWithPassphrase(c2, 'phrase de passe de démo'), m.shares.tiers], cfg.network);
+const restored = backupRootFromShares([await openWithPassphrase(c2, 'demo passphrase'), m.shares.tiers], cfg.network);
 const status = await get(`${PARTNER}/shares/${created.walletId}`);
-console.log('\nVérifications');
-console.log(`   Swissquote a enregistré la clé publique de secours : ${sqKnowsBackup}`);
-console.log(`   C2 déchiffrée + part TIERS → même clé de secours : ${JSON.stringify(accountOrigin(restored)) === JSON.stringify(m.backupKey)}`);
-console.log(`   Le partenaire confirme le dépôt sans révéler la part : ${status.exists && !('sealedShare' in status)}`);
+console.log('\nChecks');
+console.log(`   Swissquote registered the backup public key: ${sqKnowsBackup}`);
+console.log(`   decrypted C2 + PARTNER share → same backup key: ${JSON.stringify(accountOrigin(restored)) === JSON.stringify(m.backupKey)}`);
+console.log(`   The partner confirms the deposit without revealing the share: ${status.exists && !('sealedShare' in status)}`);

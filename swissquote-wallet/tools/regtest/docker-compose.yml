@@ -1,8 +1,8 @@
-# Regtest Bitcoin local pour le développement, repris de Nigiri (vulpemventures/nigiri,
-# cmd/nigiri/resources/docker-compose.yml), réduit au strict nécessaire.
-# Chopsticks expose l'API esplora sur http://localhost:3000, plus POST /faucet {"address": "..."}
-# et un minage automatique à chaque POST /tx.
-# Lancement : npm run regtest:up   (Docker Desktop doit être démarré)
+# Local Bitcoin regtest for development, taken from Nigiri (vulpemventures/nigiri,
+# cmd/nigiri/resources/docker-compose.yml), cut down to the bare minimum.
+# Chopsticks exposes the esplora API on http://localhost:3000, plus POST /faucet {"address": "..."}
+# and automatic mining on every POST /tx.
+# Start: npm run regtest:up   (Docker Desktop must be running). Not needed on signet.
 
 services:
   bitcoin:

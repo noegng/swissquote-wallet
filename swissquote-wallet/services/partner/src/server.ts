@@ -1,11 +1,11 @@
-// [MOCK] Service partenaire (fiduciaire indépendante) : détient la part SLIP-39 du groupe TIERS.
-// Seul, il ne peut rien : sans la part CLIENT, la clé de secours ne se reconstitue pas (I2).
-// Processus séparé avec son propre stockage (data/). Ne dépend pas de Swissquote : il doit
-// fonctionner si Swissquote a disparu.
-// Libération (récupération) : contrôle d'identité MOCK, délai, notification, puis la part est
-// re-scellée pour la clé éphémère du nouvel appareil : elle ne transite jamais en clair.
-// Personne de confiance (notaire, avocat) : le client peut lui confier la part TIERS. Le partenaire
-// la re-scelle pour la clé de cette personne puis détruit sa copie ; il ne fait plus que relayer.
+// [MOCK] Partner service (independent trust company): holds the SLIP-39 share of the PARTNER group.
+// Alone it can do nothing: without the CLIENT share, the backup key cannot be rebuilt (I2).
+// Separate process with its own storage (data/). Does not depend on Swissquote: it must
+// keep working if Swissquote has disappeared.
+// Release (recovery): MOCK identity check, delay, notification, then the share is
+// re-sealed for the new device's ephemeral key: it never travels in clear.
+// Trusted person (notary, lawyer): the client can entrust the PARTNER share to them. The partner
+// re-seals it for that person's key, then destroys its copy; from then on it only relays.
 import './env';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
@@ -42,7 +42,7 @@ function audit(action: string, details: Record<string, unknown> = {}) {
   console.log(`[MOCK ${NAME}] ${action}`, details);
 }
 
-// Clé de réception du partenaire. MOCK : en clair dans data/ ; en production, HSM du partenaire.
+// The partner's receiving key. MOCK: in clear in data/; in production, the partner's HSM.
 async function partnerKey(): Promise<{ publicJwk: JsonWebKey; privateKey: CryptoKey }> {
   let stored = readJson<{ publicJwk?: JsonWebKey; privateJwk?: JsonWebKey }>('partner-key.json', {});
   if (!stored.privateJwk) {
@@ -51,7 +51,7 @@ async function partnerKey(): Promise<{ publicJwk: JsonWebKey; privateKey: Crypto
       publicJwk: await exportPublicJwk(pair.publicKey),
       privateJwk: await globalThis.crypto.subtle.exportKey('jwk', pair.privateKey),
     };
-    writeJson('partner-key.json', { ...stored, warning: 'MOCK : clé en clair, HSM en production' });
+    writeJson('partner-key.json', { ...stored, warning: 'MOCK: key in clear, HSM in production' });
   }
   return { publicJwk: stored.publicJwk!, privateKey: await importPrivateJwk(stored.privateJwk!) };
 }
@@ -59,10 +59,10 @@ async function partnerKey(): Promise<{ publicJwk: JsonWebKey; privateKey: Crypto
 interface ShareRecord {
   walletId: string;
   clientId: string;
-  /** Part scellée pour le partenaire. Absente une fois la part confiée à une personne de confiance. */
+  /** Share sealed for the partner. Missing once the share has been entrusted to a trusted person. */
   sealedShare?: SealedBox;
   depositedAt: string;
-  /** Personne de confiance qui détient la part à la place du partenaire. */
+  /** Trusted person who holds the share instead of the partner. */
   trustee?: { inviteId: string; name: string; since: string };
 }
 
@@ -77,21 +77,21 @@ interface ReleaseTicket {
   identityCheck: string;
   createdAt: string;
   executeAfter: number;
-  /** Part re-scellée pour l'appareil par la personne de confiance (le partenaire ne peut pas la lire). */
+  /** Share re-sealed for the device by the trusted person (the partner cannot read it). */
   sealedForDevice?: SealedBox;
 }
 
-// Invitation d'une personne de confiance à détenir la part TIERS. Son identifiant est le lien remis
-// à cette personne : il n'est jamais renvoyé par une route publique.
+// Invitation for a trusted person to hold the PARTNER share. Its id is the link given
+// to that person: no public route ever returns it.
 interface Invitation {
   id: string;
   walletId: string;
   clientId: string;
   trusteeName: string;
   status: 'invited' | 'accepted' | 'confirmed' | 'collected' | 'cancelled';
-  /** Clé publique créée sur l'appareil de la personne de confiance. */
+  /** Public key created on the trusted person's device. */
   trusteeKey?: JsonWebKey;
-  /** Part scellée pour cette clé : illisible pour le partenaire. */
+  /** Share sealed for that key: unreadable for the partner. */
   sealedForTrustee?: SealedBox;
   createdAt: string;
 }
@@ -104,7 +104,7 @@ const releases = () => readJson<Record<string, ReleaseTicket>>('releases.json', 
 const saveRelease = (t: ReleaseTicket) => writeJson('releases.json', { ...releases(), [t.id]: t });
 const secondsLeft = (t: ReleaseTicket) => Math.max(0, Math.ceil((t.executeAfter - Date.now()) / 1000));
 
-// Canal de notification propre au partenaire (MOCK : e-mail ou courrier du partenaire au client).
+// The partner's own notification channel (MOCK: email or letter from the partner to the client).
 function notify(walletId: string, text: string) {
   const all = readJson<Record<string, { at: string; text: string }[]>>('notifications.json', {});
   (all[walletId] ??= []).push({ at: new Date().toISOString(), text });
@@ -117,26 +117,26 @@ await app.register(cors, { origin: process.env.ORIGIN ?? 'http://localhost:5173'
 
 app.get('/health', async () => ({ mock: true, service: NAME, ok: true }));
 
-// Clé publique du partenaire : l'app scelle la part TIERS pour elle.
-// En production, cette clé serait épinglée dans l'app (pas récupérée à la volée).
+// The partner's public key: the app seals the PARTNER share for it.
+// In production this key would be pinned in the app (not fetched on the fly).
 app.get('/public-key', async () => ({ mock: true, publicKey: (await partnerKey()).publicJwk }));
 
-// Dépôt de la part TIERS à la création du wallet. On vérifie qu'elle est bien scellée pour nous,
-// sans jamais la journaliser ni la renvoyer.
+// Deposit of the PARTNER share when the wallet is created. We check that it is sealed for us,
+// without ever logging or returning it.
 app.post('/shares', async (req, reply) => {
   const body = req.body as { walletId?: string; clientId?: string; sealedShare?: SealedBox };
   if (!body?.walletId || !body.clientId || !body.sealedShare) {
-    return reply.code(400).send({ mock: true, error: 'walletId, clientId et sealedShare requis' });
+    return reply.code(400).send({ mock: true, error: 'walletId, clientId and sealedShare are required' });
   }
   if (shares()[body.walletId]) {
-    return reply.code(409).send({ mock: true, error: 'Une part existe déjà pour ce wallet' });
+    return reply.code(409).send({ mock: true, error: 'A share already exists for this wallet' });
   }
   try {
     const share = await openSealed(body.sealedShare, (await partnerKey()).privateKey);
     if (share.trim().split(/\s+/).length < 20) throw new Error('format');
   } catch {
-    audit('share.refused', { walletId: body.walletId, reason: 'part illisible pour le partenaire' });
-    return reply.code(400).send({ mock: true, error: 'Part illisible : elle doit être scellée pour le partenaire' });
+    audit('share.refused', { walletId: body.walletId, reason: 'share unreadable for the partner' });
+    return reply.code(400).send({ mock: true, error: 'Unreadable share: it must be sealed for the partner' });
   }
   const record: ShareRecord = {
     walletId: body.walletId,
@@ -149,7 +149,7 @@ app.post('/shares', async (req, reply) => {
   return { mock: true, stored: true, depositedAt: record.depositedAt };
 });
 
-// Statut d'une part (jamais son contenu) : qui la détient, et où en est une éventuelle invitation.
+// Status of a share (never its content): who holds it, and where a possible invitation stands.
 app.get('/shares/:walletId', async (req) => {
   const record = shares()[(req.params as { walletId: string }).walletId];
   const invitation = record
@@ -165,10 +165,10 @@ app.get('/shares/:walletId', async (req) => {
   };
 });
 
-// --- Personne de confiance : invitation, acceptation, confirmation par le client, remise de la part.
+// --- Trusted person: invitation, acceptance, confirmation by the client, handover of the share.
 
-// Le client invite une personne de confiance. MOCK : le partenaire croit le clientId fourni ; en
-// production, son propre contrôle d'identité, un délai et une notification avant toute remise.
+// The client invites a trusted person. MOCK: the partner trusts the clientId it is given; in
+// production, its own identity check, a delay and a notification before any handover.
 app.post('/invitations', async (req, reply) => {
   const body = req.body as { walletId?: string; clientId?: string; trusteeName?: string };
   const share = body?.walletId ? shares()[body.walletId] : undefined;
@@ -199,8 +199,8 @@ app.post('/invitations', async (req, reply) => {
   return { mock: true, inviteId: invitation.id };
 });
 
-// Lu par le client (suivi) et par la personne de confiance (son portail). La part n'y figure que
-// scellée pour la clé de cette personne.
+// Read by the client (tracking) and by the trusted person (their portal). The share only appears
+// sealed for that person's key.
 app.get('/invitations/:id', async (req, reply) => {
   const i = invitations()[(req.params as { id: string }).id];
   if (!i) return reply.code(404).send({ mock: true, error: 'Unknown invitation' });
@@ -228,7 +228,7 @@ app.get('/invitations/:id', async (req, reply) => {
   };
 });
 
-// La personne de confiance accepte : elle envoie la clé publique créée sur son appareil.
+// The trusted person accepts: they send the public key created on their device.
 app.post('/invitations/:id/accept', async (req, reply) => {
   const i = invitations()[(req.params as { id: string }).id];
   const publicKey = (req.body as { publicKey?: JsonWebKey })?.publicKey;
@@ -245,8 +245,8 @@ app.post('/invitations/:id/accept', async (req, reply) => {
   return { mock: true, status: 'accepted' };
 });
 
-// Le client confirme (après avoir comparé le code de la clé avec la personne) : le partenaire
-// re-scelle la part pour la clé de cette personne. Elle ne transite jamais en clair.
+// The client confirms (after comparing the key code with the person): the partner
+// re-seals the share for that person's key. It never travels in clear.
 app.post('/invitations/:id/confirm', async (req, reply) => {
   const i = invitations()[(req.params as { id: string }).id];
   if (!i) return reply.code(404).send({ mock: true, error: 'Unknown invitation' });
@@ -264,7 +264,7 @@ app.post('/invitations/:id/confirm', async (req, reply) => {
   return { mock: true, status: 'confirmed' };
 });
 
-// La personne de confiance confirme qu'elle a sa part : le partenaire détruit sa copie.
+// The trusted person confirms they have their share: the partner destroys its copy.
 app.post('/invitations/:id/collected', async (req, reply) => {
   const i = invitations()[(req.params as { id: string }).id];
   if (!i) return reply.code(404).send({ mock: true, error: 'Unknown invitation' });
@@ -280,7 +280,7 @@ app.post('/invitations/:id/collected', async (req, reply) => {
   return { mock: true, status: 'collected' };
 });
 
-// Annulation par le client tant que la part n'a pas été remise.
+// Cancellation by the client as long as the share has not been handed over.
 app.post('/invitations/:id/cancel', async (req, reply) => {
   const i = invitations()[(req.params as { id: string }).id];
   if (!i) return reply.code(404).send({ mock: true, error: 'Unknown invitation' });
@@ -295,28 +295,28 @@ app.post('/invitations/:id/cancel', async (req, reply) => {
   return { mock: true, status: 'cancelled' };
 });
 
-// Demande de libération de la part TIERS depuis un nouvel appareil. Le partenaire ne dépend pas de
-// Swissquote : il fait son propre contrôle d'identité (MOCK) et applique son propre délai.
+// Request to release the PARTNER share from a new device. The partner does not depend on
+// Swissquote: it runs its own identity check (MOCK) and applies its own delay.
 app.post('/release', async (req, reply) => {
   const body = req.body as { walletId?: string; clientId?: string; devicePublicKey?: JsonWebKey };
   const share = body?.walletId ? shares()[body.walletId] : undefined;
   if (!share || share.clientId !== body.clientId || !body.devicePublicKey) {
-    return reply.code(404).send({ mock: true, error: 'Aucune part pour ce wallet et ce client' });
+    return reply.code(404).send({ mock: true, error: 'No share for this wallet and client' });
   }
   try {
     await sealFor(body.devicePublicKey, 'check');
   } catch {
-    return reply.code(400).send({ mock: true, error: 'Clé publique P-256 de l’appareil requise' });
+    return reply.code(400).send({ mock: true, error: 'The device P-256 public key is required' });
   }
   const active = Object.values(releases()).find((r) => r.walletId === share.walletId && r.status === 'pending');
-  if (active) return reply.code(409).send({ mock: true, error: 'Une libération est déjà en cours', releaseId: active.id });
+  if (active) return reply.code(409).send({ mock: true, error: 'A release is already in progress', releaseId: active.id });
   const ticket: ReleaseTicket = {
     id: randomUUID(),
     walletId: share.walletId,
     clientId: share.clientId,
     devicePublicKey: body.devicePublicKey,
     status: 'pending',
-    identityCheck: 'MOCK : contrôle d’identité du partenaire supposé réussi',
+    identityCheck: 'MOCK: partner identity check assumed successful',
     createdAt: new Date().toISOString(),
     executeAfter: Date.now() + RELEASE_DELAY_SECONDS * 1000,
   };
@@ -324,21 +324,21 @@ app.post('/release', async (req, reply) => {
   audit('release.requested', { walletId: ticket.walletId, releaseId: ticket.id, identityCheck: ticket.identityCheck });
   notify(
     ticket.walletId,
-    `Demande de libération de votre part de secours. Elle sera transmise dans ${RELEASE_DELAY_SECONDS} s, ` +
-      `chiffrée pour le nouvel appareil. Si ce n'est pas vous, annulez.`,
+    `Request to release your backup share. It will be sent in ${RELEASE_DELAY_SECONDS} s, ` +
+      `encrypted for the new device. If this is not you, cancel.`,
   );
   return { mock: true, releaseId: ticket.id, executeAfter: new Date(ticket.executeAfter).toISOString() };
 });
 
-// Après le délai : la part est re-scellée pour la clé publique du nouvel appareil (jamais en clair).
+// After the delay: the share is re-sealed for the new device's public key (never in clear).
 app.get('/release/:id', async (req, reply) => {
   const t = releases()[(req.params as { id: string }).id];
-  if (!t) return reply.code(404).send({ mock: true, error: 'Demande inconnue' });
+  if (!t) return reply.code(404).send({ mock: true, error: 'Unknown request' });
   if (t.status === 'cancelled') return { mock: true, status: 'cancelled' };
   const record = shares()[t.walletId];
-  if (!record) return reply.code(404).send({ mock: true, error: 'Part introuvable pour ce wallet' });
-  // Part détenue par une personne de confiance : le partenaire n'a rien à ouvrir, il attend qu'elle
-  // approuve la demande et fournisse la part scellée pour l'appareil. Son délai s'applique quand même.
+  if (!record) return reply.code(404).send({ mock: true, error: 'No share found for this wallet' });
+  // Share held by a trusted person: the partner has nothing to open, it waits for that person to
+  // approve the request and provide the share sealed for the device. Its delay still applies.
   if (record.trustee && !t.sealedForDevice) {
     return {
       mock: true,
@@ -355,14 +355,14 @@ app.get('/release/:id', async (req, reply) => {
   if (t.status !== 'released') {
     saveRelease({ ...t, status: 'released' });
     audit('release.delivered', { walletId: t.walletId, releaseId: t.id });
-    notify(t.walletId, 'Votre part de secours a été transmise, chiffrée pour votre nouvel appareil.');
+    notify(t.walletId, 'Your backup share was sent, encrypted for your new device.');
   }
   return { mock: true, status: 'released', sealedForDevice };
 });
 
-// La personne de confiance approuve une demande : elle fournit sa part, scellée sur son appareil
-// pour la clé du nouvel appareil du client. Le lien d'invitation sert de preuve (MOCK : en
-// production, authentification forte de cette personne).
+// The trusted person approves a request: they provide their share, sealed on their device
+// for the client's new device key. The invitation link serves as proof (MOCK: in
+// production, strong authentication of that person).
 app.post('/release/:id/fulfil', async (req, reply) => {
   const t = releases()[(req.params as { id: string }).id];
   const body = req.body as { inviteId?: string; sealedForDevice?: SealedBox };
@@ -377,33 +377,33 @@ app.post('/release/:id/fulfil', async (req, reply) => {
   return { mock: true, status: 'approved', secondsLeft: secondsLeft(t) };
 });
 
-// Annulation. MOCK : sans authentification (lien dans le message du partenaire). Un voleur pourrait
-// annuler une libération légitime : simple retard, jamais de perte (documenté dans les menaces).
+// Cancellation. MOCK: no authentication (link in the partner's message). A thief could
+// cancel a legitimate release: only a delay, never a loss (documented in the threat model).
 app.post('/release/:id/cancel', async (req, reply) => {
   const t = releases()[(req.params as { id: string }).id];
-  if (!t) return reply.code(404).send({ mock: true, error: 'Demande inconnue' });
-  if (t.status !== 'pending') return reply.code(409).send({ mock: true, error: `Demande déjà ${t.status}` });
+  if (!t) return reply.code(404).send({ mock: true, error: 'Unknown request' });
+  if (t.status !== 'pending') return reply.code(409).send({ mock: true, error: `Request already ${t.status}` });
   saveRelease({ ...t, status: 'cancelled' });
   audit('release.cancelled', { walletId: t.walletId, releaseId: t.id });
-  notify(t.walletId, 'Libération de votre part de secours annulée.');
+  notify(t.walletId, 'Release of your backup share cancelled.');
   return { mock: true, status: 'cancelled' };
 });
 
-// Annulation de toute libération en cours pour un wallet : appelée par l'app quand le client annule
-// une récupération chez Swissquote (sinon l'appareil qui l'avait lancée recevrait quand même la part,
-// et toute nouvelle demande serait refusée). MOCK : même niveau de confiance que l'annulation par lien.
+// Cancels every release in progress for a wallet: called by the app when the client cancels
+// a recovery at Swissquote (otherwise the device that started it would still receive the share,
+// and any new request would be refused). MOCK: same trust level as cancelling by link.
 app.post('/releases/cancel', async (req, reply) => {
   const body = req.body as { walletId?: string; clientId?: string };
   const share = body?.walletId ? shares()[body.walletId] : undefined;
   if (!share || share.clientId !== body.clientId) {
-    return reply.code(404).send({ mock: true, error: 'Aucune part pour ce wallet et ce client' });
+    return reply.code(404).send({ mock: true, error: 'No share for this wallet and client' });
   }
   const pending = Object.values(releases()).filter((r) => r.walletId === share.walletId && r.status === 'pending');
   for (const t of pending) {
     saveRelease({ ...t, status: 'cancelled' });
     audit('release.cancelled', { walletId: t.walletId, releaseId: t.id, via: 'client' });
   }
-  if (pending.length) notify(share.walletId, 'Libération de votre part de secours annulée.');
+  if (pending.length) notify(share.walletId, 'Release of your backup share cancelled.');
   return { mock: true, cancelled: pending.length };
 });
 
@@ -412,7 +412,7 @@ app.get('/notifications/:walletId', async (req) => {
   return { mock: true, notifications: all[(req.params as { walletId: string }).walletId] ?? [] };
 });
 
-// Démo uniquement : vide le stockage du service (une nouvelle clé de partenaire est générée).
+// Demo only: empties the service storage (a new partner key is generated).
 app.post('/admin/reset', async () => {
   rmSync(DATA_DIR, { recursive: true, force: true });
   mkdirSync(DATA_DIR, { recursive: true });
@@ -422,4 +422,4 @@ app.post('/admin/reset', async () => {
 
 const port = Number(process.env.PARTNER_PORT ?? 4002);
 await app.listen({ port, host: '127.0.0.1' });
-console.log(`[MOCK ${NAME}] écoute sur http://localhost:${port}`);
+console.log(`[MOCK ${NAME}] listening on http://localhost:${port}`);

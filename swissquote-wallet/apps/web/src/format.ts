@@ -1,4 +1,4 @@
-/** Sats → « 0.000795 BTC » : les zéros de fin inutiles sont retirés. */
+/** Sats → "0.000795 BTC": useless trailing zeros are removed. */
 export function formatBtc(sats: bigint | string): string {
   const v = BigInt(sats);
   const whole = (v / 100_000_000n).toLocaleString('en-US');
@@ -6,12 +6,12 @@ export function formatBtc(sats: bigint | string): string {
   return `${whole}${frac ? `.${frac}` : ''} BTC`;
 }
 
-/** Partie numérique de formatBtc (« 0.000795 »), pour l'afficher à part de l'unité (compteur animé). */
+/** Numeric part of formatBtc ("0.000795"), to show it apart from the unit (animated counter). */
 export const btcDigits = (sats: bigint | string) => formatBtc(sats).replace(/ BTC$/, '');
 
 const chf = new Intl.NumberFormat('de-CH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-/** Contre-valeur indicative en francs suisses (« ≈ CHF 54.75 »). Vide tant que le cours est inconnu. */
+/** Indicative value in Swiss francs ("≈ CHF 54.75"). Empty while the rate is unknown. */
 export function formatChf(sats: bigint | string, rate: number | null): string {
   if (rate === null) return '';
   const value = (Number(BigInt(sats)) / 1e8) * rate;
@@ -19,7 +19,7 @@ export function formatChf(sats: bigint | string, rate: number | null): string {
   return `≈ CHF ${chf.format(value)}`;
 }
 
-/** « 0.001 » (BTC) → sats. Lève une erreur si la saisie est invalide. */
+/** "0.001" (BTC) → sats. Throws if the input is invalid. */
 export function parseBtc(input: string): bigint {
   const s = input.trim().replace(',', '.');
   if (!/^\d+(\.\d{1,8})?$/.test(s)) throw new Error('Invalid amount (BTC, up to 8 decimals)');

@@ -1,6 +1,6 @@
-// Briques d'interface communes, reprises de la maquette Figma « V3 App » : coque d'écran (barre de
-// navigation, progression, pied collant), listes groupées, pastilles d'état, boutons.
-// Aucune logique métier ici : uniquement de la présentation.
+// Shared interface building blocks, taken from the "V3 App" Figma mockup: screen shell (navigation
+// bar, progress, sticky footer), grouped lists, status chips, buttons.
+// No business logic here: presentation only.
 import { useState, type ButtonHTMLAttributes, type FormEventHandler, type ReactNode } from 'react';
 import { GooeyBar } from './anim/GooeyBar';
 import { RingingBell } from './anim/RingingBell';
@@ -171,7 +171,7 @@ export function Icon({ name, size = 20, stroke = 2 }: { name: IconName; size?: n
   );
 }
 
-/** Coque d'un écran : barre de navigation, progression, contenu défilant, pied collant. */
+/** Screen shell: navigation bar, progress, scrolling content, sticky footer. */
 export function Screen({
   title,
   onBack,
@@ -181,15 +181,15 @@ export function Screen({
   onSubmit,
   children,
 }: {
-  /** Titre de la barre de navigation ; absent = pas de barre (accueil, résultats). */
+  /** Navigation bar title; missing = no bar (home, results). */
   title?: string;
   onBack?: () => void;
-  /** [étape en cours, nombre d'étapes] */
+  /** [current step, number of steps] */
   step?: [number, number];
   footer?: ReactNode;
-  /** Barre d'onglets du wallet : uniquement les sections qui existent dans l'app. */
+  /** Wallet tab bar: only the sections that exist in the app. */
   tabs?: { value: TabName; onChange: (tab: TabName) => void; badges?: Partial<Record<TabName, number>> };
-  /** Fourni : l'écran est un formulaire, le bouton principal du pied le soumet. */
+  /** Provided: the screen is a form, and the footer's main button submits it. */
   onSubmit?: FormEventHandler<HTMLFormElement>;
   children: ReactNode;
 }) {
@@ -238,8 +238,8 @@ const TABS: [TabName, IconName, string][] = [
   ['recovery', 'lifebuoy', 'Recovery'],
 ];
 
-/** Onglets du wallet : l'onglet choisi se détache en pastille (GooeyBar). L'onglet Activity a une
- *  cloche qui sonne et un compteur quand de nouvelles alertes arrivent (RingingBell). */
+/** Wallet tabs: the chosen tab detaches as a pill (GooeyBar). The Activity tab has a
+ *  bell that rings, with a count, when new alerts arrive (RingingBell). */
 function TabBar({
   value,
   onChange,
@@ -348,7 +348,7 @@ export function Row({
   trail?: IconName;
   onClick?: () => void;
   disabled?: boolean;
-  /** Nom lu par un lecteur d’écran quand le contenu visible ne dit pas ce que fait la ligne. */
+  /** Name read by a screen reader when the visible content does not say what the row does. */
   label?: string;
 }) {
   const content = (
@@ -380,7 +380,7 @@ export function Row({
   );
 }
 
-/** Ligne libellé / valeur (résumé d'un paiement). */
+/** Label / value row (payment summary). */
 export function KV({ k, children }: { k: string; children: ReactNode }) {
   return (
     <div className="row kv">
@@ -447,8 +447,8 @@ export function Timeline({ items }: { items: TimelineItem[] }) {
   );
 }
 
-/** Journal d'une opération en plusieurs étapes (création, transfert) : chaque étape terminée se coche
- *  en s'animant (StepCheck) ; `working` ajoute une ligne « en cours » dont l'anneau tourne. */
+/** Log of a multi-step operation (creation, sweep): each finished step ticks itself
+ *  with an animation (StepCheck); `working` adds an "in progress" row with a spinning ring. */
 export function Checklist({ lines, working }: { lines: string[]; working?: string | false }) {
   if (lines.length === 0 && !working) return null;
   return (
@@ -496,7 +496,7 @@ export function Segmented<T extends string>({
   );
 }
 
-/** Panneau sombre avec un compte à rebours (délai de sécurité). */
+/** Dark panel with a countdown (security delay). */
 export function Countdown({
   caption,
   secondsLeft,
@@ -505,7 +505,7 @@ export function Countdown({
 }: {
   caption: string;
   secondsLeft: number | null;
-  /** Durée totale du délai, pour la jauge ; absente = pas de jauge. */
+  /** Total length of the delay, for the gauge; missing = no gauge. */
   total?: number;
   footnote: string;
 }) {
@@ -534,7 +534,7 @@ export function formatClock(seconds: number): string {
 export function Brand({ large }: { large?: boolean }) {
   return (
     <span className={large ? 'brand large' : 'brand'}>
-      {/* Symbole Swissquote, repris tel quel de swissquote.com (marque de Swissquote). */}
+      {/* Swissquote symbol, taken as is from swissquote.com (a Swissquote trademark). */}
       <svg viewBox="0 0 35 35" aria-hidden="true">
         <path
           fill="currentColor"
@@ -547,9 +547,9 @@ export function Brand({ large }: { large?: boolean }) {
 }
 
 /**
- * Mots d'une part de sauvegarde, numérotés. Les numéros sont dessinés en CSS (::before) : une
- * sélection copiée ne contient que les mots. Le bouton copie les mots séparés par des espaces,
- * prêts à coller dans le champ de saisie.
+ * Numbered words of a backup share. The numbers are drawn in CSS (::before): a copied
+ * selection only contains the words. The button copies the words separated by spaces,
+ * ready to paste into the input field.
  */
 export function WordList({ words }: { words: string[] }) {
   const [copied, setCopied] = useState(false);

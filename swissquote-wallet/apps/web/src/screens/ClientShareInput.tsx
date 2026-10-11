@@ -1,11 +1,11 @@
-// Saisie de la part CLIENT : papier (20 mots) ou copie cloud (fichier C2 + phrase de passe).
-// Renvoie les champs et l'action de validation, pour que l'écran place le bouton dans son pied.
+// Entry of the CLIENT share: paper (20 words) or cloud copy (C2 file + passphrase).
+// Returns the fields and the submit action, so that the screen places the button in its footer.
 import { useState, type ReactNode } from 'react';
 import { clientShareFromFile, clientShareFromWords } from '../shareInput';
 import { Segmented } from '../ui';
 
 export function useClientShareInput(
-  /** Reçoit la part validée ; l'appelant l'utilise puis l'oublie. */
+  /** Receives the validated share; the caller uses it, then forgets it. */
   onShare: (share: string) => void,
 ): { fields: ReactNode; ready: boolean; submit: () => Promise<void> } {
   const [mode, setMode] = useState<'paper' | 'cloud'>('paper');

@@ -1,15 +1,15 @@
-// Récupération après perte du téléphone, sur un nouvel appareil (skills slip39-backup et
-// custody-invariants) :
-//   1. demande chez Swissquote (wallet gelé, délai, alertes) et chez le partenaire (son propre délai),
-//      avec une clé ECDH non exportable de cet appareil ;
-//   2. après le délai, la part du partenaire arrive scellée pour cet appareil ; le client fournit sa
-//      part (papier C1 ou copie cloud C2) ; la clé de secours est reconstituée ICI, en mémoire ;
-//   3. nouveau jeu de clés, nouvelle part TIERS chez le partenaire, cérémonie de sauvegarde de la
-//      nouvelle part CLIENT, puis le nouveau wallet est enregistré sur l'appareil (prepareNewWallet) ;
-//   4. SEULEMENT ENSUITE, transfert de tous les fonds, signé par la clé de secours et cosigné par
-//      Swissquote (sweepToNewWallet) ; la clé de secours reconstituée est oubliée.
-// Les fonds ne partent donc jamais vers un wallet dont la clé ou la sauvegarde pourrait encore se
-// perdre, et un transfert échoué se relance (Swissquote recosigne aux mêmes conditions).
+// Recovery after the phone is lost, on a new device (skills slip39-backup and
+// custody-invariants):
+//   1. request at Swissquote (wallet frozen, delay, alerts) and at the partner (its own delay),
+//      with a non-extractable ECDH key of this device;
+//   2. after the delay, the partner's share arrives sealed for this device; the client provides their
+//      share (paper C1 or cloud copy C2); the backup key is rebuilt HERE, in memory;
+//   3. new set of keys, new PARTNER share at the partner, backup ceremony for the
+//      new CLIENT share, then the new wallet is stored on the device (prepareNewWallet);
+//   4. ONLY THEN, sweep of all funds, signed by the backup key and cosigned by
+//      Swissquote (sweepToNewWallet); the rebuilt backup key is forgotten.
+// So funds never move to a wallet whose key or backup could still be
+// lost, and a failed sweep can be retried (Swissquote cosigns again under the same conditions).
 import {
   accountOrigin,
   backupRootFromShares,
@@ -42,7 +42,7 @@ export async function remoteWallets(session: Session): Promise<RemoteWallet[]> {
   return (await sq<{ wallets: RemoteWallet[] }>('/clients/me/wallets', undefined, session.token)).wallets;
 }
 
-/** Annule chez le partenaire toute libération en cours pour ce wallet (annulation d'une récupération). */
+/** Cancels at the partner every release in progress for this wallet (when a recovery is cancelled). */
 export const cancelPartnerRelease = (walletId: string, clientId: string) =>
   partner('/releases/cancel', { walletId, clientId });
 
@@ -56,15 +56,15 @@ export async function startRecovery(session: Session, wallet: RemoteWallet, cred
     try {
       rel = await request();
     } catch (e) {
-      // Une ancienne demande (récupération abandonnée ou annulée) bloque la nouvelle : elle était
-      // scellée pour une autre clé d'appareil, inutilisable ici. On l'annule et on redemande.
+      // An old request (abandoned or cancelled recovery) blocks the new one: it was
+      // sealed for another device key, useless here. Cancel it and ask again.
       if (!(e instanceof ApiError && e.status === 409)) throw e;
       await cancelPartnerRelease(wallet.walletId, session.clientId);
       rel = await request();
     }
   } catch (e) {
-    // Sans la part du partenaire, la récupération ne peut pas aboutir : on la referme chez Swissquote
-    // pour ne pas laisser le wallet gelé par une demande orpheline.
+    // Without the partner's share the recovery cannot succeed: close it at Swissquote
+    // so the wallet is not left frozen by an orphan request.
     await sq(`/recovery/${r.recoveryId}/cancel`, {}, session.token).catch(() => {});
     throw e;
   }
@@ -82,7 +82,7 @@ export async function startRecovery(session: Session, wallet: RemoteWallet, cred
 
 export interface RecoveryProgress {
   swissquote: { status: string; secondsLeft: number };
-  /** `trusteeName` : la part est détenue par une personne de confiance qui n'a pas encore approuvé. */
+  /** `trusteeName`: the share is held by a trusted person who has not approved yet. */
   partner: { status: string; secondsLeft: number; trusteeName?: string };
 }
 
@@ -98,8 +98,8 @@ export async function recoveryProgress(state: RecoveryState): Promise<RecoveryPr
   };
 }
 
-/** Reconstitue la clé de secours sur cet appareil (part du partenaire + part du client) et vérifie
- *  qu'elle est bien celle de l'ancien wallet. En mémoire uniquement (I5). */
+/** Rebuilds the backup key on this device (partner share + client share) and checks
+ *  that it is the old wallet's. In memory only (I5). */
 async function restoreBackupRoot(state: RecoveryState, clientShare: string, log: (line: string) => void) {
   const rel = await partner<{ status: string; sealedForDevice?: SealedBox }>(`/release/${state.releaseId}`);
   if (!rel.sealedForDevice) throw new Error('Our partner’s share is not available yet');
@@ -114,9 +114,9 @@ async function restoreBackupRoot(state: RecoveryState, clientShare: string, log:
 }
 
 /**
- * Étape 1 : nouveau jeu de clés (téléphone, Swissquote, secours) et nouvelle part TIERS chez le
- * partenaire. Aucun fonds ne bouge. Renvoie le nouveau wallet (graine déjà chiffrée, rien
- * d'enregistré) et la nouvelle part CLIENT, à sauvegarder par le client avant le transfert.
+ * Step 1: new set of keys (phone, Swissquote, backup) and new PARTNER share at the
+ * partner. No funds move. Returns the new wallet (seed already encrypted, nothing
+ * stored yet) and the new CLIENT share, for the client to back up before the sweep.
  */
 export async function prepareNewWallet(
   session: Session,
@@ -124,7 +124,7 @@ export async function prepareNewWallet(
   clientShare: string,
   log: (line: string) => void,
 ): Promise<{ newWallet: StoredWallet; newClientShare: string }> {
-  // Vérifie les mots du client avant de créer quoi que ce soit.
+  // Check the client's words before creating anything.
   await restoreBackupRoot(state, clientShare, log);
 
   const next = createWalletMaterial(btc.network);
@@ -158,9 +158,9 @@ export async function prepareNewWallet(
 }
 
 /**
- * Étape 2, une fois le nouveau wallet sauvegardé et enregistré (`state.newWallet`) : transfert de
- * tous les fonds de l'ancien wallet, signé par la clé de secours et cosigné par Swissquote. Rejouable :
- * si l'ancien wallet est déjà vide et la récupération close chez Swissquote, il n'y a plus rien à faire.
+ * Step 2, once the new wallet is backed up and stored (`state.newWallet`): sweep of
+ * all funds of the old wallet, signed by the backup key and cosigned by Swissquote. Replayable:
+ * if the old wallet is already empty and the recovery closed at Swissquote, there is nothing left to do.
  */
 export async function sweepToNewWallet(
   session: Session,
@@ -175,8 +175,8 @@ export async function sweepToNewWallet(
   const utxos = await esplora.scanWallet(state.oldPolicy, btc.network, 20);
   let txUrl: string | null = null;
   if (utxos.length === 0) {
-    // Déjà transféré (reprise après coupure), ou ancien wallet vide : rien à déplacer. L'ancien wallet
-    // reste gelé chez Swissquote, sans fonds ; le nouveau wallet est prêt.
+    // Already swept (resumed after an interruption), or empty old wallet: nothing to move. The old wallet
+    // stays frozen at Swissquote, with no funds; the new wallet is ready.
     const ticket = await sq<{ status: string }>(`/recovery/${state.recoveryId}`);
     log(ticket.status === 'completed' ? 'Funds already moved to your new wallet' : 'Your old wallet was empty: nothing to move');
   } else {

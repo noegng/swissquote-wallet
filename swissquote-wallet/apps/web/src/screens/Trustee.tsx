@@ -1,6 +1,6 @@
-// Portail de la personne de confiance (notaire, avocat), ouvert depuis le lien d'invitation.
-// Sans compte Swissquote et sans aucun appel à Swissquote : uniquement le service partenaire.
-// Elle y accepte l'invitation, récupère sa part, puis approuve ou refuse les demandes de récupération.
+// The trusted person's portal (notary, lawyer), opened from the invitation link.
+// No Swissquote account and no call to Swissquote at all: only the partner service.
+// There they accept the invitation, collect their share, then approve or refuse recovery requests.
 import { useCallback, useEffect, useState } from 'react';
 import { ApiError } from '../api';
 import { loadTrusteeKey } from '../keystore';
@@ -26,7 +26,7 @@ export function Trustee({ inviteId, onClose }: { inviteId: string; onClose: () =
   const [hasKey, setHasKey] = useState<boolean | null>(null);
   const [code, setCode] = useState('');
   const [words, setWords] = useState<string[] | null>(null);
-  // Part saisie à la main, si cet appareil n'a pas la clé (invitation acceptée sur un autre appareil).
+  // Share typed by hand, if this device does not have the key (invitation accepted on another device).
   const [typed, setTyped] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -208,7 +208,7 @@ export function Trustee({ inviteId, onClose }: { inviteId: string; onClose: () =
     );
   }
 
-  // Part récupérée : la personne de confiance traite les demandes de récupération du client.
+  // Share collected: the trusted person handles the client's recovery requests.
   const open = inv.requests.filter((r) => !r.fulfilled);
   const approved = inv.requests.filter((r) => r.fulfilled);
   return (

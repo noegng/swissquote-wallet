@@ -1,18 +1,18 @@
-// Barre de sélection « gooey » : l'élément choisi se détache du groupe, relié à ses voisins par un col
-// qui s'amincit puis casse, comme une goutte. Adapté de « Gooey Nav » (Rare UI, licence MIT) : même
-// ressort et même tracé du col, sans Tailwind ni Next. Couleurs : --gooey-bar et --gooey-active.
+// "Gooey" selection bar: the chosen item detaches from the group, linked to its neighbours by a neck
+// that thins and then breaks, like a drop. Adapted from "Gooey Nav" (Rare UI, MIT licence): same
+// spring and same neck path, without Tailwind or Next. Colours: --gooey-bar and --gooey-active.
 import { useEffect, useId, type ReactNode } from 'react';
 import { motion, useReducedMotion, useSpring, useTransform } from 'motion/react';
 
-// Ressort amorti : rien ne dépasse.
+// Damped spring: nothing overshoots.
 const SPRING = { type: 'spring', stiffness: 200, damping: 28, mass: 1 } as const;
-// Le col a disparu quand l'écart atteint cette fraction de sa largeur.
+// The neck is gone once the gap reaches this fraction of its width.
 const NECK_BREAK = 0.22;
 const NECK_H = 100;
 const SEPARATION = 10;
 const RADIUS = 18;
 
-/** Deux courbes concaves qui se pincent vers le milieu, dessinées dans l'écart entre deux éléments. */
+/** Two concave curves pinching toward the middle, drawn in the gap between two items. */
 function neckPath(gap: number, span: number) {
   if (!Number.isFinite(gap) || gap <= 0) return '';
   const waist = NECK_H * (1 - gap / (span * NECK_BREAK));
@@ -49,7 +49,7 @@ function Segment({
     else marginLeft.set(gap);
   }, [gap, marginLeft, reduced]);
 
-  // Le col occupe exactement l'écart qui s'ouvre à gauche de l'élément.
+  // The neck fills exactly the gap opening on the item's left.
   const d = useTransform(marginLeft, (g) => neckPath(g, SEPARATION));
 
   return (
@@ -84,7 +84,7 @@ function Segment({
 
 export function GooeyBar({ active, items }: { active: number; items: ReactNode[] }) {
   const reduced = useReducedMotion() ?? false;
-  // Un joint est ouvert aux extrémités et de part et d'autre de l'élément choisi.
+  // A seam is open at both ends and on each side of the chosen item.
   const open = (seam: number) => seam === 0 || seam === items.length || seam - 1 === active || seam === active;
 
   return (
@@ -92,7 +92,7 @@ export function GooeyBar({ active, items }: { active: number; items: ReactNode[]
       {items.map((item, i) => (
         <Segment
           key={i}
-          // Un joint fermé recouvre d'un pixel : aucun liseré ne passe.
+          // A closed seam overlaps by one pixel: no hairline shows through.
           gap={i === 0 ? 0 : open(i) ? SEPARATION : -1}
           hasSeam={i > 0}
           leftActive={i - 1 === active}

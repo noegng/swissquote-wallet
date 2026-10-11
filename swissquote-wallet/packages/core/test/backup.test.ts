@@ -11,8 +11,8 @@ import {
 } from '../src';
 
 // Vecteurs officiels : https://github.com/trezor/python-shamir-mnemonic/blob/master/vectors.json
-// Format : [description, mnémoniques, secret maître hex ("" = invalide), xprv]. Phrase de passe "TREZOR".
-describe('bibliothèque SLIP-39 : vecteurs officiels Trezor', () => {
+// Format: [description, mnemonics, master secret hex ("" = invalid), xprv]. Passphrase "TREZOR".
+describe('SLIP-39 library: official Trezor vectors', () => {
   for (const [description, mnemonics, secretHex] of vectors as [string, string[], string, string][]) {
     it(description, () => {
       if (secretHex) {
@@ -24,40 +24,40 @@ describe('bibliothèque SLIP-39 : vecteurs officiels Trezor', () => {
   }
 });
 
-describe('clé de secours : groupes CLIENT et TIERS (I2)', () => {
+describe('backup key: CLIENT and PARTNER groups (I2)', () => {
   const secret = newBackupSecret();
   const { client, tiers } = splitBackupSecret(secret);
 
-  it('produit deux mnémoniques de 20 mots', () => {
+  it('produces two 20-word mnemonics', () => {
     expect(secret).toHaveLength(BACKUP_SECRET_BYTES);
     expect(client.split(' ')).toHaveLength(20);
     expect(tiers.split(' ')).toHaveLength(20);
     expect(client).not.toBe(tiers);
   });
 
-  it('CLIENT + TIERS restaure le secret (récupération légitime)', () => {
+  it('CLIENT + PARTNER restores the secret (legitimate recovery)', () => {
     expect(toHex(combineBackupShares([client, tiers]))).toBe(toHex(secret));
     expect(toHex(combineBackupShares([tiers, client]))).toBe(toHex(secret));
   });
 
-  it('TIERS seul ne restaure rien : Swissquote + partenaire sont bloqués (I2)', () => {
+  it('PARTNER alone restores nothing: Swissquote + partner are blocked (I2)', () => {
     expect(() => combineBackupShares([tiers])).toThrow();
   });
 
-  it('CLIENT seul ne restaure rien : voleur du papier (C1) ou du cloud (C2) bloqué', () => {
+  it('CLIENT alone restores nothing: a thief of the paper (C1) or the cloud copy (C2) is blocked', () => {
     expect(() => combineBackupShares([client])).toThrow();
   });
 
-  it('C1 + C2 (même mnémonique CLIENT) ne restaurent rien sans le partenaire', () => {
+  it('C1 + C2 (same CLIENT mnemonic) restore nothing without the partner', () => {
     expect(() => combineBackupShares([client, client])).toThrow();
   });
 
-  it('une part d’un autre wallet ne se combine pas', () => {
+  it('a share from another wallet does not combine', () => {
     const other = splitBackupSecret(newBackupSecret());
     expect(() => combineBackupShares([client, other.tiers])).toThrow();
   });
 
-  it('identifie le groupe d’une part et détecte une faute de frappe', () => {
+  it('identifies the group of a share and detects a typo', () => {
     expect(shareGroup(client)).toBe('client');
     expect(shareGroup(tiers)).toBe('tiers');
     const words = client.split(' ');
@@ -65,7 +65,7 @@ describe('clé de secours : groupes CLIENT et TIERS (I2)', () => {
     expect(() => shareGroup(words.join(' '))).toThrow();
   });
 
-  it('tolère majuscules et espaces autour d’une saisie manuelle de C1', () => {
+  it('tolerates capitals and spaces around a manually typed C1', () => {
     expect(toHex(combineBackupShares([`  ${client.toUpperCase()} `, tiers]))).toBe(toHex(secret));
   });
 });

@@ -1,13 +1,13 @@
-// PSBT : création (app), signature (chaque détenteur de clé), combinaison et finalisation.
+// PSBT: creation (app), signing (each key holder), combining and finalizing.
 import { Psbt, address as btcAddress, type Network } from 'bitcoinjs-lib';
 import type { BIP32Interface } from 'bip32';
 import { deriveAddress, type Chain, type WalletPolicy } from './descriptor';
 import { ecc, toHex, type KeyOrigin } from './keys';
 
-/** Seuil de poussière d'une sortie P2WSH. */
+/** Dust threshold of a P2WSH output. */
 export const DUST_SATS = 330n;
 
-// Tailles approximatives (vB) d'une transaction P2WSH 2 sur 3, avec marge.
+// Approximate sizes (vB) of a 2-of-3 P2WSH transaction, with a margin.
 const VBYTES_BASE = 11;
 const VBYTES_PER_INPUT = 105;
 const VBYTES_PER_OUTPUT = 43;
@@ -28,7 +28,7 @@ export interface BuildSpendArgs {
   amount: bigint;
   /** sat/vB */
   feeRate: number;
-  /** Index de l'adresse de change (chemin /1/index du même descripteur). */
+  /** Index of the change address (path /1/index of the same descriptor). */
   changeIndex: number;
 }
 
@@ -43,11 +43,11 @@ function estimateFee(inputs: number, outputs: number, feeRate: number): bigint {
   return BigInt(Math.ceil(vbytes * feeRate));
 }
 
-/** Construit une PSBT non signée : plus grosses UTXO d'abord, change vers le descripteur du client. */
+/** Builds an unsigned PSBT: largest UTXOs first, change back to the client's descriptor. */
 export function buildSpend(args: BuildSpendArgs): BuiltSpend {
   const { policy, network, to, amount, feeRate, changeIndex } = args;
-  if (amount < DUST_SATS) throw new Error(`Montant sous le seuil de poussière (${DUST_SATS} sats)`);
-  btcAddress.toOutputScript(to, network); // lève une erreur si l'adresse n'est pas de ce réseau
+  if (amount < DUST_SATS) throw new Error(`Amount below the dust threshold (${DUST_SATS} sats)`);
+  btcAddress.toOutputScript(to, network); // throws if the address is not on this network
 
   const sorted = [...args.utxos].sort((a, b) => (b.value > a.value ? 1 : b.value < a.value ? -1 : 0));
   const selected: WalletUtxo[] = [];
@@ -60,9 +60,9 @@ export function buildSpend(args: BuildSpendArgs): BuiltSpend {
 
   let fee = estimateFee(selected.length, 2, feeRate);
   let change = total - amount - fee;
-  if (change < 0n) throw new Error(`Fonds insuffisants : ${total} sats disponibles`);
+  if (change < 0n) throw new Error(`Insufficient funds: ${total} sats available`);
   if (change < DUST_SATS) {
-    // Change trop petit : on l'abandonne aux frais plutôt que de créer une sortie refusée.
+    // Change too small: leave it to the fee rather than create an output the network rejects.
     fee = total - amount;
     change = 0n;
   }
@@ -86,14 +86,14 @@ export function buildSpend(args: BuildSpendArgs): BuiltSpend {
   return { psbt, fee, change };
 }
 
-/** Transfert de tous les fonds vers une seule adresse, sans change (récupération, sortie). */
+/** Moves all funds to a single address, with no change (recovery, exit). */
 export function buildSweep(args: Omit<BuildSpendArgs, 'amount' | 'changeIndex'>): BuiltSpend {
   const { policy, network, utxos, to, feeRate } = args;
-  if (utxos.length === 0) throw new Error('Aucun fonds à transférer');
+  if (utxos.length === 0) throw new Error('No funds to move');
   btcAddress.toOutputScript(to, network);
   const total = utxos.reduce((s, u) => s + u.value, 0n);
   const fee = estimateFee(utxos.length, 1, feeRate);
-  if (total - fee < DUST_SATS) throw new Error(`Fonds insuffisants pour couvrir les frais (${total} sats)`);
+  if (total - fee < DUST_SATS) throw new Error(`Not enough funds to cover the fees (${total} sats)`);
   const psbt = new Psbt({ network });
   for (const u of utxos) {
     const d = deriveAddress(policy, u.chain, u.index, network);
@@ -109,7 +109,7 @@ export function buildSweep(args: Omit<BuildSpendArgs, 'amount' | 'changeIndex'>)
   return { psbt, fee, change: 0n };
 }
 
-/** Signe toutes les entrées qui portent l'empreinte de cette racine. Ne touche pas aux autres. */
+/** Signs every input carrying this root's fingerprint. Leaves the others untouched. */
 export function signWithRoot(psbt: Psbt, root: BIP32Interface): Psbt {
   psbt.signAllInputsHD(root);
   return psbt;
@@ -119,9 +119,9 @@ const validator = (pubkey: Uint8Array, msghash: Uint8Array, signature: Uint8Arra
   ecc.verify(msghash, pubkey, signature);
 
 /**
- * Vrai si chaque entrée porte une signature valide de la clé `key` (repérée par son empreinte dans
- * les chemins BIP-32). Sert au cosignataire en récupération : exiger la clé de secours, pas celle
- * du téléphone perdu.
+ * True if every input carries a valid signature from `key` (found by its fingerprint in
+ * the BIP-32 paths). Used by the cosigner during recovery: require the backup key, not the
+ * lost phone's.
  */
 export function everyInputSignedBy(psbt: Psbt, key: KeyOrigin): boolean {
   return psbt.data.inputs.every((input, i) => {
@@ -135,18 +135,18 @@ export function everyInputSignedBy(psbt: Psbt, key: KeyOrigin): boolean {
   });
 }
 
-/** Relit une PSBT reçue en base64 (ex. côté service Swissquote). */
+/** Parses a PSBT received as base64 (e.g. on the Swissquote service side). */
 export function psbtFromBase64(base64: string, network: Network): Psbt {
   return Psbt.fromBase64(base64, { network });
 }
 
-/** Combine des copies signées séparément (ex. app et service Swissquote). */
+/** Combines copies signed separately (e.g. by the app and the Swissquote service). */
 export function combinePsbts(base64s: string[], network: Network): Psbt {
   const [first, ...rest] = base64s.map((b) => Psbt.fromBase64(b, { network }));
   return rest.length ? first.combine(...rest) : first;
 }
 
-/** Vérifie les signatures puis finalise. Échoue s'il manque une signature (moins de 2 sur 3). */
+/** Checks the signatures, then finalizes. Fails if a signature is missing (fewer than 2 of 3). */
 export function finalizeSpend(psbt: Psbt): { hex: string; txid: string } {
   if (!psbt.validateSignaturesOfAllInputs(validator)) throw new Error('Signature invalide');
   psbt.finalizeAllInputs();

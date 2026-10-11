@@ -1,5 +1,5 @@
-// Remise à zéro entre deux répétitions de la démo (skill demo-run).
-// Appelle POST /admin/reset sur chaque service mocké lancé.
+// Reset between two demo rehearsals (skill demo-run).
+// Calls POST /admin/reset on each running mocked service.
 const services = [
   ['swissquote', `http://localhost:${process.env.SWISSQUOTE_PORT ?? 4001}`],
   ['partner', `http://localhost:${process.env.PARTNER_PORT ?? 4002}`],
@@ -8,9 +8,9 @@ const services = [
 for (const [name, url] of services) {
   try {
     const res = await fetch(`${url}/admin/reset`, { method: 'POST' });
-    console.log(`${name} : ${res.ok ? 'remis à zéro' : `erreur ${res.status}`}`);
+    console.log(`${name}: ${res.ok ? 'reset' : `error ${res.status}`}`);
   } catch {
-    console.log(`${name} : service non lancé (rien à faire)`);
+    console.log(`${name}: service not running (nothing to do)`);
   }
 }
-console.log("Penser à vider le stockage local de l'app : DevTools > Application > Clear site data.");
+console.log('Remember to clear the app storage too: DevTools > Application > Clear site data.');

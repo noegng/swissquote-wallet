@@ -1,5 +1,5 @@
-// Gros paiement en attente du délai de sécurité (palier 2) : compte à rebours, annulation par passkey,
-// diffusion automatique une fois le délai écoulé.
+// Large payment waiting for the security delay (tier 2): countdown, cancellation by passkey,
+// automatic broadcast once the delay is over.
 import { useEffect, useRef, useState } from 'react';
 import { sq } from '../api';
 import { formatBtc, shortAddress } from '../format';
@@ -12,21 +12,21 @@ export type Done =
   | { status: 'cancelled' }
   | { status: 'failed'; reason: string };
 
-/** Suit un paiement en attente. Une seule boucle de suivi par paiement, quel que soit le nombre de rendus. */
+/** Tracks a pending payment. A single tracking loop per payment, however many times it renders. */
 export function usePendingPayment(wallet: StoredWallet, pending: Pending, onDone: (result: Done) => void) {
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
   const [total, setTotal] = useState<number | undefined>(undefined);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  // Le parent se re-rend souvent : on garde le dernier onDone sans relancer la boucle de suivi
-  // (deux boucles en parallèle pourraient diffuser la transaction deux fois).
+  // The parent re-renders often: keep the latest onDone without restarting the tracking loop
+  // (two loops in parallel could broadcast the transaction twice).
   const onDoneRef = useRef(onDone);
   onDoneRef.current = onDone;
   const latest = useRef({ wallet, pending });
   latest.current = { wallet, pending };
 
   useEffect(() => {
-    // Durée totale du délai, pour la jauge uniquement.
+    // Total length of the delay, for the gauge only.
     sq<{ highValueDelaySeconds: number }>('/rules')
       .then((r) => setTotal(r.highValueDelaySeconds))
       .catch(() => setTotal(undefined));
@@ -68,7 +68,7 @@ export function usePendingPayment(wallet: StoredWallet, pending: Pending, onDone
   return { secondsLeft, total, error, busy, cancel };
 }
 
-/** Compte à rebours et explication, communs à l'accueil et à l'écran d'envoi. */
+/** Countdown and explanation, shared by the home and send screens. */
 export function PendingPaymentPanel({
   pending,
   secondsLeft,

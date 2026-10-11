@@ -1,4 +1,4 @@
-// Envoi : saisie → résumé en clair vérifié par l'app → approbation passkey → résultat.
+// Send: entry → plain-language summary checked by the app → passkey approval → result.
 import { useEffect, useState, type FormEvent } from 'react';
 import { ApiError, sq } from '../api';
 import { formatBtc, formatChf, parseBtc, shortAddress, shortId } from '../format';
@@ -20,10 +20,10 @@ type Outcome =
 function explain(e: unknown): string {
   const err = e as Error;
   if (err.name === 'NotAllowedError') return 'Approval cancelled on the device.';
-  // Messages du core (en français, partagés avec les scripts) traduits pour l'interface.
-  const funds = /Fonds insuffisants : (\d+) sats/.exec(err.message);
+  // Core messages (shared with the scripts) rephrased for the interface.
+  const funds = /Insufficient funds: (\d+) sats/.exec(err.message);
   if (funds) return `Insufficient funds: ${formatBtc(funds[1])} available, fees included.`;
-  if (/seuil de poussière/.test(err.message)) return 'Amount too small: the minimum is 0.0000033 BTC (330 sats).';
+  if (/dust threshold/.test(err.message)) return 'Amount too small: the minimum is 0.0000033 BTC (330 sats).';
   return err.message;
 }
 
@@ -72,7 +72,7 @@ export function Send({ wallet, onBack }: { wallet: StoredWallet; onBack: () => v
   const [amount, setAmount] = useState('');
   const [prepared, setPrepared] = useState<PreparedPayment | null>(null);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
-  // Seuil de signature immédiate et déjà dépensé sur 24 h : décident du délai de sécurité.
+  // Threshold for immediate signing and amount already spent over 24 h: they decide the security delay.
   const instant = useInstantLimit(wallet.walletId);
   const [sanctioned, setSanctioned] = useState<string[]>([]);
   const [error, setError] = useState('');
@@ -107,7 +107,7 @@ export function Send({ wallet, onBack }: { wallet: StoredWallet; onBack: () => v
       const r = await submitPayment(wallet, prepared!);
       setOutcome(r.status === 'sent' ? { kind: 'sent', url: r.url, txid: r.txid } : { kind: 'pending', pending: r.pending });
     } catch (err) {
-      // 403 : refus des règles (sanctions, PSBT étrangère). 423 : wallet gelé.
+      // 403: refused by the rules (sanctions, foreign PSBT). 423: wallet frozen.
       if (err instanceof ApiError && (err.status === 403 || err.status === 423)) {
         setOutcome({ kind: 'refused', reason: err.message });
       } else {

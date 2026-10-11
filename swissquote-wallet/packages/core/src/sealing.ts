@@ -1,8 +1,8 @@
-// Chiffrement des parts de sauvegarde (skill slip39-backup). WebCrypto uniquement, rien à la main :
-//   - pour un destinataire (partenaire, ou appareil du client en récupération) :
-//     ECDH P-256 éphémère + HKDF-SHA-256 + AES-256-GCM ;
-//   - pour la copie C2 dans le cloud du client : PBKDF2-SHA-256 (phrase de passe) + AES-256-GCM.
-// Fonctionne dans le navigateur et dans Node 22 (globalThis.crypto.subtle).
+// Encryption of the backup shares (skill slip39-backup). WebCrypto only, nothing hand-written:
+//   - for a recipient (the partner, or the client's device during a recovery):
+//     ephemeral ECDH P-256 + HKDF-SHA-256 + AES-256-GCM;
+//   - for the C2 copy in the client's cloud: PBKDF2-SHA-256 (passphrase) + AES-256-GCM.
+// Works in the browser and in Node 22 (globalThis.crypto.subtle).
 
 const subtle = globalThis.crypto.subtle;
 const ECDH = { name: 'ECDH', namedCurve: 'P-256' } as const;
@@ -12,7 +12,7 @@ export const PBKDF2_ITERATIONS = 600_000;
 export interface SealedBox {
   v: 1;
   alg: 'ECDH-P256+HKDF-SHA256+A256GCM';
-  /** Clé publique éphémère de l'expéditeur. */
+  /** The sender's ephemeral public key. */
   epk: JsonWebKey;
   iv: string;
   ct: string;
@@ -39,7 +39,7 @@ function fromB64(b64: string): Uint8Array<ArrayBuffer> {
 
 const random = (n: number) => globalThis.crypto.getRandomValues(new Uint8Array(n));
 
-/** Paire de clés de réception. `extractable` pour un service qui la garde dans un fichier (mock). */
+/** Receiving key pair. `extractable` for a service that keeps it in a file (mock). */
 export function generateSealingKeyPair(extractable = false): Promise<CryptoKeyPair> {
   return subtle.generateKey(ECDH, extractable, ['deriveBits']) as Promise<CryptoKeyPair>;
 }
@@ -64,7 +64,7 @@ async function sharedAesKey(privateKey: CryptoKey, publicKey: CryptoKey, usage: 
   );
 }
 
-/** Chiffre un texte pour le détenteur de la clé privée correspondant à `recipient`. */
+/** Encrypts a text for the holder of the private key matching `recipient`. */
 export async function sealFor(recipient: JsonWebKey, plaintext: string): Promise<SealedBox> {
   const recipientKey = await subtle.importKey('jwk', recipient, ECDH, false, []);
   const ephemeral = (await subtle.generateKey(ECDH, true, ['deriveBits'])) as CryptoKeyPair;
@@ -80,7 +80,7 @@ export async function sealFor(recipient: JsonWebKey, plaintext: string): Promise
   };
 }
 
-/** Déchiffre une boîte scellée. Lève une erreur si la clé n'est pas la bonne ou si la boîte a été modifiée. */
+/** Opens a sealed box. Throws if the key is wrong or the box was tampered with. */
 export async function openSealed(box: SealedBox, privateKey: CryptoKey): Promise<string> {
   const epk = await subtle.importKey('jwk', box.epk, ECDH, false, []);
   const aes = await sharedAesKey(privateKey, epk, 'decrypt');
@@ -99,7 +99,7 @@ async function passphraseKey(passphrase: string, salt: Uint8Array<ArrayBuffer>, 
   );
 }
 
-/** Chiffre la copie C2 avec une phrase de passe choisie par le client. */
+/** Encrypts the C2 copy with a passphrase chosen by the client. */
 export async function sealWithPassphrase(
   passphrase: string,
   plaintext: string,

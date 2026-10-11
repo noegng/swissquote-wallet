@@ -1,9 +1,9 @@
-// [MOCK] Règles du cosignataire Swissquote, appliquées dans cet ordre (skill mock-service) :
-//   1. la PSBT n'utilise que des fonds du wallet et le change revient au wallet (summarizeSpend)
-//   2. aucun destinataire sur la liste de sanctions (mock : liste de démonstration)
-//   3. palier 1 : cumul des 24 dernières heures (montants + frais) sous le plafond → signature immédiate
-//      palier 2 : au-dessus → mise en attente, notification, signature après délai sauf annulation
-// Swissquote peut refuser ou retarder, jamais signer seul : il n'a qu'une clé sur trois.
+// [MOCK] Rules of the Swissquote cosigner, applied in this order (skill mock-service):
+//   1. the PSBT only uses the wallet's funds and the change comes back to the wallet (summarizeSpend)
+//   2. no recipient on the sanctions list (mock: demo list)
+//   3. tier 1: total of the last 24 hours (amounts + fees) within the instant amount → signed at once
+//      tier 2: above it → held, notification, signed after a delay unless cancelled
+// Swissquote can refuse or delay, never sign alone: it holds only one key out of three.
 import type { SpendSummary } from '@sqw/core';
 import { btcAmount } from './context';
 import { readJson, writeJson } from './store';
@@ -45,19 +45,19 @@ export function decide(walletId: string, summary: SpendSummary): Decision {
   const hit = summary.external.find((o) => sanctioned.has(o.address.toLowerCase()));
   if (hit) return { kind: 'refuse', reason: `Recipient on the sanctions list: ${hit.address}` };
 
-  // Les frais comptent dans le plafond : sinon un voleur pourrait détruire les fonds en payant des
-  // frais énormes (ex. 1 000 sats envoyés, 900 000 sats de frais) sans passer par le délai.
+  // Fees count toward the limit: otherwise a thief could destroy the funds by paying huge
+  // fees (e.g. 1,000 sats sent, 900,000 sats of fees) without going through the delay.
   const already = spentLast24h(walletId);
   const total = already + outgoing(summary);
   if (total <= DAILY_LIMIT_SATS) return { kind: 'sign', tier: 1 };
   return {
     kind: 'hold',
     tier: 2,
-    reason: `Above the daily limit, fees included (${btcAmount(total)} > ${btcAmount(DAILY_LIMIT_SATS)})`,
+    reason: `Beyond today's instant payments, fees included (${btcAmount(total)} > ${btcAmount(DAILY_LIMIT_SATS)})`,
   };
 }
 
-/** Ce qui quitte réellement le wallet : montant envoyé + frais du réseau. */
+/** What really leaves the wallet: amount sent + network fee. */
 export function outgoing(summary: SpendSummary): bigint {
   return summary.sentExternal + summary.fee;
 }

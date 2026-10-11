@@ -29,8 +29,8 @@ function spend(policy: WalletPolicy, to: string, utxoPolicy = policy) {
   });
 }
 
-describe('résumé d’une PSBT vérifié contre le descripteur', () => {
-  it('sépare destinataire, change et frais', () => {
+describe('PSBT summary checked against the descriptor', () => {
+  it('separates recipient, change and fee', () => {
     const policy = wallet();
     const to = deriveAddress(wallet(), 0, 0, network).address;
     const { psbt, fee, change } = spend(policy, to);
@@ -42,18 +42,18 @@ describe('résumé d’une PSBT vérifié contre le descripteur', () => {
     expect(s.fee).toBe(fee);
   });
 
-  it('refuse une entrée qui appartient à un autre wallet', () => {
+  it('rejects an input that belongs to another wallet', () => {
     const policy = wallet();
     const other = wallet();
     const { psbt } = spend(policy, deriveAddress(wallet(), 0, 0, network).address, other);
-    expect(() => summarizeSpend(psbt, policy, network)).toThrow(/étrangère/);
+    expect(() => summarizeSpend(psbt, policy, network)).toThrow(/foreign/);
   });
 
-  it('compte comme externe un « change » qui ne correspond pas au descripteur', () => {
+  it('counts as external a "change" that does not match the descriptor', () => {
     const policy = wallet();
     const { psbt } = spend(policy, deriveAddress(wallet(), 0, 0, network).address);
-    // Une app compromise remplace les métadonnées du change sans changer l'adresse réelle :
-    // l'adresse ne correspond plus à ce que dit la dérivation, donc ce n'est pas du change.
+    // A compromised app replaces the change metadata without changing the real address:
+    // the address no longer matches what the derivation says, so it is not change.
     const real = psbt.data.outputs[1].bip32Derivation!;
     psbt.data.outputs[1].bip32Derivation = real.map((d) => ({ ...d, path: d.path.replace(/\/2$/, '/7') }));
     const s = summarizeSpend(psbt, policy, network);

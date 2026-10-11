@@ -1,6 +1,6 @@
-// Cérémonie de sauvegarde de la part CLIENT, commune à la création et à la récupération :
-// C1 sur papier (avec vérification de deux mots), puis C2 chiffrée par phrase de passe et téléchargée.
-// La part n'est jamais stockée : elle vit dans la mémoire de cet écran, puis disparaît.
+// Backup ceremony for the CLIENT share, shared by wallet creation and recovery:
+// C1 on paper (with two words checked), then C2 encrypted with a passphrase and downloaded.
+// The share is never stored: it lives in this screen's memory, then disappears.
 import { useMemo, useState } from 'react';
 import { sealWithPassphrase } from '@sqw/core';
 import { btc } from '../config';
@@ -9,7 +9,7 @@ import { Btn, Callout, Screen, Title, WordList } from '../ui';
 function download(filename: string, content: unknown) {
   const url = URL.createObjectURL(new Blob([JSON.stringify(content, null, 2)], { type: 'application/json' }));
   Object.assign(document.createElement('a'), { href: url, download: filename }).click();
-  // Révoquer tout de suite peut interrompre le téléchargement (Safari, Firefox).
+  // Revoking right away can interrupt the download (Safari, Firefox).
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
@@ -29,9 +29,9 @@ export function BackupCeremony({
 }: {
   walletId: string;
   clientShare: string;
-  /** Titre de la barre de navigation : « New wallet » à la création, « New backup » en récupération. */
+  /** Navigation bar title: "New wallet" at creation, "New backup" during recovery. */
   navTitle: string;
-  /** Progression affichée sous la barre (création : étapes 2 et 3 sur 3) ; absente en récupération. */
+  /** Progress shown under the bar (creation: steps 2 and 3 of 3); missing during recovery. */
   stepOf?: (step: 'paper' | 'verify' | 'cloud') => [number, number];
   onDone: () => void;
 }) {
@@ -49,9 +49,9 @@ export function BackupCeremony({
     setError('');
     try {
       const box = await sealWithPassphrase(passphrase, clientShare);
-      download(`swissquote-wallet-sauvegarde-C2-${walletId.slice(0, 8)}.json`, {
+      download(`swissquote-wallet-backup-C2-${walletId.slice(0, 8)}.json`, {
         type: 'swissquote-wallet/backup-c2',
-        note: 'Copie chiffrée de votre part de secours (C2). À garder dans votre iCloud ou Google Drive.',
+        note: 'Encrypted copy of your backup share (C2). Keep it in your iCloud or Google Drive.',
         walletId,
         network: btc.name,
         box,

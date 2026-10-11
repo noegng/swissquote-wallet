@@ -1,8 +1,8 @@
-// Charge le .env du monorepo avant tout autre module (les règles lisent process.env à l'import).
-// Cherché dans le dossier du monorepo (à côté de .env.example), puis dans le dossier parent (racine
-// du dépôt git), pour qu'un .env posé un niveau trop haut ne soit pas ignoré en silence.
-// Les variables déjà définies dans l'environnement gardent la priorité
-// (process.loadEnvFile les écraserait, d'où parseEnv).
+// Loads the monorepo's .env before any other module (the rules read process.env at import time).
+// Looked up in the monorepo folder (next to .env.example), then in the parent folder (root of
+// the git repository), so that a .env placed one level too high is not silently ignored.
+// Variables already set in the environment keep priority
+// (process.loadEnvFile would overwrite them, hence parseEnv).
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseEnv } from 'node:util';
@@ -15,10 +15,10 @@ if (ENV_FILE) {
   }
 }
 
-// Réseau Bitcoin : une valeur mal écrite ne doit pas retomber en silence sur regtest.
+// Bitcoin network: a misspelled value must not silently fall back to regtest.
 const network = process.env.BTC_NETWORK?.trim() || 'regtest';
 if (network !== 'regtest' && network !== 'signet') {
-  throw new Error(`BTC_NETWORK=${process.env.BTC_NETWORK} invalide dans ${ENV_FILE ?? 'l’environnement'} : regtest ou signet`);
+  throw new Error(`BTC_NETWORK=${process.env.BTC_NETWORK} is invalid in ${ENV_FILE ?? 'the environment'}: use regtest or signet`);
 }
 process.env.BTC_NETWORK = network;
-console.log(`[MOCK] réseau Bitcoin : ${network} (${ENV_FILE ?? 'aucun .env trouvé, valeurs par défaut'})`);
+console.log(`[MOCK] Bitcoin network: ${network} (${ENV_FILE ?? 'no .env found, defaults'})`);

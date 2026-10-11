@@ -1,10 +1,10 @@
-// Personne de confiance (notaire, avocat) qui détient la part TIERS à la place du partenaire
-// (skills slip39-backup et custody-invariants).
-//   Client : invite, compare le code de la clé avec la personne, confirme la remise.
-//   Personne de confiance : crée sa clé sur son appareil, reçoit la part scellée pour cette clé, puis
-//   approuve les demandes de récupération en la re-scellant pour le nouvel appareil du client.
-// L'app du client ne voit jamais cette part : elle passe du partenaire à la personne de confiance.
-// Rien ici n'appelle Swissquote : le dispositif doit fonctionner si Swissquote a disparu.
+// Trusted person (notary, lawyer) who holds the PARTNER share instead of the partner
+// (skills slip39-backup and custody-invariants).
+//   Client: invites, compares the key code with the person, confirms the handover.
+//   Trusted person: creates their key on their device, receives the share sealed for that key, then
+//   approves recovery requests by re-sealing it for the client's new device.
+// The client's app never sees this share: it goes from the partner to the trusted person.
+// Nothing here calls Swissquote: the scheme must work if Swissquote has disappeared.
 import { exportPublicJwk, generateSealingKeyPair, openSealed, sealFor, type SealedBox } from '@sqw/core';
 import { partner } from './api';
 import { clearInvite, loadTrusteeKey, saveInvite, saveTrusteeKey, type StoredWallet } from './keystore';
@@ -27,7 +27,7 @@ export interface Invitation {
   requests: ReleaseRequest[];
 }
 
-/** Qui détient la part TIERS d'un wallet, vu par le partenaire. */
+/** Who holds a wallet's PARTNER share, as seen by the partner. */
 export interface ShareHolder {
   exists: boolean;
   holder: 'partner' | 'trustee';
@@ -39,15 +39,15 @@ export const shareHolder = (walletId: string) => partner<ShareHolder>(`/shares/$
 export const invitation = (inviteId: string) => partner<Invitation>(`/invitations/${inviteId}`);
 export const inviteLink = (inviteId: string) => `${location.origin}${location.pathname}?trustee=${inviteId}`;
 
-/** Code court de la clé de la personne de confiance : le client le compare avec elle, de vive voix,
- *  avant de confirmer la remise (le lien a pu être ouvert par quelqu'un d'autre). */
+/** Short code of the trusted person's key: the client compares it with them, by voice,
+ *  before confirming the handover (someone else may have opened the link). */
 export async function keyCode(key: JsonWebKey): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${key.x}.${key.y}`));
   const hex = [...new Uint8Array(digest).slice(0, 4)].map((b) => b.toString(16).padStart(2, '0')).join('');
   return `${hex.slice(0, 4)}-${hex.slice(4)}`.toUpperCase();
 }
 
-// --- Côté client
+// --- Client side
 
 export async function inviteTrustee(wallet: StoredWallet, trusteeName: string): Promise<string> {
   const r = await partner<{ inviteId: string }>('/invitations', {
@@ -67,16 +67,16 @@ export async function cancelInvite(wallet: StoredWallet, inviteId: string): Prom
   await clearInvite(wallet.walletId);
 }
 
-// --- Côté personne de confiance
+// --- Trusted person side
 
-/** Crée la clé de réception sur cet appareil (privée, non exportable) et envoie sa partie publique. */
+/** Creates the receiving key on this device (private, non-extractable) and sends its public part. */
 export async function acceptInvitation(inviteId: string): Promise<void> {
   const pair = await generateSealingKeyPair(false);
   await saveTrusteeKey(inviteId, pair.privateKey);
   await partner(`/invitations/${inviteId}/accept`, { publicKey: await exportPublicJwk(pair.publicKey) });
 }
 
-/** Ouvre la part avec la clé de cet appareil. */
+/** Opens the share with this device's key. */
 export async function openTrusteeShare(inviteId: string, box: SealedBox): Promise<string> {
   const key = await loadTrusteeKey(inviteId);
   if (!key) throw new Error('This device does not hold the key for this share. Use the device you accepted the invitation on.');
@@ -85,7 +85,7 @@ export async function openTrusteeShare(inviteId: string, box: SealedBox): Promis
 
 export const markCollected = (inviteId: string) => partner(`/invitations/${inviteId}/collected`, {});
 
-/** Approuve une demande : la part est re-scellée ici pour le nouvel appareil du client. */
+/** Approves a request: the share is re-sealed here for the client's new device. */
 export async function approveRelease(inviteId: string, request: ReleaseRequest, share: string): Promise<void> {
   await partner(`/release/${request.releaseId}/fulfil`, {
     inviteId,

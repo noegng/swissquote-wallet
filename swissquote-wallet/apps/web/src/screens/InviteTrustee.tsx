@@ -1,6 +1,6 @@
-// Confier la part TIERS à une personne de confiance (notaire, avocat) à la place du partenaire :
-// invitation par lien ou QR code, comparaison d'un code avec cette personne, puis remise.
-// La part passe du partenaire à la personne de confiance : cette app ne la voit jamais (I4).
+// Entrusting the PARTNER share to a trusted person (notary, lawyer) instead of the partner:
+// invitation by link or QR code, a code compared with that person, then the handover.
+// The share goes from the partner to the trusted person: this app never sees it (I4).
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { clearInvite, loadInvite, type StoredWallet, type TrusteeInvite } from '../keystore';
 import { QrCode } from '../qr';

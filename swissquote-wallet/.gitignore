@@ -3,16 +3,16 @@ dist/
 .env
 *.log
 
-# Stockage propre de chaque service mocké (jamais versionné)
+# Each mocked service's own storage (never versioned)
 services/*/data/
 
-# Données du regtest Docker
+# Local Docker regtest data
 tools/regtest/volumes/
 
 # Python
 __pycache__/
 .venv/
 
-# Graines de test du spike (réseaux de test uniquement)
+# Spike test seeds (test networks only)
 scripts/.spike/
 scripts/.demo-exit.json

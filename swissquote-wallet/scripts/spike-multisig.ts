@@ -1,8 +1,8 @@
-// Spike H0 : vraie transaction 2 sur 3 (clé téléphone + clé Swissquote) sur regtest ou signet.
-// Usage : npm run spike            (BTC_NETWORK du .env, regtest par défaut)
-//         npm run spike:signet     (force signet, quel que soit le terminal)
-// Les graines de test sont gardées dans scripts/.spike/<réseau>.json (gitignoré) pour pouvoir
-// financer l'adresse via un faucet puis relancer le script. Réseaux de test uniquement.
+// H0 spike: a real 2-of-3 transaction (phone key + Swissquote key) on regtest or signet.
+// Usage: npm run spike            (BTC_NETWORK from .env, regtest by default)
+//        npm run spike:signet     (forces signet, whatever the terminal)
+// The test seeds are kept in scripts/.spike/<network>.json (gitignored) so that the address can
+// be funded from a faucet before running the script again. Test networks only.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
@@ -35,7 +35,7 @@ const cfg = networkConfig(
 );
 const esplora = new Esplora(cfg);
 
-// Graines persistées pour ce réseau
+// Seeds stored for this network
 const dir = join(import.meta.dirname, '.spike');
 mkdirSync(dir, { recursive: true });
 const seedFile = join(dir, `${name}.json`);
@@ -53,14 +53,14 @@ const policy: WalletPolicy = {
 };
 
 const receive = deriveAddress(policy, 0, 0, cfg.network);
-console.log(`Réseau      : ${name} (${cfg.esploraUrl})`);
-console.log(`Descripteur : ${descriptorString(policy, 0)}`);
-console.log(`Adresse 2/3 : ${receive.address}`);
+console.log(`Network     : ${name} (${cfg.esploraUrl})`);
+console.log(`Descriptor  : ${descriptorString(policy, 0)}`);
+console.log(`2-of-3 addr : ${receive.address}`);
 
 let utxos = await esplora.scanWallet(policy, cfg.network, 3);
 if (utxos.length === 0) {
   if (name === 'regtest') {
-    console.log('Aucun fonds : financement via le faucet regtest…');
+    console.log('No funds: funding from the regtest faucet…');
     const res = await fetch(`${cfg.esploraUrl}/faucet`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -72,15 +72,15 @@ if (utxos.length === 0) {
       utxos = await esplora.scanWallet(policy, cfg.network, 3);
     }
   } else {
-    console.log(`\nAucun fonds. Envoyer des sats signet à ${receive.address}`);
-    console.log('Faucet : https://bitcoinsignetfaucet.com — puis relancer : npm run spike:signet');
+    console.log(`\nNo funds. Send signet sats to ${receive.address}`);
+    console.log('Faucet: https://bitcoinsignetfaucet.com — then run again: npm run spike:signet');
     process.exit(0);
   }
 }
 const balance = utxos.reduce((s, u) => s + u.value, 0n);
-console.log(`Solde       : ${balance} sats sur ${utxos.length} UTXO`);
+console.log(`Balance     : ${balance} sats in ${utxos.length} UTXO(s)`);
 
-// Envoi d'un petit montant vers une adresse hors du wallet (la clé de secours d'un autre jeu suffit).
+// Sends a small amount to an address outside the wallet (the backup key of another set will do).
 const other = rootFromSeed(randomSeed(), cfg.network);
 const destination = deriveAddress(
   { threshold: 2, keys: [accountOrigin(other), accountOrigin(other, 1), accountOrigin(other, 2)] },
@@ -88,10 +88,10 @@ const destination = deriveAddress(
   0,
   cfg.network,
 ).address;
-// Petit solde (faucet signet : souvent 1 000 sats) : 400 sats, juste au-dessus de la poussière (330).
+// Small balance (signet faucet: often 1,000 sats): 400 sats, just above dust (330).
 const amount = balance > 20_000n ? 5_000n : 400n;
-// Les estimations signet sont parfois aberrantes (68 sat/vB constaté le 10/10) : avec un petit
-// solde on fixe 2 sat/vB, la confirmation peut alors prendre quelques blocs.
+// Signet estimates are sometimes absurd (68 sat/vB seen on 10/10): with a small
+// balance we use 2 sat/vB, so confirmation may take a few blocks.
 const feeRate = balance > 20_000n ? await esplora.feeRate() : 2;
 const { psbt, fee, change } = buildSpend({
   policy,
@@ -102,12 +102,12 @@ const { psbt, fee, change } = buildSpend({
   feeRate,
   changeIndex: 0,
 });
-console.log(`Envoi       : ${amount} sats → ${destination} (frais ${fee}, change ${change})`);
+console.log(`Sending     : ${amount} sats → ${destination} (fee ${fee}, change ${change})`);
 
-// L'app signe avec la clé téléphone ; Swissquote signe sa propre copie ; on combine.
+// The app signs with the phone key; Swissquote signs its own copy; then we combine.
 const appCopy = signWithRoot(psbt.clone(), phone).toBase64();
 const sqCopy = signWithRoot(psbtFromBase64(psbt.toBase64(), cfg.network), swissquote).toBase64();
 const { hex, txid } = finalizeSpend(combinePsbts([appCopy, sqCopy], cfg.network));
 const broadcastTxid = await esplora.broadcast(hex);
-console.log(`\nTransaction diffusée : ${broadcastTxid}`);
-console.log(`Explorateur          : ${cfg.explorerTxUrl(txid)}`);
+console.log(`\nTransaction broadcast: ${broadcastTxid}`);
+console.log(`Explorer             : ${cfg.explorerTxUrl(txid)}`);

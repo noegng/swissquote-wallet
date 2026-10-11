@@ -1,5 +1,5 @@
-// Bibliothèque partagée par l'app, les services mockés et les scripts.
-// Skills à charger : btc-multisig, slip39-backup, custody-invariants.
+// Library shared by the app, the mocked services and the scripts.
+// Skills to load: btc-multisig, slip39-backup, custody-invariants.
 
 export * from './network';
 export * from './keys';

@@ -1,4 +1,4 @@
-// Client minimal de l'API esplora (mempool.space signet, ou Chopsticks en regtest).
+// Minimal client for the esplora API (blockstream.info or mempool.space on signet, Chopsticks on regtest).
 import type { Network } from 'bitcoinjs-lib';
 import { deriveAddress, type Chain, type WalletPolicy } from './descriptor';
 import type { NetworkConfig } from './network';
@@ -19,21 +19,21 @@ interface EsploraTx {
   status: { confirmed: boolean; block_time?: number };
 }
 
-/** Transaction du wallet telle que la chaîne la donne (aucun service Swissquote interrogé). */
+/** A wallet transaction as the chain reports it (no Swissquote service involved). */
 export interface WalletTx {
   txid: string;
-  /** Variation du solde du wallet : positive = reçu, négative = envoyé (frais compris). */
+  /** Change in the wallet balance: positive = received, negative = sent (fees included). */
   net: bigint;
   fee: bigint;
   confirmed: boolean;
-  /** Horodatage du bloc, en secondes. Absent tant que la transaction n'est pas confirmée. */
+  /** Block timestamp, in seconds. Missing until the transaction is confirmed. */
   blockTime?: number;
 }
 
-/** Transaction dont les entrées sont déjà dépensées ailleurs : la rediffuser est inutile. */
+/** A transaction whose inputs are already spent elsewhere: broadcasting it again is pointless. */
 export class StaleTransactionError extends Error {
   constructor(detail: string) {
-    super(`Transaction obsolète, ses fonds ont déjà été dépensés : ${detail}`);
+    super(`Stale transaction, its funds were already spent: ${detail}`);
     this.name = 'StaleTransactionError';
   }
 }
@@ -51,7 +51,7 @@ export class Esplora {
     return this.get(`/address/${address}/utxo`);
   }
 
-  /** Diffuse une transaction. Le corps doit être le hex brut en text/plain (pas du JSON). */
+  /** Broadcasts a transaction. The body must be the raw hex as text/plain (not JSON). */
   async broadcast(hex: string): Promise<string> {
     const res = await fetch(`${this.cfg.esploraUrl}/tx`, {
       method: 'POST',
@@ -59,15 +59,15 @@ export class Esplora {
       body: hex,
     });
     const body = await res.text();
-    if (!res.ok) throw new Error(`Diffusion refusée : ${body}`);
+    if (!res.ok) throw new Error(`Broadcast rejected: ${body}`);
     return body.trim();
   }
 
   /**
-   * Diffusion rejouable : si le réseau refuse une transaction qu'il connaît déjà (diffusion
-   * précédente dont la réponse s'est perdue), c'est un succès. Si ses entrées sont déjà dépensées
-   * par une autre transaction, lève `StaleTransactionError` : la rejouer ne servira jamais à rien.
-   * Toute autre erreur (réseau, API) est relancée telle quelle : on peut réessayer.
+   * Replayable broadcast: if the network rejects a transaction it already knows (an earlier
+   * broadcast whose response was lost), that is a success. If its inputs are already spent
+   * by another transaction, throws `StaleTransactionError`: retrying will never help.
+   * Any other error (network, API) is rethrown as is: it can be retried.
    */
   async broadcastOnce(hex: string, txid: string): Promise<string> {
     try {
@@ -98,7 +98,7 @@ export class Esplora {
     return Math.max(1, Math.ceil(estimates['3'] ?? estimates['6'] ?? 1));
   }
 
-  /** Vrai si l'adresse a déjà reçu au moins une transaction (confirmée ou non). */
+  /** True if the address has already received at least one transaction (confirmed or not). */
   async addressUsed(address: string): Promise<boolean> {
     const a = await this.get<{ chain_stats: { tx_count: number }; mempool_stats: { tx_count: number } }>(
       `/address/${address}`,
@@ -107,9 +107,9 @@ export class Esplora {
   }
 
   /**
-   * Parcourt une chaîne (réception 0 ou change 1) par lots parallèles de 10, jusqu'à trouver `gap`
-   * adresses consécutives jamais utilisées (« gap limit » BIP-44). Aucune adresse utilisée n'est
-   * ainsi oubliée, quel que soit son index. Renvoie les index utilisés et le premier index libre.
+   * Walks a chain (receive 0 or change 1) in parallel batches of 10 until it finds `gap`
+   * consecutive never-used addresses (BIP-44 "gap limit"). No used address is missed,
+   * whatever its index. Returns the used indexes and the first free index.
    */
   async usedIndexes(
     policy: WalletPolicy,
@@ -138,12 +138,12 @@ export class Esplora {
     return { used, firstUnused };
   }
 
-  /** Premier index jamais utilisé sur une chaîne (réception 0 ou change 1), pour ne pas réutiliser d'adresse. */
+  /** First never-used index on a chain (receive 0 or change 1), so that no address is reused. */
   async firstUnusedIndex(policy: WalletPolicy, network: Network, chain: Chain, gap = 20): Promise<number> {
     return (await this.usedIndexes(policy, network, chain, gap)).firstUnused;
   }
 
-  /** Adresses utilisées du wallet (réception et change), découvertes avec le gap limit. */
+  /** Used addresses of the wallet (receive and change), discovered with the gap limit. */
   private async usedAddresses(policy: WalletPolicy, network: Network, gap: number) {
     const chains = await Promise.all(([0, 1] as Chain[]).map((chain) => this.usedIndexes(policy, network, chain, gap)));
     const used = chains.flatMap(({ used }, chain) => used.map((u) => ({ chain: chain as Chain, ...u })));
@@ -151,9 +151,9 @@ export class Esplora {
   }
 
   /**
-   * État du wallet en un seul parcours : UTXO de toutes les adresses utilisées (jusqu'à `gap` adresses
-   * vides consécutives par chaîne) et premier index libre de chaque chaîne (prochaine adresse de
-   * réception, prochaine adresse de change). Requêtes par lots parallèles de 10.
+   * Wallet state in a single pass: UTXOs of every used address (up to `gap` consecutive empty
+   * addresses per chain) and the first free index of each chain (next receive address,
+   * next change address). Requests in parallel batches of 10.
    */
   async walletState(
     policy: WalletPolicy,
@@ -179,13 +179,13 @@ export class Esplora {
     return { utxos, nextReceive: firstUnused[0], nextChange: firstUnused[1] };
   }
 
-  /** UTXO du wallet, sur toutes ses adresses utilisées (voir `walletState`). */
+  /** Wallet UTXOs, across all its used addresses (see `walletState`). */
   async scanWallet(policy: WalletPolicy, network: Network, gap = 20): Promise<WalletUtxo[]> {
     return (await this.walletState(policy, network, gap)).utxos;
   }
 
-  /** Historique du wallet lu sur la chaîne : transactions de ses adresses utilisées (gap limit),
-   *  dédoublonnées, les plus récentes d'abord (non confirmées en tête). */
+  /** Wallet history read from the chain: transactions of its used addresses (gap limit),
+   *  deduplicated, most recent first (unconfirmed on top). */
   async walletTxs(policy: WalletPolicy, network: Network, gap = 20): Promise<WalletTx[]> {
     const addresses = (await this.usedAddresses(policy, network, gap)).used.map((a) => a.address);
     const mine = new Set(addresses);

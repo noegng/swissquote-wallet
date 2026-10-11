@@ -1,5 +1,5 @@
-/* Maquette Figma « V3 App ». Jetons relevés sur swissquote.com (orange #FA5B35 et son dégradé,
-   sq-black #323232, échelle de gris, ombres). Hind remplace la police propriétaire SwissquoteCT. */
+/* "V3 App" Figma mockup. Tokens taken from swissquote.com (orange #FA5B35 and its gradient,
+   sq-black #323232, grey scale, shadows). Hind replaces the proprietary SwissquoteCT font. */
 :root {
   --primary: #fa5b35;
   --primary-50: #fff0eb;
@@ -37,7 +37,7 @@ textarea {
   color: inherit;
 }
 
-/* ---- Scène : cadre de téléphone sur grand écran, plein écran sur mobile */
+/* ---- Stage: phone frame on a large screen, full screen on mobile */
 .stage {
   min-height: 100dvh;
   display: flex;
@@ -48,7 +48,7 @@ textarea {
   padding: 16px;
 }
 
-/* Bandeau au-dessus de l'app : mention du prototype et choix de la présentation (app ou web). */
+/* Banner above the app: prototype notice and layout switch (app or web). */
 .topbar {
   display: flex;
   align-items: center;
@@ -165,14 +165,14 @@ textarea {
   }
 }
 
-/* La version web demande un grand écran : en dessous, seule la présentation app existe. */
+/* The web layout needs a large screen: below that, only the app layout exists. */
 @media (max-width: 900px) {
   .layout-switch {
     display: none;
   }
 }
 
-/* ---- Écran */
+/* ---- Screen */
 .screen {
   flex: 1;
   min-height: 0;
@@ -238,7 +238,7 @@ span.nav-btn {
   padding: 12px 20px 24px;
 }
 
-/* Le contenu défile : rien ne doit se tasser pour tenir dans la hauteur de l'écran. */
+/* The content scrolls: nothing must shrink to fit the screen height. */
 .body > * {
   flex: none;
 }
@@ -307,7 +307,7 @@ span.nav-btn {
   display: flex;
 }
 
-/* Pastille : des alertes sont arrivées depuis la dernière ouverture de l'onglet. */
+/* Badge: alerts arrived since the tab was last opened. */
 .tabbar .tab-icon.badge::after {
   content: '';
   position: absolute;
@@ -326,7 +326,7 @@ span.nav-btn {
   font-weight: 600;
 }
 
-/* ---- Texte */
+/* ---- Text */
 .title {
   display: flex;
   flex-direction: column;
@@ -396,7 +396,7 @@ span.nav-btn {
   height: 34px;
 }
 
-/* ---- Boutons */
+/* ---- Buttons */
 .btn {
   display: flex;
   align-items: center;
@@ -457,7 +457,7 @@ span.nav-btn {
   outline-offset: 2px;
 }
 
-/* ---- Champs */
+/* ---- Fields */
 .field {
   display: flex;
   flex-direction: column;
@@ -533,7 +533,7 @@ span.nav-btn {
   box-shadow: 0 1px 3px rgba(50, 50, 50, 0.1);
 }
 
-/* ---- Listes groupées */
+/* ---- Grouped lists */
 .group {
   display: flex;
   flex-direction: column;
@@ -625,7 +625,7 @@ button.row:disabled .t {
   overflow-wrap: anywhere;
 }
 
-/* Identifiant de transaction : lien vers l'explorateur de blocs. */
+/* Transaction id: link to the block explorer. */
 .row .s .txlink {
   display: inline-flex;
   align-items: center;
@@ -794,7 +794,7 @@ button.row:disabled .t {
   padding-top: 8px;
 }
 
-/* ---- Frise d'étapes */
+/* ---- Step timeline */
 .timeline {
   margin: 0;
   padding: 18px 16px 2px;
@@ -908,7 +908,7 @@ button.row:disabled .t {
   color: var(--success);
 }
 
-/* ---- Mots de sauvegarde */
+/* ---- Backup words */
 .words {
   display: grid;
   grid-auto-flow: column;
@@ -933,7 +933,7 @@ button.row:disabled .t {
   border-top: 0;
 }
 
-/* Numéro dessiné en CSS : jamais inclus dans le texte copié. */
+/* Number drawn in CSS: never included in the copied text. */
 .words li::before {
   content: attr(data-n);
   flex: none;
@@ -944,7 +944,7 @@ button.row:disabled .t {
   font-variant-numeric: tabular-nums;
 }
 
-/* ---- Accueil */
+/* ---- Home */
 .home-head {
   display: flex;
   align-items: center;
@@ -1083,7 +1083,7 @@ button.row:disabled .t {
   overflow-wrap: anywhere;
 }
 
-/* ---- Envoi */
+/* ---- Send */
 .amount {
   display: flex;
   flex-direction: column;
@@ -1202,7 +1202,7 @@ button.row:disabled .t {
   color: var(--grey-500);
 }
 
-/* Pile verticale au même rythme que le contenu d'un écran. */
+/* Vertical stack with the same rhythm as a screen's content. */
 .stack {
   display: flex;
   flex-direction: column;
@@ -1213,13 +1213,13 @@ button.row:disabled .t {
   display: none;
 }
 
-/* Onglets sans barre de navigation : le titre respire sous la barre d'état. */
+/* Tabs without a navigation bar: the title gets some room under the status bar. */
 .body > .title:first-child {
   padding-top: 12px;
 }
 
-/* ---- Version web : mêmes écrans et mêmes composants, sans cadre de téléphone. Barre d'en-tête
-   avec la marque et les onglets, contenu dans une colonne centrée, la page défile. */
+/* ---- Web layout: same screens and same components, without the phone frame. Header bar
+   with the brand and the tabs, content in a centred column, the page scrolls. */
 @media (min-width: 901px) {
   .stage.web {
     justify-content: flex-start;
@@ -1260,7 +1260,7 @@ button.row:disabled .t {
     display: inline-flex;
   }
 
-  /* La marque est déjà dans l'en-tête. */
+  /* The brand is already in the header. */
   .web .brand.large,
   .web .home-head .brand {
     display: none;
@@ -1307,7 +1307,7 @@ button.row:disabled .t {
     background: none;
   }
 
-  /* Les onglets montent dans l'en-tête (28px : hauteur du bandeau prototype). */
+  /* The tabs move up into the header (28px: height of the prototype banner). */
   .web .tabbar {
     position: fixed;
     top: 28px;
@@ -1359,7 +1359,7 @@ button.row:disabled .t {
   object-fit: cover;
 }
 
-/* ---- Personne de confiance : code de vérification à comparer de vive voix */
+/* ---- Trusted person: verification code to compare by voice */
 .code-card {
   padding: 20px 16px;
   border-radius: 16px;
@@ -1372,7 +1372,7 @@ button.row:disabled .t {
   font-variant-numeric: tabular-nums;
 }
 
-/* ---- Animations (dossier src/anim, adaptées de Rare UI) */
+/* ---- Animations (src/anim folder, adapted from Rare UI) */
 
 .sr-only {
   position: absolute;
@@ -1386,7 +1386,7 @@ button.row:disabled .t {
   border: 0;
 }
 
-/* Compteur à rouleaux */
+/* Rolling counter */
 .roll {
   display: inline-flex;
   align-items: baseline;
@@ -1430,7 +1430,7 @@ button.row:disabled .t {
   white-space: pre;
 }
 
-/* Onglets « gooey » : l'onglet choisi se détache en pastille orange */
+/* "Gooey" tabs: the chosen tab detaches as an orange pill */
 .tabbar {
   --gooey-bar: var(--grey-200);
   --gooey-active: var(--primary);
@@ -1474,7 +1474,7 @@ button.row:disabled .t {
   color: var(--white);
 }
 
-/* Cloche de l'onglet Activity */
+/* Activity tab bell */
 .bell {
   position: relative;
   display: inline-flex;
@@ -1529,7 +1529,7 @@ button.row:disabled .t {
   justify-content: center;
 }
 
-/* Coches du journal d'étapes */
+/* Step log checks */
 .step-check {
   flex: none;
   width: 20px;
@@ -1547,7 +1547,7 @@ button.row:disabled .t {
 }
 
 @media (min-width: 901px) {
-  /* Version web : les onglets en pastilles dans l'en-tête gardent l'effet. */
+  /* Web layout: the pill tabs in the header keep the effect. */
   .web .tabbar .gooey-seg .tab {
     padding: 9px 16px;
   }

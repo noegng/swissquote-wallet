@@ -1,6 +1,6 @@
-// [MOCK] Service Swissquote : connexion (KYC simulé), passkeys, registre des wallets (Travel Rule),
-// cosignataire avec règles, notifications « hors bande ». Processus séparé avec son propre
-// stockage (data/). Récupération dans recovery.ts. Voir la skill mock-service.
+// [MOCK] Swissquote service: login (simulated KYC), passkeys, wallet registry (Travel Rule),
+// rule-enforcing cosigner, "out-of-band" notifications. Separate process with its own
+// storage (data/). Recovery lives in recovery.ts. See the mock-service skill.
 import './env';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
@@ -59,7 +59,7 @@ interface CosignRequest {
 const requests = () => readJson<Record<string, CosignRequest>>('requests.json', {});
 const saveRequest = (r: CosignRequest) => writeJson('requests.json', { ...requests(), [r.id]: r });
 
-/** Décode la PSBT et vérifie qu'elle n'utilise que les fonds du wallet, change compris. */
+/** Decodes the PSBT and checks that it only uses the wallet's funds, change included. */
 function cosign(wallet: WalletRecord, psbtBase64: string) {
   const psbt = psbtFromBase64(psbtBase64, cfg.network);
   const summary = summarizeSpend(psbt, wallet.policy, cfg.network, wallet.policy.keys[1]);
@@ -73,7 +73,7 @@ const frozenReason = (w: WalletRecord) =>
       ? 'Wallet frozen by the client (phone lost or stolen): unfreeze with the passkey, or recover'
       : 'Wallet frozen: a recovery is in progress (the client can cancel it)';
 
-/** Annule tous les gros paiements en attente d'un wallet (gel). Renvoie leur nombre. */
+/** Cancels every pending large payment of a wallet (freeze). Returns how many. */
 function cancelPendingRequests(walletId: string, reason: string): number {
   const all = requests();
   const pending = Object.values(all).filter((r) => r.walletId === walletId && r.status === 'pending');
@@ -88,24 +88,24 @@ await app.register(cors, { origin: process.env.ORIGIN ?? 'http://localhost:5173'
 
 app.get('/health', async () => ({ mock: true, service: SERVICE, ok: true, network: cfg.name }));
 
-// Connexion à l'espace client Swissquote. MOCK : le KYC est supposé déjà fait par la banque.
+// Login to the Swissquote client area. MOCK: KYC is assumed to be done by the bank already.
 app.post('/kyc/login', async (req, reply) => {
   const clientId = (req.body as { clientId?: string })?.clientId?.trim().toLowerCase() ?? '';
   const token = login(clientId);
-  if (!token) return reply.code(400).send({ mock: true, error: 'Identifiant client invalide (3 à 40 caractères a-z, 0-9, -)' });
+  if (!token) return reply.code(400).send({ mock: true, error: 'Invalid client ID (3 to 40 characters: a-z, 0-9, -)' });
   return { mock: true, token, clientId, hasPasskey: hasPasskey(clientId) };
 });
 
-// Création de la passkey du client (session requise). La clé privée reste dans la puce de l'appareil.
+// Creation of the client's passkey (session required). The private key stays in the device's chip.
 app.post('/webauthn/register/options', async (req, reply) => {
   const clientId = clientFromAuthHeader(req.headers.authorization);
-  if (!clientId) return reply.code(401).send({ mock: true, error: 'Session requise' });
+  if (!clientId) return reply.code(401).send({ mock: true, error: 'Session required' });
   return registrationOptions(clientId);
 });
 
 app.post('/webauthn/register/verify', async (req, reply) => {
   const clientId = clientFromAuthHeader(req.headers.authorization);
-  if (!clientId) return reply.code(401).send({ mock: true, error: 'Session requise' });
+  if (!clientId) return reply.code(401).send({ mock: true, error: 'Session required' });
   try {
     const info = await verifyRegistration(clientId, (req.body as { response: never }).response);
     return { mock: true, verified: true, ...info };
@@ -115,18 +115,18 @@ app.post('/webauthn/register/verify', async (req, reply) => {
   }
 });
 
-// Preuve qu'un appareil détient déjà une passkey du client (récupération sur un appareil où la passkey
-// est synchronisée : le navigateur refuse d'en créer une deuxième).
+// Proof that a device already holds one of the client's passkeys (recovery on a device where the passkey
+// is synced: the browser refuses to create a second one).
 app.post('/webauthn/device/options', async (req, reply) => {
   const clientId = clientFromAuthHeader(req.headers.authorization);
-  if (!clientId) return reply.code(401).send({ mock: true, error: 'Session requise' });
-  if (!hasPasskey(clientId)) return reply.code(404).send({ mock: true, error: 'Aucune passkey pour ce client' });
+  if (!clientId) return reply.code(401).send({ mock: true, error: 'Session required' });
+  if (!hasPasskey(clientId)) return reply.code(404).send({ mock: true, error: 'No passkey for this client' });
   return deviceProofOptions(clientId);
 });
 
 app.post('/webauthn/device/verify', async (req, reply) => {
   const clientId = clientFromAuthHeader(req.headers.authorization);
-  if (!clientId) return reply.code(401).send({ mock: true, error: 'Session requise' });
+  if (!clientId) return reply.code(401).send({ mock: true, error: 'Session required' });
   try {
     const credentialId = await verifyDeviceProof(clientId, (req.body as { response?: never })?.response);
     return { mock: true, verified: true, credentialId };
@@ -135,28 +135,28 @@ app.post('/webauthn/device/verify', async (req, reply) => {
   }
 });
 
-// Défi passkey lié à une opération : empreinte de la PSBT (cosign) ou identifiant de demande (cancel).
+// Passkey challenge bound to an operation: PSBT hash (cosign) or request id (cancel).
 app.post('/webauthn/operation/options', async (req, reply) => {
   const body = req.body as { walletId?: string; purpose?: Purpose; payload?: string };
   const wallet = body?.walletId ? wallets()[body.walletId] : undefined;
   if (body?.walletId && !wallet) {
-    return reply.code(404).send({ mock: true, error: 'Wallet inconnu de Swissquote (données du service réinitialisées ?)' });
+    return reply.code(404).send({ mock: true, error: 'Wallet unknown to Swissquote (was the service data reset?)' });
   }
   if (!wallet || !body.payload || !['cosign', 'cancel', 'unfreeze'].includes(body.purpose ?? '')) {
-    return reply.code(400).send({ mock: true, error: 'walletId, purpose (cosign|cancel|unfreeze) et payload requis' });
+    return reply.code(400).send({ mock: true, error: 'walletId, purpose (cosign|cancel|unfreeze) and payload are required' });
   }
   return operationOptions(wallet.clientId, body.purpose!, body.payload);
 });
 
-// Création du wallet : Swissquote dérive sa clé pour ce client et enregistre le descripteur.
-// L'enregistrement prouve que l'adresse appartient au client (Travel Rule, sans démarche).
+// Wallet creation: Swissquote derives its key for this client and registers the descriptor.
+// The registration proves that the addresses belong to the client (Travel Rule, with no extra step).
 app.post('/wallets', async (req, reply) => {
   const clientId = clientFromAuthHeader(req.headers.authorization);
-  if (!clientId) return reply.code(401).send({ mock: true, error: 'Session requise' });
-  if (!hasPasskey(clientId)) return reply.code(403).send({ mock: true, error: 'Créer une passkey avant le wallet' });
+  if (!clientId) return reply.code(401).send({ mock: true, error: 'Session required' });
+  if (!hasPasskey(clientId)) return reply.code(403).send({ mock: true, error: 'Create a passkey before the wallet' });
   const body = req.body as { phoneKey?: unknown; backupKey?: unknown };
   if (!isKeyOrigin(body?.phoneKey) || !isKeyOrigin(body?.backupKey)) {
-    return reply.code(400).send({ mock: true, error: 'phoneKey et backupKey requis' });
+    return reply.code(400).send({ mock: true, error: 'phoneKey and backupKey are required' });
   }
   const record = createWalletRecord(clientId, body.phoneKey, body.backupKey);
   audit('wallet.created', { walletId: record.walletId, clientId, account: record.account });
@@ -172,14 +172,14 @@ app.post('/wallets', async (req, reply) => {
 
 app.get('/wallets/:id', async (req, reply) => {
   const w = wallets()[(req.params as { id: string }).id];
-  return w ? { mock: true, ...w } : reply.code(404).send({ mock: true, error: 'Wallet inconnu' });
+  return w ? { mock: true, ...w } : reply.code(404).send({ mock: true, error: 'Unknown wallet' });
 });
 
-// Cosignature : exige une assertion passkey fraîche dont le défi porte l'empreinte de cette PSBT.
+// Cosigning: requires a fresh passkey assertion whose challenge carries this PSBT's hash.
 app.post('/cosign', async (req, reply) => {
   const body = req.body as { walletId?: string; psbt?: string; authentication?: never };
   const wallet = body?.walletId ? wallets()[body.walletId] : undefined;
-  if (!wallet || !body.psbt) return reply.code(400).send({ mock: true, error: 'walletId et psbt requis' });
+  if (!wallet || !body.psbt) return reply.code(400).send({ mock: true, error: 'walletId and psbt are required' });
   if (statusOf(wallet) !== 'active') {
     audit('cosign.refused', { walletId: wallet.walletId, reason: frozenReason(wallet) });
     return reply.code(423).send({ mock: true, status: 'refused', reason: frozenReason(wallet) });
@@ -249,15 +249,15 @@ app.post('/cosign', async (req, reply) => {
   };
 });
 
-// Suivi d'un gros paiement : signé automatiquement une fois le délai écoulé, sauf annulation.
+// Tracking a large payment: signed automatically once the delay is over, unless cancelled.
 app.get('/cosign/:id', async (req, reply) => {
   const request = requests()[(req.params as { id: string }).id];
-  if (!request) return reply.code(404).send({ mock: true, error: 'Demande inconnue' });
-  if (!wallets()[request.walletId]) return reply.code(404).send({ mock: true, error: 'Wallet inconnu' });
+  if (!request) return reply.code(404).send({ mock: true, error: 'Unknown request' });
+  if (!wallets()[request.walletId]) return reply.code(404).send({ mock: true, error: 'Unknown wallet' });
   if (request.status === 'pending' && statusOf(wallets()[request.walletId]) !== 'active') {
-    // Un gros paiement en attente ne part pas si le wallet a été gelé entre-temps (récupération).
+    // A pending large payment does not leave if the wallet was frozen in the meantime (recovery).
     saveRequest({ ...request, status: 'cancelled' });
-    audit('cosign.cancelled', { requestId: request.id, reason: 'wallet gelé' });
+    audit('cosign.cancelled', { requestId: request.id, reason: 'wallet frozen' });
     return { mock: true, status: 'cancelled', reason: frozenReason(wallets()[request.walletId]) };
   }
   if (request.status === 'pending' && Date.now() >= request.executeAfter) {
@@ -288,11 +288,11 @@ app.get('/cosign/:id', async (req, reply) => {
   };
 });
 
-// Annulation d'un gros paiement : action de protection, acceptée avec la passkey (défi lié à la
-// demande) OU avec la session de l'espace client (client dont le téléphone a été volé).
+// Cancelling a large payment: a protective action, accepted with the passkey (challenge bound to the
+// request) OR with the client-area session (a client whose phone was stolen).
 app.post('/cosign/:id/cancel', async (req, reply) => {
   const request = requests()[(req.params as { id: string }).id];
-  if (!request) return reply.code(404).send({ mock: true, error: 'Demande inconnue' });
+  if (!request) return reply.code(404).send({ mock: true, error: 'Unknown request' });
   let via: 'session' | 'passkey';
   try {
     const clientId = wallets()[request.walletId].clientId;
@@ -307,7 +307,7 @@ app.post('/cosign/:id/cancel', async (req, reply) => {
     return reply.code(401).send({ mock: true, status: 'unauthenticated', reason: (e as Error).message });
   }
   if (request.status !== 'pending') {
-    return reply.code(409).send({ mock: true, error: `Demande déjà ${request.status}` });
+    return reply.code(409).send({ mock: true, error: `Request already ${request.status}` });
   }
   saveRequest({ ...request, status: 'cancelled' });
   audit('cosign.cancelled', { walletId: request.walletId, requestId: request.id, via });
@@ -315,11 +315,11 @@ app.post('/cosign/:id/cancel', async (req, reply) => {
   return { mock: true, status: 'cancelled', requestId: request.id, via };
 });
 
-// Gel d'urgence (téléphone perdu ou volé) : action de protection, session OU passkey. Bloque toute
-// cosignature et annule les gros paiements en attente. N'empêche pas une récupération.
+// Emergency freeze (phone lost or stolen): a protective action, session OR passkey. Blocks all
+// cosigning and cancels pending large payments. Does not prevent a recovery.
 app.post('/wallets/:id/freeze', async (req, reply) => {
   const wallet = wallets()[(req.params as { id: string }).id];
-  if (!wallet) return reply.code(404).send({ mock: true, error: 'Wallet inconnu' });
+  if (!wallet) return reply.code(404).send({ mock: true, error: 'Unknown wallet' });
   if (statusOf(wallet) === 'recovered') return reply.code(409).send({ mock: true, error: frozenReason(wallet) });
   let via: 'session' | 'passkey';
   try {
@@ -334,7 +334,7 @@ app.post('/wallets/:id/freeze', async (req, reply) => {
     return reply.code(401).send({ mock: true, status: 'unauthenticated', reason: (e as Error).message });
   }
   if (statusOf(wallet) === 'active') saveWallet({ ...wallet, status: 'frozen', frozenBy: 'client' });
-  // Déjà gelé par une récupération : le gel du client doit survivre à son annulation.
+  // Already frozen by a recovery: the client's freeze must survive its cancellation.
   else rememberClientFreeze(wallet.walletId);
   const cancelled = cancelPendingRequests(wallet.walletId, 'gel par le client');
   audit('wallet.frozen', { walletId: wallet.walletId, via, cancelledPayments: cancelled });
@@ -346,12 +346,12 @@ app.post('/wallets/:id/freeze', async (req, reply) => {
   return { mock: true, status: 'frozen', cancelledPayments: cancelled, via };
 });
 
-// Dégel : ASSOUPLIT la protection, donc passkey obligatoire (la session seule ne suffit pas).
+// Unfreeze: RELAXES the protection, so the passkey is mandatory (the session alone is not enough).
 app.post('/wallets/:id/unfreeze', async (req, reply) => {
   const wallet = wallets()[(req.params as { id: string }).id];
-  if (!wallet) return reply.code(404).send({ mock: true, error: 'Wallet inconnu' });
+  if (!wallet) return reply.code(404).send({ mock: true, error: 'Unknown wallet' });
   if (wallet.frozenBy !== 'client' || statusOf(wallet) !== 'frozen') {
-    return reply.code(409).send({ mock: true, error: 'Seul un gel demandé par le client se lève ici' });
+    return reply.code(409).send({ mock: true, error: 'Only a freeze requested by the client can be lifted here' });
   }
   try {
     await verifyOperation(wallet.clientId, 'unfreeze', wallet.walletId, (req.body as { authentication?: never })?.authentication);
@@ -365,7 +365,7 @@ app.post('/wallets/:id/unfreeze', async (req, reply) => {
   return { mock: true, status: 'active' };
 });
 
-// Boîte de notifications « hors bande » (mock des SMS, e-mails et alertes de l'espace client).
+// "Out-of-band" notification inbox (mock of SMS, emails and client-area alerts).
 app.get('/notifications/:walletId', async (req) => {
   const all = readJson<Record<string, unknown[]>>('notifications.json', {});
   return { mock: true, notifications: all[(req.params as { walletId: string }).walletId] ?? [] };
@@ -379,25 +379,25 @@ app.get('/rules', async () => ({
   sanctionedAddresses: sanctionedAddresses(),
 }));
 
-// Plafond restant d'un wallet (montants + frais des 24 dernières heures), pour que l'app annonce
-// correctement un éventuel délai avant la signature.
+// Remaining instant amount of a wallet (amounts + fees over the last 24 hours), so that the app
+// correctly announces a possible delay before signing.
 app.get('/wallets/:id/limit', async (req, reply) => {
   const w = wallets()[(req.params as { id: string }).id];
-  if (!w) return reply.code(404).send({ mock: true, error: 'Wallet inconnu' });
+  if (!w) return reply.code(404).send({ mock: true, error: 'Unknown wallet' });
   return { mock: true, dailyLimitSats: DAILY_LIMIT_SATS.toString(), spentLast24hSats: spentLast24h(w.walletId).toString() };
 });
 
-// Démo uniquement : ajoute une adresse à la liste de sanctions mockée.
+// Demo only: adds an address to the mocked sanctions list.
 app.post('/admin/sanctions', async (req, reply) => {
   const address = (req.body as { address?: string })?.address;
-  if (!address) return reply.code(400).send({ mock: true, error: 'address requis' });
-  // Adresses bech32 : insensibles à la casse, stockées en minuscules (comme bitcoinjs les écrit).
+  if (!address) return reply.code(400).send({ mock: true, error: 'address is required' });
+  // bech32 addresses are case-insensitive: stored in lowercase (as bitcoinjs writes them).
   writeJson('sanctions.json', [...new Set([...sanctionedAddresses(), address.trim().toLowerCase()])]);
   audit('sanctions.added', { address });
   return { mock: true, sanctionedAddresses: sanctionedAddresses() };
 });
 
-// Démo uniquement : vide le stockage du service (une nouvelle clé maître est générée).
+// Demo only: empties the service storage (a new master key is generated).
 app.post('/admin/reset', async () => {
   resetData();
   resetSigner();
@@ -409,4 +409,4 @@ registerRecoveryRoutes(app);
 
 const port = Number(process.env.SWISSQUOTE_PORT ?? 4001);
 await app.listen({ port, host: '127.0.0.1' });
-console.log(`[MOCK ${SERVICE}] écoute sur http://localhost:${port} (réseau ${cfg.name})`);
+console.log(`[MOCK ${SERVICE}] listening on http://localhost:${port} (network ${cfg.name})`);

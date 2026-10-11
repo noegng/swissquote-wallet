@@ -41,8 +41,8 @@ function unsignedSpend(policy: WalletPolicy) {
   });
 }
 
-describe('descripteur 2 sur 3', () => {
-  it('donne une adresse P2WSH regtest déterministe, indépendante de l’ordre des clés', () => {
+describe('2-of-3 descriptor', () => {
+  it('gives a deterministic regtest P2WSH address, independent of the key order', () => {
     const { policy } = makeWallet();
     const a = deriveAddress(policy, 0, 0, network);
     const shuffled: WalletPolicy = { ...policy, keys: [policy.keys[2], policy.keys[0], policy.keys[1]] };
@@ -51,14 +51,14 @@ describe('descripteur 2 sur 3', () => {
     expect(deriveAddress(policy, 0, 1, network).address).not.toBe(a.address);
   });
 
-  it('exporte un descripteur standard wsh(sortedmulti(2,…))', () => {
+  it('exports a standard wsh(sortedmulti(2,…)) descriptor', () => {
     const { policy } = makeWallet();
     const d = descriptorString(policy, 0);
     expect(d).toMatch(/^wsh\(sortedmulti\(2,\[[0-9a-f]{8}\/48'\/1'\/0'\/2'\]tpub/);
     expect(d.match(/tpub/g)).toHaveLength(3);
   });
 
-  it('refuse une adresse d’un autre réseau', () => {
+  it('rejects an address from another network', () => {
     const { policy } = makeWallet();
     expect(() =>
       buildSpend({
@@ -73,7 +73,7 @@ describe('descripteur 2 sur 3', () => {
     ).toThrow();
   });
 
-  it('envoie le change vers le descripteur du client', () => {
+  it('sends the change back to the client descriptor', () => {
     const { policy } = makeWallet();
     const { psbt, change, fee } = unsignedSpend(policy);
     expect(change + fee + 30_000n).toBe(100_000n);
@@ -82,7 +82,7 @@ describe('descripteur 2 sur 3', () => {
 });
 
 describe('invariants de signature (I1, I3)', () => {
-  it('I1 : aucune clé seule ne peut finaliser, Swissquote compris', () => {
+  it('I1: no single key can finalize, Swissquote included', () => {
     const w = makeWallet();
     for (const root of [w.swissquote, w.phone, w.backup]) {
       const { psbt } = unsignedSpend(w.policy);
@@ -91,16 +91,16 @@ describe('invariants de signature (I1, I3)', () => {
     }
   });
 
-  it('les trois paires légitimes finalisent : quotidien, téléphone perdu, Swissquote disparu (I3)', () => {
+  it('the three legitimate pairs finalize: daily use, lost phone, Swissquote gone (I3)', () => {
     const w = makeWallet();
     const pairs = [
       [w.phone, w.swissquote], // usage quotidien
-      [w.backup, w.swissquote], // téléphone perdu
+      [w.backup, w.swissquote], // lost phone
       [w.phone, w.backup], // Swissquote disparu (I3)
     ];
     for (const [a, b] of pairs) {
       const { psbt } = unsignedSpend(w.policy);
-      // Signatures produites sur deux copies séparées, comme entre l'app et le service.
+      // Signatures made on two separate copies, as between the app and the service.
       const copyA = signWithRoot(psbt.clone(), a).toBase64();
       const copyB = signWithRoot(psbt.clone(), b).toBase64();
       const { txid, hex } = finalizeSpend(combinePsbts([copyA, copyB], network));
@@ -109,7 +109,7 @@ describe('invariants de signature (I1, I3)', () => {
     }
   });
 
-  it('une clé étrangère au wallet ne signe rien', () => {
+  it('a key foreign to the wallet signs nothing', () => {
     const w = makeWallet();
     const stranger = rootFromSeed(randomSeed(), network);
     const { psbt } = unsignedSpend(w.policy);
@@ -117,8 +117,8 @@ describe('invariants de signature (I1, I3)', () => {
   });
 });
 
-describe('signature d’une clé précise (récupération)', () => {
-  it('distingue une PSBT signée par la clé de secours d’une PSBT signée par le téléphone', () => {
+describe('signature from a specific key (recovery)', () => {
+  it('tells a PSBT signed by the backup key from one signed by the phone', () => {
     const w = makeWallet();
     const byBackup = signWithRoot(unsignedSpend(w.policy).psbt, w.backup);
     const byPhone = signWithRoot(unsignedSpend(w.policy).psbt, w.phone);
@@ -128,8 +128,8 @@ describe('signature d’une clé précise (récupération)', () => {
   });
 });
 
-describe('transfert de tous les fonds (récupération, sortie)', () => {
-  it('une seule sortie, aucun change, signable par secours + Swissquote', () => {
+describe('moving all funds (recovery, exit)', () => {
+  it('a single output, no change, signable by backup + Swissquote', () => {
     const w = makeWallet();
     const to = deriveAddress(makeWallet().policy, 0, 0, network).address;
     const { psbt, fee, change } = buildSweep({

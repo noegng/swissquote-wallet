@@ -1,6 +1,6 @@
-// Coche d'une étape : anneau en pointillés, puis disque qui se remplit en rebondissant et coche qui se
-// dessine ; l'étape en cours a un anneau qui tourne. Adapté de « Task List » (Rare UI, licence MIT) :
-// même anneau, même rebond et même tracé, sans le texte barré (une étape réussie n'est pas annulée).
+// Step check: dashed ring, then a disc that fills with a bounce and a check that draws
+// itself; the step in progress has a spinning ring. Adapted from "Task List" (Rare UI, MIT licence):
+// same ring, same bounce and same path, without the strike-through (a successful step is not cancelled).
 import { motion, useReducedMotion, type Transition } from 'motion/react';
 
 const EASE_OUT = [0.22, 1, 0.36, 1] as const;
@@ -10,7 +10,7 @@ const TICK: Transition = { duration: 0.22, ease: EASE_OUT, delay: 0.06 };
 const SPIN: Transition = { duration: 1.2, ease: 'linear', repeat: Infinity };
 const INSTANT: Transition = { duration: 0 };
 
-// Les tirets divisent la circonférence : l'anneau se ferme sans raccord.
+// The dashes divide the circumference: the ring closes without a seam.
 const RING_R = 11;
 const RING_DASH = `1 ${(2 * Math.PI * RING_R) / 13 - 1}`;
 
@@ -24,7 +24,7 @@ export function StepCheck({ state }: { state: 'working' | 'done' }) {
       viewBox="0 0 24 24"
       aria-hidden
       className="step-check"
-      // Au montage d'une étape terminée : anneau visible, puis remplissage et coche.
+      // When a finished step mounts: ring visible, then fill and check.
       initial={{ scale: 1 }}
       animate={{ scale: done ? [1, 1.12, 1] : 1, rotate: done || reduced ? 0 : 360 }}
       transition={done ? t(POP) : reduced ? INSTANT : SPIN}
