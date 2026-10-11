@@ -160,7 +160,7 @@ export function Exit({ onBack }: { onBack: () => void }) {
         }
       >
         <Title title="Sending your funds" />
-        <Checklist lines={log} />
+        <Checklist lines={log} working={!error && 'Working on it…'} />
         {error && <p className="error">{error}</p>}
       </Screen>
     );

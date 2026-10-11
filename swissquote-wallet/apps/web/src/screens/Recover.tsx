@@ -342,7 +342,7 @@ export function Recover({
         }
       >
         <Title title="Moving to your new keys" />
-        <Checklist lines={log} />
+        <Checklist lines={log} working={!error && 'Working on it…'} />
         {error && <p className="error">{error}</p>}
       </Screen>
     );

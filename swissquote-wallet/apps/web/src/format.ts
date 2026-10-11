@@ -6,6 +6,9 @@ export function formatBtc(sats: bigint | string): string {
   return `${whole}${frac ? `.${frac}` : ''} BTC`;
 }
 
+/** Partie numérique de formatBtc (« 0.000795 »), pour l'afficher à part de l'unité (compteur animé). */
+export const btcDigits = (sats: bigint | string) => formatBtc(sats).replace(/ BTC$/, '');
+
 const chf = new Intl.NumberFormat('de-CH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 /** Contre-valeur indicative en francs suisses (« ≈ CHF 54.75 »). Vide tant que le cours est inconnu. */

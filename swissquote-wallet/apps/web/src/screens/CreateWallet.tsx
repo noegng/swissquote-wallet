@@ -108,7 +108,7 @@ export function CreateWallet({
         }
       >
         <Title title="Creating your wallet" />
-        <Checklist lines={progress} />
+        <Checklist lines={progress} working={!error && 'Working on it…'} />
         {error && <p className="error">{error}</p>}
       </Screen>
     );

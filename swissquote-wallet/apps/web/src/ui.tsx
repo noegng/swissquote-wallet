@@ -2,6 +2,9 @@
 // navigation, progression, pied collant), listes groupées, pastilles d'état, boutons.
 // Aucune logique métier ici : uniquement de la présentation.
 import { useState, type ButtonHTMLAttributes, type FormEventHandler, type ReactNode } from 'react';
+import { GooeyBar } from './anim/GooeyBar';
+import { RingingBell } from './anim/RingingBell';
+import { StepCheck } from './anim/StepCheck';
 
 const ICONS = {
   chevL: <path d="m15 18-6-6 6-6" />,
@@ -185,7 +188,7 @@ export function Screen({
   step?: [number, number];
   footer?: ReactNode;
   /** Barre d'onglets du wallet : uniquement les sections qui existent dans l'app. */
-  tabs?: { value: TabName; onChange: (tab: TabName) => void; badge?: TabName | null };
+  tabs?: { value: TabName; onChange: (tab: TabName) => void; badges?: Partial<Record<TabName, number>> };
   /** Fourni : l'écran est un formulaire, le bouton principal du pied le soumet. */
   onSubmit?: FormEventHandler<HTMLFormElement>;
   children: ReactNode;
@@ -235,32 +238,46 @@ const TABS: [TabName, IconName, string][] = [
   ['recovery', 'lifebuoy', 'Recovery'],
 ];
 
+/** Onglets du wallet : l'onglet choisi se détache en pastille (GooeyBar). L'onglet Activity a une
+ *  cloche qui sonne et un compteur quand de nouvelles alertes arrivent (RingingBell). */
 function TabBar({
   value,
   onChange,
-  badge,
+  badges = {},
 }: {
   value: TabName;
   onChange: (tab: TabName) => void;
-  badge?: TabName | null;
+  badges?: Partial<Record<TabName, number>>;
 }) {
   return (
     <nav className="tabbar" aria-label="Wallet sections">
-      {TABS.map(([tab, icon, label]) => (
-        <button
-          key={tab}
-          type="button"
-          className={tab === value ? 'tab on' : 'tab'}
-          aria-current={tab === value ? 'page' : undefined}
-          aria-label={tab === badge ? `${label}, new alerts` : undefined}
-          onClick={() => onChange(tab)}
-        >
-          <span className={tab === badge ? 'tab-icon badge' : 'tab-icon'}>
-            <Icon name={icon} size={24} />
-          </span>
-          {label}
-        </button>
-      ))}
+      <GooeyBar
+        active={TABS.findIndex(([tab]) => tab === value)}
+        items={TABS.map(([tab, icon, label]) => {
+          const count = badges[tab] ?? 0;
+          return (
+            <button
+              key={tab}
+              type="button"
+              className={tab === value ? 'tab on' : 'tab'}
+              aria-current={tab === value ? 'page' : undefined}
+              aria-label={count ? `${label}, ${count} new alert${count > 1 ? 's' : ''}` : undefined}
+              onClick={() => onChange(tab)}
+            >
+              <span className="tab-icon">
+                {tab === 'activity' ? (
+                  <RingingBell count={count}>
+                    <Icon name={icon} size={24} />
+                  </RingingBell>
+                ) : (
+                  <Icon name={icon} size={24} />
+                )}
+              </span>
+              {label}
+            </button>
+          );
+        })}
+      />
     </nav>
   );
 }
@@ -430,17 +447,24 @@ export function Timeline({ items }: { items: TimelineItem[] }) {
   );
 }
 
-/** Journal d'une opération en plusieurs étapes (création, transfert) : une ligne cochée par étape. */
-export function Checklist({ lines }: { lines: string[] }) {
-  if (lines.length === 0) return null;
+/** Journal d'une opération en plusieurs étapes (création, transfert) : chaque étape terminée se coche
+ *  en s'animant (StepCheck) ; `working` ajoute une ligne « en cours » dont l'anneau tourne. */
+export function Checklist({ lines, working }: { lines: string[]; working?: string | false }) {
+  if (lines.length === 0 && !working) return null;
   return (
-    <ul className="checklist">
+    <ul className="checklist" aria-live="polite">
       {lines.map((l) => (
         <li key={l}>
-          <Icon name="check" size={16} stroke={2.5} />
+          <StepCheck state="done" />
           {l}
         </li>
       ))}
+      {working && (
+        <li key="working" className="working">
+          <StepCheck state="working" />
+          {working}
+        </li>
+      )}
     </ul>
   );
 }

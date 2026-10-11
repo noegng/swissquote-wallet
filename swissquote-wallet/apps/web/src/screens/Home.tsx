@@ -5,7 +5,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { deriveAddress, descriptorString, type WalletTx } from '@sqw/core';
 import { ApiError, sq, type Session } from '../api';
 import { btc } from '../config';
-import { formatBtc, formatChf } from '../format';
+import { btcDigits, formatBtc, formatChf } from '../format';
+import { RollingNumber } from '../anim/RollingNumber';
 import { deleteWallet, loadPending, type PendingPayment as Pending, type StoredWallet } from '../keystore';
 import { approve, esplora } from '../payments';
 import { cancelPartnerRelease } from '../recovery';
@@ -199,6 +200,8 @@ export function Home({
   }, [tab, balance, wallet]);
 
   const latestAlert = notifications[0]?.at ?? '';
+  // Alertes arrivées depuis la dernière ouverture de l'onglet Activity (compteur de la cloche).
+  const unseen = notifications.filter((n) => n.at > seen).length;
   useEffect(() => {
     if (tab !== 'activity' || !latestAlert || latestAlert <= seen) return;
     setSeen(latestAlert);
@@ -320,7 +323,7 @@ export function Home({
     ok === null ? ['Checking', 'neutral'] : ok ? ['Active', 'success'] : ['Share missing', 'danger'];
 
   return (
-    <Screen tabs={{ value: tab, onChange: setTab, badge: latestAlert > seen ? 'activity' : null }}>
+    <Screen tabs={{ value: tab, onChange: setTab, badges: { activity: unseen } }}>
       {tab === 'wallet' ? (
         <div className="home-head" key="head">
           <Brand />
@@ -430,7 +433,7 @@ export function Home({
           <span className="cap">
             Bitcoin wallet, {wallet.network === 'signet' ? 'signet (public test network)' : 'regtest (local)'}
           </span>
-          <strong>{balance === null ? '…' : formatBtc(balance)}</strong>
+          <strong>{balance === null ? '…' : <RollingNumber value={btcDigits(balance)} suffix=" BTC" />}</strong>
           <span className="cap">{balance === null ? '' : formatChf(balance, rate)}</span>
         </div>
       )}

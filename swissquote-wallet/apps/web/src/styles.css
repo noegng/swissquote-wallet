@@ -1371,3 +1371,188 @@ button.row:disabled .t {
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
+
+/* ---- Animations (dossier src/anim, adaptées de Rare UI) */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Compteur à rouleaux */
+.roll {
+  display: inline-flex;
+  align-items: baseline;
+  font-variant-numeric: tabular-nums;
+}
+
+.roll-cells {
+  display: inline-flex;
+  align-items: center;
+  user-select: none;
+}
+
+.roll-digit {
+  position: relative;
+  display: inline-grid;
+  overflow: hidden;
+  line-height: 1.2;
+}
+
+.roll-sizer {
+  visibility: hidden;
+  grid-area: 1 / 1;
+}
+
+.roll-stack {
+  position: absolute;
+  inset: 0 0 auto 0;
+}
+
+.roll-stack span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.roll-mark {
+  display: inline-block;
+}
+
+.roll-suffix {
+  white-space: pre;
+}
+
+/* Onglets « gooey » : l'onglet choisi se détache en pastille orange */
+.tabbar {
+  --gooey-bar: var(--grey-200);
+  --gooey-active: var(--primary);
+  display: flex;
+  flex-direction: column;
+}
+
+.tabbar .gooey {
+  display: flex;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tabbar .gooey-seg {
+  position: relative;
+  flex: 1;
+  background: var(--gooey-bar);
+  transition: background-color 0.4s;
+}
+
+.tabbar .gooey-seg.on {
+  background: var(--gooey-active);
+}
+
+.tabbar .gooey-neck {
+  position: absolute;
+  top: 0;
+  right: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.tabbar .gooey-seg .tab {
+  width: 100%;
+  padding: 7px 0 6px;
+}
+
+.tabbar .gooey-seg .tab.on,
+.tabbar .gooey-seg .tab.on .icon {
+  color: var(--white);
+}
+
+/* Cloche de l'onglet Activity */
+.bell {
+  position: relative;
+  display: inline-flex;
+}
+
+.bell-icon {
+  display: inline-flex;
+}
+
+.bell-badge {
+  position: absolute;
+  top: -5px;
+  right: -9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border: 2px solid var(--white);
+  border-radius: 999px;
+  background: var(--primary);
+  color: var(--white);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.tab.on .bell-badge {
+  background: var(--ink);
+}
+
+.bell-col {
+  position: relative;
+  display: inline-block;
+  width: 1ch;
+  height: 1em;
+  overflow: hidden;
+}
+
+.bell-col-stack {
+  position: absolute;
+  inset: 0;
+}
+
+.bell-col-stack span {
+  position: absolute;
+  inset-inline: 0;
+  display: flex;
+  justify-content: center;
+}
+
+/* Coches du journal d'étapes */
+.step-check {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  color: var(--grey-400);
+}
+
+.step-check-fill {
+  fill: var(--success);
+}
+
+.checklist li.working {
+  color: var(--grey-500);
+}
+
+@media (min-width: 901px) {
+  /* Version web : les onglets en pastilles dans l'en-tête gardent l'effet. */
+  .web .tabbar .gooey-seg .tab {
+    padding: 9px 16px;
+  }
+
+  .web .tabbar .gooey-seg .tab.on {
+    background: none;
+  }
+}

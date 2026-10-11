@@ -3,7 +3,8 @@
 // On montre donc ce qui reste à payer tout de suite aujourd'hui, et ce qui se passe au-delà.
 import { useEffect, useState } from 'react';
 import { sq } from '../api';
-import { formatBtc, formatChf } from '../format';
+import { btcDigits, formatBtc, formatChf } from '../format';
+import { RollingNumber } from '../anim/RollingNumber';
 
 interface Limit {
   limit: bigint;
@@ -52,7 +53,7 @@ export function InstantLimit({ limit, rate }: { limit: Limit | null; rate: numbe
       <div className="limit-head">
         <strong>Instant payments</strong>
         <span>
-          {formatBtc(left)} left today{rate !== null && ` (${formatChf(left, rate)})`}
+          <RollingNumber value={btcDigits(left)} suffix=" BTC" /> left today{rate !== null && ` (${formatChf(left, rate)})`}
         </span>
       </div>
       <div
