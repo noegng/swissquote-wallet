@@ -55,6 +55,8 @@ const NETWORK_DOWN = 'Bitcoin network unreachable (is regtest running? `npm run 
 // rate-limits requests, so passes are spaced out.
 const REFRESH_MS = btc.name === 'regtest' ? 5_000 : 20_000;
 
+const SIGNET_FAUCET = 'https://bitcoinsignetfaucet.com';
+
 const clock = (at: number) => new Date(at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 
 function dayLabel(at: number): string {
@@ -291,6 +293,13 @@ export function Home({
   }
 
   async function faucet() {
+    if (wallet.network === 'signet') {
+      // Public signet faucet: show the address, copy it, and open the faucet in a new tab.
+      setShowReceive(true);
+      navigator.clipboard?.writeText(address).catch(() => {});
+      window.open(SIGNET_FAUCET, '_blank', 'noopener,noreferrer');
+      return setMessage('Your address is copied: paste it in the signet faucet. The balance updates within about 20 seconds.');
+    }
     setMessage('Requesting test bitcoin from the regtest faucet…');
     try {
       const res = await fetch(`${btc.esploraUrl}/faucet`, {
@@ -472,9 +481,13 @@ export function Home({
             trail="chevR"
             onClick={() => setShowReceive((v) => !v)}
           />
-          {wallet.network === 'regtest' && (
-            <Row icon="plus" title="Get test bitcoin" sub="Regtest faucet, for the demo" trail="chevR" onClick={faucet} />
-          )}
+          <Row
+            icon="plus"
+            title="Get test bitcoin"
+            sub={wallet.network === 'regtest' ? 'Regtest faucet, for the demo' : 'Signet faucet: your address is copied'}
+            trail="chevR"
+            onClick={faucet}
+          />
         </Group>
       )}
 

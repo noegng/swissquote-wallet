@@ -1,52 +1,54 @@
 ---
 name: custody-invariants
-description: Garde-fou de sécurité du Swissquote Wallet. À charger AVANT toute modification touchant aux clés (téléphone, Swissquote, secours), aux parts SLIP-39, aux règles du cosignataire, à la récupération, aux services mockés ou au stockage, et avant une revue de code ou la préparation des réponses au jury sur la custody et le modèle de menaces.
+description: Security guard-rail of the Swissquote Wallet. Load it BEFORE any change touching the keys (phone, Swissquote, backup), the SLIP-39 shares, the cosigner rules, the recovery, the mocked services or the storage, and before a code review or preparing the jury answers on custody and the threat model.
 ---
 
-# Invariants de custody
+# Custody invariants
 
-Le modèle : multisig Bitcoin 2 sur 3 (clé téléphone, clé Swissquote, clé de secours) ; clé de secours en SLIP-39, seuil de groupes 2, groupes CLIENT (C1 papier = C2 cloud chiffré, même mnémonique) et TIERS (partenaire). Swissquote n'a **aucune** part de la clé de secours. Source : `docs/03-decisions.md`.
+The model: 2-of-3 Bitcoin multisig (phone key, Swissquote key, backup key); backup key in SLIP-39, group threshold 2, CLIENT group (C1 on paper = C2 encrypted in the cloud, same mnemonic) and PARTNER group (the partner, or a trusted person). Swissquote holds **no** share of the backup key. Source: `docs/03-decisions.md`.
 
-## Les invariants
+## The invariants
 
-| # | Invariant | Test qui le garantit |
+| # | Invariant | Test that guarantees it |
 |---|---|---|
-| I1 | Swissquote seul ne peut pas déplacer les fonds | `packages/core/test/multisig.test.ts` (« aucune clé seule ne peut finaliser ») ; `npm run demo:cosign` (étape I1) |
-| I2 | Swissquote + partenaire ne peuvent ni déplacer les fonds ni restaurer la clé de secours | `backup.test.ts` et `onboarding.test.ts` (TIERS seul ne restaure rien) ; `multisig.test.ts` (clé SQ seule ne finalise pas) |
-| I3 | Le client sort sans Swissquote | `multisig.test.ts` (paire téléphone + secours) ; `onboarding.test.ts` (CLIENT + TIERS redonnent la clé de secours) ; e2e « Swissquote arrêté » à écrire |
-| I4 | L'app ne détient jamais la clé SQ ni la part TIERS | revue : aucun import de `services/*` dans `apps/web` ; la part TIERS n'arrive dans l'app que **chiffrée pour l'appareil** pendant une récupération |
-| I5 | La clé de secours n'est réassemblée que sur l'appareil, puis abandonnée | e2e : après récupération, les fonds sont sur un **nouveau** descripteur ; la clé reconstituée n'est jamais persistée ni envoyée |
-| I6 | Aucune cryptographie maison | revue : uniquement bitcoinjs-lib, bip32, ecpair, @bitcoinerlab/secp256k1, la lib SLIP-39 validée, WebCrypto, SimpleWebAuthn |
-| I7 | Tout mock est étiqueté | réponses des services avec `mock: true`, bannière MOCK dans l'UI, README |
+| I1 | Swissquote alone cannot move the funds | `packages/core/test/multisig.test.ts` ("no single key can finalize"); `npm run demo:cosign` (I1 step) |
+| I2 | Swissquote + partner can neither move the funds nor restore the backup key | `backup.test.ts` and `onboarding.test.ts` (PARTNER alone restores nothing); `multisig.test.ts` (the SQ key alone does not finalize) |
+| I3 | The client leaves without Swissquote | `multisig.test.ts` (phone + backup pair); `onboarding.test.ts` (CLIENT + PARTNER give back the backup key); `npm run demo:exit` with Swissquote really stopped |
+| I4 | The app never holds the SQ key or the PARTNER share | review: no import of `services/*` in `apps/web`; the PARTNER share only reaches the app **encrypted for the device** during a recovery |
+| I5 | The backup key is only reassembled on the device, then dropped | e2e: after a recovery, the funds are on a **new** descriptor; the rebuilt key is never stored or sent |
+| I6 | No homemade cryptography | review: only bitcoinjs-lib, bip32, ecpair, @bitcoinerlab/secp256k1, the validated SLIP-39 library, WebCrypto, SimpleWebAuthn |
+| I7 | Every mock is labelled | service responses with `mock: true`, prototype banner in the UI, README |
 
-## Avant de modifier du code sensible
+## Before changing sensitive code
 
-1. Identifier quels invariants le changement touche.
-2. Vérifier qu'aucune des combinaisons suivantes ne devient suffisante : {SQ}, {SQ, TIERS}, {SQ, C1}, {téléphone volé + e-mail}, {C1 + C2 sans TIERS}.
-3. Vérifier que les combinaisons légitimes restent suffisantes : {téléphone, SQ} (quotidien), {secours, SQ} (téléphone perdu), {téléphone, secours} (SQ disparu).
-4. Lancer `npm test` (tests d'invariants dans `packages/core/test/`) et `npm run demo:cosign` (services lancés).
+1. Identify which invariants the change touches.
+2. Check that none of these combinations becomes enough: {SQ}, {SQ, PARTNER}, {SQ, C1}, {stolen phone + email}, {C1 + C2 without PARTNER}.
+3. Check that the legitimate combinations stay enough: {phone, SQ} (daily use), {backup, SQ} (lost phone), {phone, backup} (SQ gone).
+4. Run `npm test` (invariant tests in `packages/core/test/`) and `npm run demo:cosign` (services running on regtest).
 
-## Principe d'asymétrie
+## Asymmetry principle
 
-- **Protéger** (annuler un paiement, annuler une récupération, geler) : passkey **ou** session de l'espace client (`authorizeProtective` dans `services/swissquote/src/auth.ts`). Le client au téléphone volé n'a plus sa passkey.
-- **Assouplir** (dégeler, signer) : passkey obligatoire.
-- Le plafond se calcule sur **montant + frais** (`outgoing()` dans `rules.ts`).
+- **Protect** (cancel a payment, cancel a recovery, freeze): passkey **or** client-area session (`authorizeProtective` in `services/swissquote/src/auth.ts`). A client whose phone was stolen no longer has their passkey.
+- **Relax** (unfreeze, sign): passkey required.
+- The limit is computed on **amount + fees** (`outgoing()` in `rules.ts`).
+- Recovery: the new wallet is backed up and stored **before** any funds move; the sweep only goes to the new wallet and requires the backup key's signature.
 
-## Erreurs interdites
+## Forbidden mistakes
 
-- Donner une part SLIP-39 à Swissquote (même chiffrée).
-- Faire 3 groupes SLIP-39 avec un seuil de 2 (C1 + C2 suffiraient sans partenaire).
-- Persister la clé de secours reconstituée, l'envoyer à un service ou la logger.
-- Laisser le cosignataire signer sans assertion passkey valide ou hors des règles (palier, délai, sanctions). Le défi WebAuthn doit être à usage unique et lié à l'opération (empreinte de la PSBT pour `/cosign`, identifiant de la demande pour une annulation).
-- Utiliser l'authentificateur logiciel de test (`scripts/lib/soft-authenticator.ts`) ailleurs que dans les scripts.
-- Compter un plafond sans les frais.
-- Exiger la passkey pour une action de protection (le client au téléphone volé serait bloqué).
-- Écrire une primitive cryptographique (hash, courbe, partage de secret, chiffrement) à la main.
-- Mocker sans l'étiqueter.
+- Giving a SLIP-39 share to Swissquote (even encrypted).
+- Using 3 SLIP-39 groups with a threshold of 2 (C1 + C2 would be enough without the partner).
+- Storing the rebuilt backup key, sending it to a service or logging it.
+- Letting the cosigner sign without a valid passkey assertion or outside the rules (tier, delay, sanctions). The WebAuthn challenge must be single-use and bound to the operation (PSBT hash for `/cosign`, request id for a cancellation).
+- Using the software test authenticator (`scripts/lib/soft-authenticator.ts`) anywhere but in the scripts.
+- Counting a limit without the fees.
+- Requiring the passkey for a protective action (a client with a stolen phone would be locked out).
+- Moving funds to a wallet whose keys or backup are not yet stored.
+- Writing a cryptographic primitive (hash, curve, secret sharing, encryption) by hand.
+- Mocking without labelling.
 
-## Questions du jury à revérifier après chaque changement
+## Jury questions to re-check after each change
 
-- Swissquote, seul ou avec le partenaire, peut-il déplacer les fonds ? (non)
-- Qui peut bloquer le client ? (personne durablement : téléphone + secours suffisent)
-- Où la seed est-elle réassemblée ? (jamais pour signer ; la clé de secours seulement sur l'appareil du client)
-- Que peut faire un attaquant avec le téléphone et l'e-mail ? (dépenser sous le plafond au plus ; récupération refusée faute de part CLIENT)
+- Can Swissquote, alone or with the partner, move the funds? (no)
+- Who can lock the client out? (nobody durably: phone + backup are enough)
+- Where is the seed reassembled? (never to sign; the backup key only on the client's device)
+- What can an attacker with the phone and the email do? (spend up to the instant amount at most; recovery refused without the CLIENT share)

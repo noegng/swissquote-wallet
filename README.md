@@ -7,7 +7,7 @@ Submission for the **Swissquote Wallet Prize** (BSA hackathon, DoraHacks). Worki
 
 | | |
 |---|---|
-| Full write-up (custody, threat model, legal, business) | [`swissquote-wallet/docs/10-soumission-dorahacks.md`](swissquote-wallet/docs/10-soumission-dorahacks.md) |
+| Full write-up (custody, threat model, legal, business) | [`swissquote-wallet/docs/10-dorahacks-submission.md`](swissquote-wallet/docs/10-dorahacks-submission.md) |
 | Public proof on signet | [`3360d434…c534c62e`](https://blockstream.info/signet/tx/3360d434de9383653c896a925988c987110496b4c28c20f684441504c534c62e) — first 2-of-3 payment, phone key + Swissquote key |
 | Demo video | *(link added at submission)* |
 | Run it | [Quick start](#run-it-in-5-minutes) |
@@ -64,7 +64,7 @@ flowchart LR
 | Who could lock the client out? | Nobody durably: phone + backup key spend without Swissquote |
 | Who could steal funds? | Phone thief → capped by the instant amount (**fees included**), then delay + alert + freeze from any computer. Phone + email → recovery refused without the paper words. Stolen paper → still needs the partner (own delay) and Swissquote. Malicious employee → 1 key of 3 |
 
-Full threat model (10 attackers, residual risks): [write-up §1](swissquote-wallet/docs/10-soumission-dorahacks.md#1-custody-model-decision).
+Full threat model (10 attackers, residual risks): [write-up §1](swissquote-wallet/docs/10-dorahacks-submission.md#1-custody-model-decision).
 
 ### 2. Architecture
 
@@ -101,7 +101,7 @@ Swissquote and the partner never talk to each other, and neither ever sees the c
 | Partner service (backup share) | **MOCK** — separate process, own storage; the app never holds its share except sealed for the device during a recovery |
 | Sanctions list, cloud storage of the backup copy, SMS/email | **MOCK** |
 
-Every mocked response carries `"mock": true` and the app shows a permanent *Prototype* banner. Editable diagram (French): [FigJam](https://www.figma.com/board/K9aqAWBiat2GuFXFnHhvN5), also [`docs/architecture.svg`](swissquote-wallet/docs/architecture.svg).
+Every mocked response carries `"mock": true` and the app shows a permanent *Prototype* banner. Static version of the diagram: [`docs/architecture.svg`](swissquote-wallet/docs/architecture.svg).
 
 ### 3. Wallet creation
 
@@ -111,7 +111,7 @@ The client logs in with their Swissquote account (KYC reused, mocked), creates a
 
 Every payment is approved with the passkey, and the WebAuthn challenge is **bound to the hash of that exact transaction** (single use): the biometric approves *this* payment, not a session. Swissquote re-checks the transaction independently of the app.
 
-- **Instant payments** — up to 0.0005 BTC per 24 h (demo value), **fees included**: signed at once.
+- **Instant payments** — up to 3,000 sats per 24 h in the signet demo (signet faucets give small amounts; a setting), **fees included**: signed at once.
 - **Above** — not blocked: held for a security delay (20 s in the demo, 24 h to 7 days in production), with an alert; the client can cancel. The home screen shows what is left today.
 - Protective actions (cancel, freeze) work with the passkey **or** the client-area session — a robbed client has no phone. Relaxing actions (unfreeze) need the passkey.
 
@@ -123,11 +123,11 @@ Every payment is approved with the passkey, and the WebAuthn challenge is **boun
 
 ### 6. Business case
 
-Keeps self-custody clients inside the ecosystem instead of losing them to an external wallet; a paid "collaborative custody" tier (the model Casa and Unchained charge for); fewer lost-seed support cases; KYC reused, and Travel Rule checks become automatic. Hypotheses to validate with Swissquote data — [write-up §7](swissquote-wallet/docs/10-soumission-dorahacks.md#7-business-case).
+Keeps self-custody clients inside the ecosystem instead of losing them to an external wallet; a paid "collaborative custody" tier (the model Casa and Unchained charge for); fewer lost-seed support cases; KYC reused, and Travel Rule checks become automatic. Hypotheses to validate with Swissquote data — [write-up §7](swissquote-wallet/docs/10-dorahacks-submission.md#7-business-case).
 
 ## Legal feasibility (custody and Travel Rule)
 
-*Design reasoning, not legal advice.* Custody depends on who **can** move the funds: Swissquote cannot, alone or with the partner, so we expect it to act as a technical cosigner rather than a custodian — to be confirmed by a Swiss lawyer. **Travel Rule:** Swissquote co-creates the wallet and registers its descriptor after KYC, so ownership of every address is proven from day one, with no manual check. Details: [write-up §6](swissquote-wallet/docs/10-soumission-dorahacks.md#6-legal-feasibility--custody-and-travel-rule).
+*Design reasoning, not legal advice.* Custody depends on who **can** move the funds: Swissquote cannot, alone or with the partner, so we expect it to act as a technical cosigner rather than a custodian — to be confirmed by a Swiss lawyer. **Travel Rule:** Swissquote co-creates the wallet and registers its descriptor after KYC, so ownership of every address is proven from day one, with no manual check. Details: [write-up §6](swissquote-wallet/docs/10-dorahacks-submission.md#6-legal-feasibility--custody-and-travel-rule).
 
 ## Bonus topics
 
@@ -139,24 +139,22 @@ Keeps self-custody clients inside the ecosystem instead of losing them to an ext
 
 ## Run it in 5 minutes
 
-Requirements: Node.js 22, Docker Desktop (for the local Bitcoin network). All commands run in the inner `swissquote-wallet/` folder.
+Requirements: Node.js 22. **No Docker needed**: the demo runs on **signet**, Bitcoin's public test network. All commands run in the inner `swissquote-wallet/` folder.
 
 ```bash
 cd swissquote-wallet
 npm install
-cp .env.example .env      # BTC_NETWORK=regtest (local) or signet (public)
-npm run regtest:up        # local Bitcoin node + explorer (Docker)
+cp .env.example .env      # BTC_NETWORK=signet by default
 npm run dev:all           # Swissquote (4001) + partner (4002) mocks + app → http://localhost:5173
 ```
 
-In the app: log in with any client ID, create the passkey and the wallet, then *Transfers → Get test bitcoin*. On signet, fund the address from a signet faucet instead. Each server prints the network and `.env` file it uses at startup.
+In the app: log in with any client ID, create the passkey and the wallet, then *Transfers → Get test bitcoin*, which gives you the address to fund from a signet faucet. Each server prints the network and `.env` file it uses at startup. Every transaction can be checked on https://blockstream.info/signet.
 
 ```bash
 npm test                  # 79 automated tests (custody invariants, 45 SLIP-39 vectors, PSBT checks…)
-npm run demo:recover      # any scenario script from the table above
 ```
 
-Step-by-step guide with troubleshooting (French): [`docs/00-demarrage.md`](swissquote-wallet/docs/00-demarrage.md).
+The scenario scripts of the table above (`npm run demo:*`) need instant blocks: they run on an optional local regtest network (Docker, `npm run regtest:up`). Step-by-step guide with troubleshooting: [`docs/00-getting-started.md`](swissquote-wallet/docs/00-getting-started.md).
 
 ## How we checked it
 
@@ -167,7 +165,7 @@ Step-by-step guide with troubleshooting (French): [`docs/00-demarrage.md`](swiss
 
 ## What this is not (yet)
 
-A prototype, not a product: the Swissquote key is a local file (HSM in production), KYC and alerts are simulated, delays are shortened, and the legal reading needs a Swiss lawyer. The production gap is listed in [`docs/06-prototype-vers-production.md`](swissquote-wallet/docs/06-prototype-vers-production.md) (French).
+A prototype, not a product: the Swissquote key is a local file (HSM in production), KYC and alerts are simulated, delays are shortened, and the legal reading needs a Swiss lawyer. The production gap is listed in [`docs/06-prototype-to-production.md`](swissquote-wallet/docs/06-prototype-to-production.md).
 
 ## AI tools used
 
@@ -188,8 +186,8 @@ A prototype, not a product: the Swissquote key is a local file (HSM in productio
 | `swissquote-wallet/services/swissquote` | **Mock** Swissquote: login, passkeys, cosigner rules, registry, recovery |
 | `swissquote-wallet/services/partner` | **Mock** partner holding the backup share; trusted-person option |
 | `swissquote-wallet/scripts` | Replayable demo and attack scenarios |
-| `swissquote-wallet/tools` | Local Bitcoin network (Docker), SLIP-39 interop check with Trezor's Python reference |
-| `swissquote-wallet/docs` | Team documentation (French), brief, decisions, submission write-up (English) |
-| `swissquote-wallet-projet.md` | Full design document (French) |
+| `swissquote-wallet/tools` | Optional local Bitcoin network (Docker), SLIP-39 interop check with Trezor's Python reference |
+| `swissquote-wallet/docs` | Getting started, brief, decisions, prior art, production gap, build plan, submission write-up, proofs |
+| `swissquote-wallet-design.md` | Full design document |
 
 Credits: animations adapted from [Rare UI](https://www.rareui.com) (MIT); local Bitcoin setup adapted from Nigiri (Vulpem Ventures).

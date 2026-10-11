@@ -1,66 +1,66 @@
 ---
 name: demo-run
-description: Lancer, réinitialiser, tester de bout en bout et répéter la démo du Swissquote Wallet (regtest Docker et signet, services mockés, web app, scénarios et attaques scriptés, collecte des txid et liens explorateur dans docs/preuves.md). À charger quand on veut démarrer le projet, lancer les tests e2e, préparer ou répéter la démo, ou produire des preuves vérifiables.
+description: Start, reset, test end to end and rehearse the Swissquote Wallet demo (signet without Docker for the presentation, optional Docker regtest for the scripts, mocked services, web app, scripted scenarios and attacks, collecting txids and explorer links in docs/proofs.md). Load it to start the project, run the end-to-end scenarios, prepare or rehearse the demo, or produce verifiable proofs.
 ---
 
-# Lancer et répéter la démo
+# Running and rehearsing the demo
 
-Tous les chemins sont relatifs à `swissquote-wallet/` (le dossier qui contient `package.json`).
+All paths are relative to `swissquote-wallet/` (the folder with `package.json`).
 
-## Démarrage
+## Starting (presentation: signet, no Docker)
 
 ```bash
 npm install
-npm run regtest:up        # Nigiri (bitcoind + esplora) dans Docker ; nécessite Docker Desktop lancé
-npm run dev:all           # services/swissquote, services/partner, apps/web en parallèle
+cp .env.example .env      # BTC_NETWORK=signet, 30 s recovery, 20 s large payments, 3000 sats instant
+npm run dev:all           # services/swissquote, services/partner, apps/web in parallel
 ```
 
-Réseau choisi par `BTC_NETWORK=regtest|signet` dans `.env` (voir `.env.example`). La web app indique le réseau et affiche la bannière MOCK.
+Each server prints `Bitcoin network: …` and the `.env` it uses. The web app shows the network and the prototype banner. Fund the wallet from https://bitcoinsignetfaucet.com an hour before the demo.
 
-## Tests
+## Scenario scripts (regtest, Docker)
+
+The scripts need instant blocks and the regtest faucet: `npm run regtest:up`, then services on regtest (`BTC_NETWORK=regtest` in `.env`, or environment variables on other ports so the signet servers keep running, e.g. `SWISSQUOTE_PORT=4101 PARTNER_PORT=4102`). Run them one at a time: in parallel they compete for the same regtest faucet.
 
 ```bash
-HIGH_VALUE_DELAY_SECONDS=8 npm run start -w services/swissquote   # délai court pour tester (PowerShell : $env:HIGH_VALUE_DELAY_SECONDS=8)
-npm run demo:create      # création complète : passkey, wallet, part TIERS chez le partenaire, C2
-npm run demo:cosign      # paliers 1 et 2, annulation, sanctions, fonds d'un autre wallet, attaques passkey, I1
-npm run demo:recover     # attaque téléphone + e-mail refusée, annulation, récupération complète (RECOVERY_DELAY_SECONDS=6 conseillé)
-npm run demo:exit -- create   # puis arrêter le service Swissquote (port 4001), puis :
-npm run demo:exit -- exit     # sortie téléphone + secours, vérifie que Swissquote est injoignable
-npm run spike:signet     # transaction publique 2 sur 3 sur signet
+npm run demo:create      # full creation: passkey, wallet, PARTNER share at the partner, C2
+npm run demo:cosign      # tiers 1 and 2, cancellation, sanctions, another wallet's funds, passkey attacks, I1, huge-fee attack, freeze
+npm run demo:recover     # phone + email attack refused, cancellation, full recovery (RECOVERY_DELAY_SECONDS=6 recommended)
+npm run demo:trustee     # trusted person: invitation, handover, approval of a release (partner only)
+npm run demo:exit -- create   # then stop the Swissquote service (port 4001), then:
+npm run demo:exit -- exit     # exit with phone + backup key, checks that Swissquote is unreachable
+npm run spike:signet     # public 2-of-3 transaction on signet
 ```
 
 ```bash
-npm test                  # unitaires + invariants I1–I5 (packages/core)
-python tools/slip39-interop/check.py   # interop SLIP-39 avec la référence Trezor
+npm test                  # unit tests + invariants I1–I5 (packages/core)
+python tools/slip39-interop/check.py   # SLIP-39 interop with the Trezor reference
 ```
 
-## Réinitialiser entre deux répétitions
+## Resetting between two rehearsals
 
 ```bash
-npm run reset             # vide services/*/data et le stockage local de l'app (instructions dans la console)
+npm run reset             # empties services/*/data (instructions for the app storage in the console)
 ```
 
-## Scénarios de démo (ordre du pitch)
+## Demo scenarios (pitch order)
 
-1. Création du wallet (C1 affichée, C2 chiffrée, part TIERS envoyée).
-2. Petit envoi immédiat (palier 1) → txid signet.
-3. Gros envoi → palier 2, notification, délai visible.
-4. Attaque : voleur du téléphone déverrouillé → palier 2, annulé par le client.
-5. Attaque : téléphone + e-mail lance une récupération → refusée (pas de part CLIENT).
-6. Attaque : Swissquote + partenaire tentent de restaurer → combinaison rejetée.
-7. Téléphone perdu → récupération, transfert vers un nouveau jeu de clés.
-8. Swissquote a disparu → on arrête `services/swissquote` (fermer son terminal ou tuer le port 4001), écran de connexion → « Swissquote unavailable? Use your exit kit ».
+1. Wallet creation (C1 shown, C2 encrypted, PARTNER share sent).
+2. Small payment signed at once (instant payments) → signet txid.
+3. Large payment → held 20 s, alert, visible delay.
+4. Attack: thief with the unlocked phone → held, cancelled by the client.
+5. Attack: phone + email start a recovery → refused (no CLIENT share).
+6. Attack: Swissquote + partner try to restore → combination rejected.
+7. Lost phone → recovery, sweep to a new set of keys.
+8. Swissquote is gone → stop `services/swissquote` (close its terminal or kill port 4001), login screen → "Swissquote unavailable? Use your exit kit".
 
-Chaque scénario est aussi un script : `npm run demo:create`, `demo:cosign`, `demo:recover`, `demo:exit` (deux phases : `-- create` puis, Swissquote arrêté, `-- exit`), `demo:trustee`.
+## Proofs
 
-## Preuves
+- Record each signet txid in `docs/proofs.md` with the link `https://blockstream.info/signet/tx/<txid>` and the date.
+- Check the confirmation: `GET https://blockstream.info/signet/api/tx/<txid>/status` (WebFetch) → `confirmed: true`.
+- Before the demo: pre-fund 3 to 5 signet addresses (faucet limited to 5 requests per 24 h), record a **backup video** and a GIF of the flow (Claude in Chrome, `gif_creator`).
 
-- Noter chaque txid signet dans `docs/preuves.md` avec le lien `https://blockstream.info/signet/tx/<txid>` et la date.
-- Vérifier la confirmation : `GET https://blockstream.info/signet/api/tx/<txid>/status` (WebFetch) → `confirmed: true`.
-- Avant la démo : préfinancer 3 à 5 adresses signet (faucet limité à 5 demandes par 24 h), enregistrer une **vidéo de secours** et un GIF du parcours (Claude in Chrome, `gif_creator`).
+## If something breaks on the day
 
-## Si quelque chose casse le jour J
-
-- Signet lent ou faucet vide → basculer sur regtest (`BTC_NETWORK=regtest`), montrer les txid signet déjà dans `preuves.md`.
-- Passkey indisponible sur la machine de démo → utiliser le navigateur et l'appareil testés pendant la répétition.
-- Rien ne marche → vidéo de secours.
+- Slow signet or empty faucet → show the signet txids already in `proofs.md`; as a last resort, switch to regtest (`BTC_NETWORK=regtest`, needs Docker).
+- Passkey unavailable on the demo machine → use the browser and device tested during the rehearsal, or Chrome's virtual authenticator.
+- Nothing works → backup video.

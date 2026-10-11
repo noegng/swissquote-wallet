@@ -1,47 +1,46 @@
 ---
 name: slip39-backup
-description: Sauvegarde et reconstitution de la clé de secours du Swissquote Wallet en SLIP-39 à groupes (groupes CLIENT et TIERS, chiffrement d'une part pour un appareil, reconstitution uniquement sur l'appareil du client, vecteurs officiels et interop avec la référence Python de Trezor). À charger pour tout code de création de wallet, de récupération, de chiffrement de parts, ou pour choisir et valider la bibliothèque SLIP-39.
+description: Backup and rebuilding of the Swissquote Wallet's backup key with SLIP-39 groups (CLIENT and PARTNER groups, sealing a share for a device, rebuilding only on the client's device, official vectors and interop with Trezor's Python reference). Load it for any code about wallet creation, recovery or share encryption, or to choose and validate the SLIP-39 library.
 ---
 
-# Clé de secours en SLIP-39
+# Backup key with SLIP-39
 
-## Configuration (ne pas changer sans revoir `custody-invariants`)
+## Configuration (do not change without going through `custody-invariants`)
 
 ```
-seuil de groupes = 2
-groupes = [[1, 1], [1, 1]]     # [CLIENT, TIERS]
-CLIENT : une mnémonique, stockée deux fois (C1 papier, C2 copie chiffrée « cloud »)
-TIERS  : une mnémonique, chiffrée pour le service partenaire
-Swissquote : aucune part
+group threshold = 2
+groups = [[1, 1], [1, 1]]     # [CLIENT, PARTNER ("tiers" in the code)]
+CLIENT:  one mnemonic, stored twice (C1 on paper, C2 encrypted "cloud" copy)
+PARTNER: one mnemonic, encrypted for the partner service (or a trusted person)
+Swissquote: no share
 ```
 
-- La spec recommande une seule part par groupe de seuil 1 : C1 et C2 sont la **même** mnémonique (redondance contre la perte).
-- **Interdit** : 3 groupes avec seuil 2 (C1 + C2 restaureraient sans partenaire).
-- Le secret maître SLIP-39 (16 ou 32 octets) sert de seed BIP-32 pour la clé de secours.
+- The spec recommends a single share per threshold-1 group: C1 and C2 are the **same** mnemonic (redundancy against loss).
+- **Forbidden**: 3 groups with threshold 2 (C1 + C2 would restore without the partner).
+- The SLIP-39 master secret (16 or 32 bytes) is the BIP-32 seed of the backup key.
 
-## Bibliothèque
+## Library
 
-- **Retenue : `shamir-mnemonic-ts`** (45 vecteurs officiels et interop Python validés le 10/10). Référence : `shamir-mnemonic` (Python, Trezor). Dans le navigateur, elle a besoin de `vite-plugin-node-polyfills` (déjà configuré dans `apps/web/vite.config.ts`).
-- **Porte d'entrée** (spike) : la bibliothèque JS doit passer les vecteurs officiels `vectors.json` de https://github.com/trezor/python-shamir-mnemonic, et ses parts doivent se restaurer avec la référence Python (et inversement). Commande : `python tools/slip39-interop/check.py`.
-- Toujours passer par le wrapper `packages/core/src/backup.ts` : le reste du code n'importe jamais la bibliothèque directement (changement de bibliothèque possible sans toucher au reste).
+- **Chosen: `shamir-mnemonic-ts`** (45 official vectors and Python interop validated on 10/10). Reference: `shamir-mnemonic` (Python, Trezor). In the browser it needs `vite-plugin-node-polyfills` (already set up in `apps/web/vite.config.ts`).
+- **Entry gate** (spike): the JS library must pass the official `vectors.json` from https://github.com/trezor/python-shamir-mnemonic, and its shares must restore with the Python reference (and the other way round). Command: `python tools/slip39-interop/check.py`.
+- Always go through the wrapper `packages/core/src/backup.ts`: the rest of the code never imports the library directly (the library can change without touching the rest).
 
-## Chiffrement d'une part pour un appareil (`sealing.ts`)
+## Sealing a share for a device (`sealing.ts`)
 
-- WebCrypto uniquement : ECDH P-256 éphémère + HKDF-SHA-256 + AES-GCM. Rien d'écrit à la main.
-- L'appareil génère une paire de clés éphémère et envoie sa clé publique ; le partenaire renvoie la part TIERS chiffrée pour cette clé.
-- C2 est chiffrée avec une clé dérivée de la passkey (extension PRF) ou, à défaut, d'une phrase de passe (PBKDF2 WebCrypto, nombre d'itérations élevé).
+- WebCrypto only: ephemeral ECDH P-256 + HKDF-SHA-256 + AES-GCM. Nothing hand-written.
+- The device generates an ephemeral key pair and sends its public key; the partner returns the PARTNER share encrypted for that key.
+- C2 is encrypted with a key derived from the passkey (PRF extension) or, failing that, from a passphrase (WebCrypto PBKDF2, high iteration count).
 
-## Cycle de vie
+## Life cycle
 
-État au 10/10 : `sealing.ts` (`sealFor`/`openSealed`, `sealWithPassphrase`/`openWithPassphrase`) et `onboarding.ts` (`createWalletMaterial`, `backupRootFromShares`) sont écrits et testés ; l'écran `apps/web/src/screens/CreateWallet.tsx` les utilise ; `npm run demo:create` joue la création sans navigateur. Le fichier C2 téléchargé a le type `swissquote-wallet/backup-c2`.
+`sealing.ts` (`sealFor`/`openSealed`, `sealWithPassphrase`/`openWithPassphrase`) and `onboarding.ts` (`createWalletMaterial`, `backupRootFromShares`) are written and tested; the screen `apps/web/src/screens/CreateWallet.tsx` uses them; `npm run demo:create` plays the creation without a browser. The downloaded C2 file has the type `swissquote-wallet/backup-c2`.
 
+1. **Creation**: the app generates the secret, splits it, shows C1, encrypts C2, encrypts PARTNER for the partner, sends PARTNER to the partner service, then **erases** the secret and the shares from memory.
+2. **Recovery**: the app gets C1 (typed) or C2 (decrypted) + PARTNER (decrypted with the ephemeral key) → `combine` → backup key in memory → a new set of keys and a new backup are created and stored **first** → the sweep to the new wallet is signed → the old backup key is erased.
+3. Never: store the rebuilt key, log it, send it to a service.
 
-1. **Création** : l'app génère le secret, découpe, affiche C1, chiffre C2, chiffre TIERS pour le partenaire, envoie TIERS au service partenaire, puis **efface** secret et parts en mémoire.
-2. **Récupération** : l'app obtient C1 (saisie) ou C2 (déchiffrée) + TIERS (déchiffrée avec la clé éphémère) → `combine` → clé de secours en mémoire → signature du transfert vers un nouveau jeu de clés → nouvelle clé de secours re-découpée → l'ancienne est effacée.
-3. Jamais : persister la clé reconstituée, la logger, l'envoyer à un service.
+## Expected tests (`packages/core/test/`)
 
-## Tests attendus (`packages/core/test/`)
-
-- Vecteurs officiels.
-- {CLIENT, TIERS} restaure ; {CLIENT} seul échoue ; {TIERS} seul échoue ; {C1, C2} échoue (même groupe).
-- Aller-retour chiffrement / déchiffrement d'une part ; échec avec une mauvaise clé.
+- Official vectors.
+- {CLIENT, PARTNER} restores; {CLIENT} alone fails; {PARTNER} alone fails; {C1, C2} fails (same group).
+- Round trip of sealing / opening a share; failure with a wrong key.

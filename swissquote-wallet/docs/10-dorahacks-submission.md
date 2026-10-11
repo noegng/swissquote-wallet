@@ -68,7 +68,7 @@ Residual risks are documented, e.g. a synced passkey (iCloud/Google) also presen
 
 ## 2. Architecture
 
-Diagram (English, rendered by GitHub): [README — Architecture](../../README.md#2-architecture). Original diagram (French): [`architecture.svg`](architecture.svg), editable on [FigJam](https://www.figma.com/board/K9aqAWBiat2GuFXFnHhvN5); green = real, yellow = mocked.
+Diagram with the data flows (rendered by GitHub): [README — Architecture](../../README.md#2-architecture). Static version: [`architecture.svg`](architecture.svg); green = real, yellow = mocked.
 
 | Component | Status |
 |---|---|
@@ -97,7 +97,7 @@ The secp256k1 Bitcoin key cannot live in the secure chip (P-256 only — same co
 
 - Every payment is approved with the **passkey** (face, fingerprint or PIN). The WebAuthn challenge is **bound to the hash of the exact PSBT**, single-use, 3-minute lifetime: the biometric approves this payment, not a session.
 - Before approving, the app rebuilds and checks its own summary (recipient, amount, fees, change back to the wallet). Swissquote re-checks it independently: foreign inputs or fake change are refused.
-- **Instant payments** — cumulative 24 h amount **including fees** up to 50 000 sats (0.0005 BTC, demo value): cosigned immediately. The home screen shows what is left today, with a gauge.
+- **Instant payments** — cumulative 24 h amount **including fees** up to 3,000 sats in the signet demo (signet faucets give small amounts; a setting, `DAILY_LIMIT_SATS`): cosigned immediately. The home screen shows what is left today, with a gauge.
 - **Above** — the payment is **not blocked**: Swissquote holds it, alerts the client (amount and fees), and cosigns after a security delay (20 s in the demo, 24 h to 7 days in production) unless the client cancels. The confirmation screen says in advance which of the two will happen.
 - **Asymmetry:** protective actions (cancel a payment, cancel a recovery, freeze the wallet) are accepted with the passkey **or** the Swissquote web session — a client whose phone was stolen has no passkey anymore. Relaxing actions (unfreeze, sign) require the passkey.
 
@@ -185,13 +185,13 @@ The architecture targets production; the implementation does not. Required befor
 
 ```bash
 cd swissquote-wallet
-npm install && cp .env.example .env   # BTC_NETWORK=regtest or signet
-npm run regtest:up        # local Bitcoin (Docker), not needed on signet
+npm install && cp .env.example .env   # BTC_NETWORK=signet by default: no Docker needed
 npm run dev:all           # Swissquote + partner (mocked) + web app → http://localhost:5173
 npm test                  # 79 tests
+# optional, for the scenario scripts: npm run regtest:up (Docker) and BTC_NETWORK=regtest
 ```
 
-Step-by-step guide (French): `docs/00-demarrage.md`. Design document (French): `swissquote-wallet-projet.md`.
+Step-by-step guide: `docs/00-getting-started.md`. Design document: `swissquote-wallet-design.md` (repository root).
 
 ## Team
 

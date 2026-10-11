@@ -126,7 +126,7 @@ export function Passkey({
       {platform === false && (
         <p className="note">
           No biometric sensor found on this device: Chrome will offer a security key or a phone instead. For the
-          demo, see the virtual authenticator in docs/00-demarrage.md.
+          demo, see the virtual authenticator in docs/00-getting-started.md.
         </p>
       )}
       {error && <p className="error">{error}</p>}
