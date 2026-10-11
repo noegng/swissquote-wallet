@@ -66,6 +66,28 @@ describe('address discovery (gap limit)', () => {
   }, 30_000);
 });
 
+describe('provider failover', () => {
+  it('moves to the other provider when the first one is over its request limit, and stays there', async () => {
+    const two = { ...cfg, esploraUrl: 'http://first.test', esploraFallbacks: ['http://second.test'] };
+    const calls: string[] = [];
+    vi.stubGlobal('fetch', async (url: string) => {
+      calls.push(url);
+      if (url.startsWith('http://first.test')) return new Response('Too Many Requests', { status: 429 });
+      return Response.json({ chain_stats: { tx_count: 3 }, mempool_stats: { tx_count: 1 } });
+    });
+    const client = new Esplora(two);
+    await expect(client.addressTxCount('addr')).resolves.toBe(4);
+    await expect(client.addressTxCount('addr')).resolves.toBe(4);
+    expect(calls).toEqual(['http://first.test/address/addr', 'http://second.test/address/addr', 'http://second.test/address/addr']);
+  });
+
+  it('fails with the provider error when every provider refuses', async () => {
+    const two = { ...cfg, esploraUrl: 'http://third.test', esploraFallbacks: ['http://fourth.test'] };
+    vi.stubGlobal('fetch', async () => new Response('Too Many Requests', { status: 429 }));
+    await expect(new Esplora(two).addressTxCount('addr')).rejects.toThrow(/429/);
+  });
+});
+
 describe('diffusion rejouable', () => {
   function fakeBroadcast(error: string, known: boolean) {
     vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {

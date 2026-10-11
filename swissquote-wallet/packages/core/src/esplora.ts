@@ -38,11 +38,37 @@ export class StaleTransactionError extends Error {
   }
 }
 
+// Providers that refused or did not answer, shared by every client: left aside until the time given.
+const resting = new Map<string, number>();
+const REST_MS = 5 * 60_000;
+
 export class Esplora {
   constructor(private readonly cfg: NetworkConfig) {}
 
+  /**
+   * Sends a request to the first provider that answers. A provider that refuses for load (429),
+   * fails (5xx) or cannot be reached is left aside for a few minutes and the next one is tried.
+   * Any other answer, an error included, is final: it is what the Bitcoin network says.
+   */
+  private async request(path: string, init?: RequestInit): Promise<Response> {
+    const all = [this.cfg.esploraUrl, ...this.cfg.esploraFallbacks];
+    const rested = (base: string) => (resting.get(base) ?? 0) <= Date.now();
+    let last: unknown;
+    for (const base of [...all.filter(rested), ...all.filter((b) => !rested(b))]) {
+      try {
+        const res = await fetch(base + path, init);
+        if (res.status !== 429 && res.status < 500) return res;
+        last = new Error(`esplora ${path} : ${res.status} ${await res.text()}`);
+      } catch (e) {
+        last = e;
+      }
+      resting.set(base, Date.now() + REST_MS);
+    }
+    throw last;
+  }
+
   private async get<T>(path: string): Promise<T> {
-    const res = await fetch(this.cfg.esploraUrl + path);
+    const res = await this.request(path);
     if (!res.ok) throw new Error(`esplora ${path} : ${res.status} ${await res.text()}`);
     return res.json() as Promise<T>;
   }
@@ -53,7 +79,7 @@ export class Esplora {
 
   /** Broadcasts a transaction. The body must be the raw hex as text/plain (not JSON). */
   async broadcast(hex: string): Promise<string> {
-    const res = await fetch(`${this.cfg.esploraUrl}/tx`, {
+    const res = await this.request('/tx', {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
       body: hex,
