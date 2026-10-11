@@ -12,7 +12,7 @@ Les connecteurs sont rattachés au compte claude.ai, pas au dépôt. Chaque memb
 | Etherscan | Connecté | Plus utile au cœur (Bitcoin) ; seulement pour l'option EVM |
 | Google Drive, Linear | Connexion non terminée | Non utilisés (suivi des tâches dans `09-plan-de-build.md`) |
 
-Vérification des transactions Bitcoin : API publique `https://mempool.space/signet/api` (pas besoin de connecteur).
+Vérification des transactions Bitcoin : API publique `https://blockstream.info/signet/api` (pas besoin de connecteur).
 
 ## Skills de projet
 

@@ -18,7 +18,6 @@ Docker Desktop doit être **ouvert** (icône de baleine dans la barre des tâche
 ```bash
 git clone https://github.com/noegng/swissquote-wallet.git
 cd swissquote-wallet
-git checkout btc-multisig-pivot
 cd swissquote-wallet          # le dossier du code (celui qui contient package.json)
 ```
 
@@ -33,7 +32,7 @@ npm install                   # installe toutes les dépendances (1 à 2 minutes
 cp .env.example .env          # Windows PowerShell : Copy-Item .env.example .env
 ```
 
-Le fichier `.env` contient les réglages locaux (réseau, ports, délais). Les valeurs par défaut conviennent.
+Le fichier `.env` contient les réglages locaux (réseau, ports, délais). Les valeurs par défaut conviennent. Il se place **dans le dossier intérieur**, à côté de `.env.example` (à défaut, un niveau au-dessus est accepté). Au lancement de `npm run dev:all`, chaque serveur affiche le réseau et le fichier `.env` qu'il utilise ; une modification du `.env` relance les serveurs automatiquement.
 
 ## 4. Lancer le Bitcoin de test local (regtest)
 
@@ -92,7 +91,7 @@ Si Windows Hello ne marche pas (machine de démo, PIN non configuré) : authenti
 ## 7. Vérifier que tout va bien
 
 ```bash
-npm test             # tests (dont, plus tard, les invariants de sécurité)
+npm test             # 79 tests, dont les invariants de custody
 npm run typecheck    # vérification des types TypeScript
 ```
 
@@ -108,10 +107,12 @@ npm run typecheck    # vérification des types TypeScript
 
 ## 9. Signet (le vrai réseau de test public, pour la démo)
 
-Le regtest sert à développer vite. Pour la démo, on utilise **signet**, un réseau de test public où tout le monde peut vérifier nos transactions sur https://mempool.space/signet.
+Le regtest sert à développer vite. Pour la démo, on utilise **signet**, un réseau de test public où tout le monde peut vérifier nos transactions sur https://blockstream.info/signet.
 
-- Dans `.env` : `BTC_NETWORK=signet`.
-- Obtenir des sats de test : https://bitcoinsignetfaucet.com (5 demandes par 24 h maximum : ne pas les gaspiller).
+- Dans `.env` : `BTC_NETWORK=signet` (les serveurs redémarrent seuls et affichent « réseau Bitcoin : signet »). Docker n'est pas nécessaire.
+- Créer un **nouveau** wallet : ses adresses commencent par `tb1…` (les wallets regtest restent de côté et reviennent si on repasse en regtest).
+- Obtenir des sats de test : https://bitcoinsignetfaucet.com (5 demandes par 24 h maximum : ne pas les gaspiller ; alimenter le wallet une heure avant la démo).
+- Les faucets donnent peu : baisser le seuil pour pouvoir montrer un paiement retenu, par exemple `DAILY_LIMIT_SATS=3000`.
 
 ## 10. Problèmes fréquents
 

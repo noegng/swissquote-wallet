@@ -2,6 +2,8 @@
 
 Wallet self-custody que Swissquote pourrait lancer pour ses clients. Projet d'une équipe de 3 pour le hackathon BSA (DoraHacks), parcours **Swissquote Wallet Prize**, durée 33 h.
 
+> Présentation pour le jury (anglais) : [README à la racine du dépôt](../README.md) et rédaction complète [`docs/10-soumission-dorahacks.md`](docs/10-soumission-dorahacks.md). Ce fichier et le reste de `docs/` sont la documentation de travail de l'équipe, en français.
+
 Histoire démontrée : création → connexion et signature → perte du téléphone → récupération, avec de vraies transactions sur **Bitcoin signet**, et la sortie du client si Swissquote disparaît.
 
 ## Idée en une phrase
@@ -40,6 +42,8 @@ Détail et exigences de production : `docs/06-prototype-vers-production.md`.
 | `docs/07-connecteurs-et-outils.md` | Connecteurs, skills, outils |
 | `docs/08-references-techniques.md` | API signet, bibliothèques, pièges connus |
 | `docs/09-plan-de-build.md` | Tâches par personne et par phase |
+| `docs/10-soumission-dorahacks.md` | Rédaction de la soumission DoraHacks (anglais) |
+| `docs/preuves.md` | Transactions publiques sur signet |
 | `../swissquote-wallet-projet.md` | Document de conception complet |
 | `packages/core` | Bibliothèque partagée : clés, descripteur, PSBT, SLIP-39, chiffrement |
 | `apps/web` | Web app mobile (Vite + React) |
@@ -57,7 +61,10 @@ Technique 35, sécurité et custody 20, juridique 15, business 15, UX et pitch 1
 Guide pas à pas : `docs/00-demarrage.md`. En résumé, dans ce dossier :
 
 ```bash
-npm install && cp .env.example .env
-npm run regtest:up     # Docker Desktop doit être ouvert
+npm install && cp .env.example .env   # BTC_NETWORK=regtest (local) ou signet (public)
+npm run regtest:up     # Docker Desktop doit être ouvert (inutile sur signet)
 npm run dev:all        # puis ouvrir http://localhost:5173
+npm test               # 79 tests
 ```
+
+Délais de démo : 30 s pour une récupération, 20 s pour un gros paiement (7 jours et 24 h à 7 jours en production).

@@ -31,7 +31,6 @@ npm run spike:signet     # transaction publique 2 sur 3 sur signet
 
 ```bash
 npm test                  # unitaires + invariants I1–I5 (packages/core)
-npm run e2e:regtest       # création → envoi → perte du téléphone → récupération → Swissquote arrêté → sortie
 python tools/slip39-interop/check.py   # interop SLIP-39 avec la référence Trezor
 ```
 
@@ -50,14 +49,14 @@ npm run reset             # vide services/*/data et le stockage local de l'app (
 5. Attaque : téléphone + e-mail lance une récupération → refusée (pas de part CLIENT).
 6. Attaque : Swissquote + partenaire tentent de restaurer → combinaison rejetée.
 7. Téléphone perdu → récupération, transfert vers un nouveau jeu de clés.
-8. Swissquote a disparu → on arrête `services/swissquote` (fermer son terminal ou tuer le port 4001), écran de connexion → « Swissquote est indisponible ? Sortir mes fonds ».
+8. Swissquote a disparu → on arrête `services/swissquote` (fermer son terminal ou tuer le port 4001), écran de connexion → « Swissquote unavailable? Use your exit kit ».
 
-Chaque scénario est aussi un script : `npm run demo:<nom>` (`demo:all` enchaîne tout).
+Chaque scénario est aussi un script : `npm run demo:create`, `demo:cosign`, `demo:recover`, `demo:exit` (deux phases : `-- create` puis, Swissquote arrêté, `-- exit`), `demo:trustee`.
 
 ## Preuves
 
-- Les scripts écrivent chaque txid dans `docs/preuves.md` avec le lien `https://mempool.space/signet/tx/<txid>` et la date.
-- Vérifier la confirmation : `GET https://mempool.space/signet/api/tx/<txid>/status` (WebFetch) → `confirmed: true`.
+- Noter chaque txid signet dans `docs/preuves.md` avec le lien `https://blockstream.info/signet/tx/<txid>` et la date.
+- Vérifier la confirmation : `GET https://blockstream.info/signet/api/tx/<txid>/status` (WebFetch) → `confirmed: true`.
 - Avant la démo : préfinancer 3 à 5 adresses signet (faucet limité à 5 demandes par 24 h), enregistrer une **vidéo de secours** et un GIF du parcours (Claude in Chrome, `gif_creator`).
 
 ## Si quelque chose casse le jour J

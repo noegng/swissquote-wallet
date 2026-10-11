@@ -27,7 +27,7 @@ Règles : P0 et P1 terminés avant tout bonus. Points d'étape à **H10, H20, H2
 ## H3–H10 : création et envoi
 
 - [x] **A** `backup.ts` (split / combine), `sealing.ts` (ECDH + HKDF + AES-GCM, et PBKDF2 pour C2), `summary.ts` (résumé vérifié), `onboarding.ts` (matériel d'un nouveau wallet)
-- [x] **A** Tests des invariants I1 à I5 (`packages/core/test/`, 74 tests) ; I5 et I3 « Swissquote arrêté » restent à couvrir en e2e
+- [x] **A** Tests des invariants I1 à I5 (`packages/core/test/`, 79 tests au 11/10) ; I3 « Swissquote arrêté » couvert par `demo:exit`
 - [x] **B** Onboarding : connexion mockée → passkey → clés → Swissquote → part TIERS scellée au partenaire → C1 + vérification de 2 mots → C2 chiffrée et téléchargée ; accueil (solde, adresse, faucet regtest, kit de sortie). Testé dans Chrome jusqu'au téléchargement de C2
 - [x] **B** Écran Envoyer : résumé vérifié par l'app, approbation passkey liée à la PSBT, palier 1 immédiat, palier 2 avec compte à rebours et annulation par passkey (repris après rechargement), lien explorateur ; accueil avec alertes Swissquote et adresse de réception non réutilisée. Testé dans Chrome jusqu'à l'approbation passkey
 - [x] **C** Règles du cosignataire : plafond quotidien, palier 2 (délai + notification annulable), sanctions (`npm run demo:cosign`)
@@ -39,7 +39,7 @@ Règles : P0 et P1 terminés avant tout bonus. Points d'étape à **H10, H20, H2
 ## H10–H18 : récupération
 
 - [x] **A** Récupération : reconstitution de la clé de secours sur l'appareil, transfert vers un nouveau jeu de clés (`npm run demo:recover`)
-- [ ] **A** Sortie sans Swissquote : téléphone + clé de secours, diffusion directe
+- [x] **A** Sortie sans Swissquote : téléphone + clé de secours, diffusion directe (`npm run demo:exit`)
 - [x] **B** Écran Récupération (nouvel appareil) et alerte d'annulation sur l'ancien ; kit de sortie téléchargeable sur l'accueil. Testé dans Chrome jusqu'à la passkey
 - [x] **B** Écran « Swissquote a disparu » (sortie avec téléphone + clé de secours, sans session) : testé de bout en bout dans Chrome avec le service Swissquote arrêté (10/10)
 - [x] **C** `/recovery` Swissquote (ouvrir avec gel, annuler par passkey, nouveau wallet, transfert exigeant la clé de secours, révocation des passkeys) et `/release` partenaire (identité, délai, re-scellement pour l'appareil, annulation)
@@ -50,13 +50,13 @@ Règles : P0 et P1 terminés avant tout bonus. Points d'étape à **H10, H20, H2
 - [ ] **A** Scripts des 3 attaques et du scénario « Swissquote a disparu », preuves dans `preuves.md`
 - [ ] **B** Panneau Démo (scénarios et attaques, raisons des refus)
 - [x] **C** Schéma d'architecture FigJam (parties mockées en couleur distincte), intégré au README (`docs/architecture.svg`) et lien FigJam
-- [ ] **C** Sections menaces, juridique, Travel Rule, business finalisées
+- [x] **C** Sections menaces, juridique, Travel Rule, business finalisées (`docs/10-soumission-dorahacks.md`, README racine, 11/10)
 - [ ] **Point d'étape H20** : histoire complète rejouable sur signet
 
 ## H22–H26 : bonus (seulement si tout ce qui précède est coché)
 
 - [ ] **A** Frais sponsorisés par Swissquote (entrée ajoutée avant la signature du client, quota)
-- [ ] **B** Interaction conforme dans l'UI : résumé clair, refus sanctions, contrôle renforcé
+- [x] **B** Interaction conforme dans l'UI : résumé clair, refus sanctions, contrôle renforcé (« Instant payments », délai annoncé avant signature)
 - [ ] **A** Preuve de propriété BIP-322 (facultatif)
 - [ ] **C** Pitch et réponses aux questions du jury
 - [ ] **Point d'étape H26**
@@ -69,11 +69,28 @@ Règles : P0 et P1 terminés avant tout bonus. Points d'étape à **H10, H20, H2
 - [ ] Vidéo de secours
 - [ ] Soumission DoraHacks (checklist de la skill `doc-sync`)
 
+## Fait le 11/10 (après H26)
+
+- [x] Audit des bugs (interface et transactions) et corrections, revérifiées sur regtest : récupération dans le bon ordre et rejouable, scan des adresses par gap limit, diffusion rejouable, annulation de la libération chez le partenaire, gel conservé
+- [x] Délais de démo raccourcis (30 s récupération, 20 s gros paiement) ; plafond présenté comme « Instant payments »
+- [x] Réseau Bitcoin fiable (validation, affichage au démarrage, séparation des wallets par réseau)
+- [x] Animations (Rare UI, licence MIT) ; copie des mots de sauvegarde sans numéros
+- [x] README de présentation à la racine du dépôt (anglais) et rédaction de soumission à jour
+
+## Avant de publier sur DoraHacks
+
+- [ ] Vidéo de la démo (create → sign → lose → recover → exit), lien dans le README racine et la page DoraHacks
+- [ ] Noms et rôles de l'équipe sur la page DoraHacks
+- [ ] Nouvelles preuves signet de l'histoire complète (paiement, gros paiement, transfert de récupération, sortie) dans `docs/preuves.md`
+- [ ] Repasser `main` sur la dernière version (`git fetch . front-figma-v3:main` puis `git push origin main`) : c'est la branche que le jury verra
+- [ ] Répétition complète de la démo dans le navigateur (skill `demo-run`)
+
 ## Outils d'IA utilisés (à déclarer dans la soumission)
 
 | Outil | Usage |
 |---|---|
-| Claude Code (Opus) | Conception, rédaction des documents, écriture du code relu par l'équipe, skills de projet |
-| Claude, connecteur Exa | Recherche de bibliothèques, de précédents (Bitkey, Ledger Recover) et d'API |
-| Claude, connecteur Figma | Schéma d'architecture |
-| Claude in Chrome | Tests de parcours de la web app, GIF de démo |
+| Claude Code (Opus) | Conception, rédaction des documents, écriture du code relu par l'équipe, tests et scénarios, audit des bugs, skills de projet |
+| Claude, connecteur Exa | Recherche de bibliothèques, de précédents (Bitkey, Casa, Ledger Recover) et d'API |
+| Claude, connecteur Figma | Schéma d'architecture, maquettes de l'app |
+| Claude in Chrome | Tests de parcours de la web app et des animations |
+| Skill Claude Code `premium-ui` | Choix des composants animés Rare UI, portés dans nos styles |

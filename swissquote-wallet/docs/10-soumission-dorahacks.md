@@ -1,10 +1,6 @@
-# DoraHacks submission — draft (not published)
-
-> Draft of the project description for the Swissquote Wallet Prize. To paste into the DoraHacks BUIDL page once the team agrees. Before publishing: add the demo video link, give the judges access to the GitHub repository (currently private), fill in the team section, and re-run the proofs on signet.
-
----
-
 # Swissquote Wallet — collaborative self-custody for Bitcoin
+
+*Submission write-up for the Swissquote Wallet Prize (BSA hackathon, DoraHacks). Short version: [README](../../README.md).*
 
 **Your bitcoins, your keys, one step away from your Swissquote account. Swissquote protects you but can never act without you — and if Swissquote disappears, you leave with your funds.**
 
@@ -23,8 +19,8 @@ Working prototype: web app + mocked Swissquote and partner services (separate pr
 | Key | Where it lives | Role |
 |---|---|---|
 | Phone key | On the client's device, encrypted at rest by a non-extractable key, unlocked through the passkey | Daily payments |
-| Swissquote key | Swissquote cosigner (mocked; HSM in production), one BIP-48 account per client | Cosigns within rules: daily limit (amount **+ fees**), delay above the limit, sanctions, freeze |
-| Backup key | Exists nowhere in one piece. SLIP-39: group CLIENT (paper words C1, same words encrypted in the client's cloud C2) **and** group PARTNER (independent third party) | Recovery after phone loss; exit if Swissquote disappears |
+| Swissquote key | Swissquote cosigner (mocked; HSM in production), one BIP-48 account per client | Cosigns within rules: instant amount per 24 h (amount **+ fees**), delay above it, sanctions, freeze |
+| Backup key | Exists nowhere in one piece. SLIP-39: group CLIENT (paper words C1, same words encrypted in the client's cloud C2) **and** group PARTNER (independent third party — or, if the client prefers, a trusted person such as a notary) | Recovery after phone loss; exit if Swissquote disappears |
 
 **Swissquote holds no share of the backup key.** Rebuilding it requires the client's share and the partner's share.
 
@@ -56,9 +52,9 @@ We use the split backup **where it is safe**: only for the rarely used backup ke
 
 | Attacker | What they get | What stops them |
 |---|---|---|
-| Phone thief (unlocked phone or malware) | Phone key | Swissquote cosigns only under the daily limit, **fees included**; above it, delay + alert; the client cancels or freezes **from his Swissquote web account, without the phone** |
+| Phone thief (unlocked phone or malware) | Phone key | Swissquote cosigns at once only up to the instant amount, **fees included**; above it, delay + alert; the client cancels or freezes **from his Swissquote web account, without the phone** |
 | Thief who pays huge fees to destroy the funds | Phone key | Fees count toward the limit: 1 000 sats + 900 000 sats of fees goes to the delayed tier |
-| Phone + email | Phone key, account access | Can open a recovery, but: the wallet freezes, the real client is alerted and can cancel; without the client's paper share the backup key cannot be rebuilt; a sweep signed with the stolen phone key is refused (Swissquote requires the backup key's signature). **Demonstrated** (`npm run demo:recover`) |
+| Phone + email | Phone key, account access | Can open a recovery, but: the wallet freezes, the real client is alerted and can cancel (which also stops the partner's release); without the client's paper share the backup key cannot be rebuilt; a sweep signed with the stolen phone key is refused (Swissquote requires the backup key's signature). **Demonstrated** (`npm run demo:recover`) |
 | Stolen paper share | Client share | Still needs the partner (own delay and identity check) and Swissquote; the client is alerted |
 | Malicious Swissquote employee | Swissquote key | 1 of 3; Swissquote has no backup share — employee + stolen paper is still not enough |
 | Swissquote + partner (collusion or court order) | Swissquote key + partner share | The CLIENT share is missing |
@@ -72,9 +68,7 @@ Residual risks are documented, e.g. a synced passkey (iCloud/Google) also presen
 
 ## 2. Architecture
 
-![Architecture](https://github.com/noegng/swissquote-wallet/blob/btc-multisig-pivot/swissquote-wallet/docs/architecture.svg)
-
-Editable diagram: [FigJam](https://www.figma.com/board/K9aqAWBiat2GuFXFnHhvN5). Green = real, yellow = mocked.
+Diagram (English, rendered by GitHub): [README — Architecture](../../README.md#2-architecture). Original diagram (French): [`architecture.svg`](architecture.svg), editable on [FigJam](https://www.figma.com/board/K9aqAWBiat2GuFXFnHhvN5); green = real, yellow = mocked.
 
 | Component | Status |
 |---|---|
@@ -103,27 +97,41 @@ The secp256k1 Bitcoin key cannot live in the secure chip (P-256 only — same co
 
 - Every payment is approved with the **passkey** (face, fingerprint or PIN). The WebAuthn challenge is **bound to the hash of the exact PSBT**, single-use, 3-minute lifetime: the biometric approves this payment, not a session.
 - Before approving, the app rebuilds and checks its own summary (recipient, amount, fees, change back to the wallet). Swissquote re-checks it independently: foreign inputs or fake change are refused.
-- **Tier 1** — cumulative 24 h amount **including fees** under the limit (50 000 sats in the demo): cosigned immediately.
-- **Tier 2** — above the limit: Swissquote holds the payment, alerts the client (amount and fees), and cosigns after a delay (30–120 s in the demo, 24 h to 7 days in production) unless the client cancels.
+- **Instant payments** — cumulative 24 h amount **including fees** up to 50 000 sats (0.0005 BTC, demo value): cosigned immediately. The home screen shows what is left today, with a gauge.
+- **Above** — the payment is **not blocked**: Swissquote holds it, alerts the client (amount and fees), and cosigns after a security delay (20 s in the demo, 24 h to 7 days in production) unless the client cancels. The confirmation screen says in advance which of the two will happen.
 - **Asymmetry:** protective actions (cancel a payment, cancel a recovery, freeze the wallet) are accepted with the passkey **or** the Swissquote web session — a client whose phone was stolen has no passkey anymore. Relaxing actions (unfreeze, sign) require the passkey.
 
 ## 5. Recovery
 
-**Phone lost or stolen** (screen "Récupérer votre wallet", `npm run demo:recover`):
+**Phone lost or stolen** (screen *Recover your wallet*, `npm run demo:recover`):
 1. On a new device: Swissquote login, passkey for this device (or proof of an existing synced passkey).
 2. Recovery opened at Swissquote (stronger identity check — mocked): the old wallet is **frozen**, pending large payments are dropped, alerts are sent, security delay starts. In parallel, the partner applies its **own** identity check and delay — it does not depend on Swissquote.
-3. During the delay, the real client can **cancel** from his old phone (passkey) or from his web account (session).
+3. During the delay, the real client can **cancel** from his old phone (passkey) or from his web account (session). Cancelling also cancels the partner's release, so the device that started the recovery never receives the share. A freeze the client requested stays in place.
 4. After the delay, the partner's share arrives sealed for a non-extractable key of the new device; the client types his paper words (or opens C2). The backup key is rebuilt **on the device only**, in memory.
-5. Swissquote creates the new wallet (new Swissquote key) and cosigns **one** sweep, only if it is already signed by the **backup key**, pays only the new wallet and returns nothing to the old one.
-6. Old passkeys are revoked (except the new device's), new PARTNER share deposited, new paper/C2 backup.
+5. The **new wallet is set up first**: new keys, a new Swissquote key, a new PARTNER share deposited, and the new paper/C2 backup written down — and only then stored on the device. **No funds move before the new wallet is backed up.**
+6. Swissquote cosigns the sweep only if it is already signed by the **backup key**, pays only the new wallet and returns nothing to the old one. The sweep can be co-signed again under the same conditions, so a failed broadcast or funds arriving later on the old wallet are never stranded. Old passkeys are revoked (except the new device's).
 
-Duration: 60–120 s in the demo; 7 days in production (as Bitkey).
+Duration: 30 s in the demo (both delays run in parallel); 7 days in production (as Bitkey). An interrupted recovery resumes where it stopped.
+
+**Trusted person (option).** Instead of the partner, the client can entrust the PARTNER share to someone they choose (notary, lawyer): invitation by link or QR code, a key created on that person's device, a short code compared by phone, then the partner re-seals the share for that key and **destroys its copy**. In a recovery, that person checks the client's identity and approves; the partner's delay still applies (`npm run demo:trustee`).
 
 **Attacker with the client's phone and email — refused** (bonus of the brief), demonstrated step by step: wallet frozen and client alerted; partner share obtained but useless without the client's paper share; sweep signed with the stolen phone key refused; real client cancels.
 
-**Swissquote permanently gone** (button "Swissquote est indisponible ? Sortir mes fonds" on the login screen, `npm run demo:exit`): no session needed; the app lists the wallets on the phone, asks the partner for its share (own delay), the client types his paper words and a destination address, and the **phone key + backup key** sign a sweep of all funds, broadcast directly to the Bitcoin network. The exit module does not even import the Swissquote client. Tested with the Swissquote service **actually stopped**, in a script and end to end in the browser. The **exit kit** (standard descriptors) also lets the client do it in Sparrow or Bitcoin Core without our app.
+**Swissquote permanently gone** (*Swissquote unavailable? Use your exit kit* on the login screen, `npm run demo:exit`): no session needed; the app lists the wallets on the phone, asks the partner for its share (own delay), the client types his paper words and a destination address, and the **phone key + backup key** sign a sweep of all funds, broadcast directly to the Bitcoin network. The exit module does not even import the Swissquote client. Tested with the Swissquote service **actually stopped**, in a script and end to end in the browser. The **exit kit** (standard descriptors) also lets the client do it in Sparrow or Bitcoin Core without our app.
 
 ---
+
+## User experience
+
+Designed for a Swissquote client, not a Bitcoin expert:
+
+- **No password, no seed to type every day**: one passkey approval (face, fingerprint or PIN) per payment.
+- **Plain-language confirmation** before anything is signed: amount, recipient, network fee and change, with the CHF value, and whether Swissquote signs at once or after a delay.
+- **Instant payments gauge** on the home screen: what can leave today without a delay, and what happens above it.
+- **One tap to freeze** a stolen wallet, also from the client area on any computer; alerts in an *Activity* feed (the bell rings and counts new alerts).
+- **QR codes** to receive and to scan a recipient; backup words that copy without their numbers.
+- **Guided recovery and exit**, with visible delays and step-by-step progress; animations switch off when the system asks for reduced motion.
+- Two layouts: phone app and wide web page.
 
 ## 6. Legal feasibility — custody and Travel Rule
 
@@ -151,12 +159,13 @@ Duration: 60–120 s in the demo; 7 days in production (as Bitkey).
 
 ## 9. Engineering and verification
 
-- **74 automated tests** (vitest): descriptor, PSBT, custody invariants (no single key can finalize, Swissquote included; the three legitimate pairs can; a single SLIP-39 group restores nothing), the **45 official SLIP-39 vectors**, sealing, onboarding, PSBT summary.
+- **79 automated tests** (vitest): descriptor, PSBT, custody invariants (no single key can finalize, Swissquote included; the three legitimate pairs can; a single SLIP-39 group restores nothing), the **45 official SLIP-39 vectors**, sealing, onboarding, PSBT summary.
 - **Interop** of our SLIP-39 shares with Trezor's Python reference, both directions.
 - **Scripted scenarios** against the real services on regtest: `demo:create`, `demo:cosign` (tiers, cancel, sanctions, foreign inputs, missing/swapped/replayed passkey, huge-fee attack, freeze and unfreeze), `demo:recover` (phone+email attack, cancel, full recovery), `demo:exit` (Swissquote stopped).
 - **Validated with real Windows Hello**: passkey creation, small and large payments, cancellation, recovery on a second device.
 - **Public proof on signet:** first 2-of-3 transaction (phone key + Swissquote key, signed on separate copies then combined): [`3360d434…c534c62e`](https://blockstream.info/signet/tx/3360d434de9383653c896a925988c987110496b4c28c20f684441504c534c62e) (confirmed, block 325 752).
 - Bugs found in review and fixed, each with a reproducing scenario: fees escaping the daily limit; a robbed client unable to cancel without his phone; recovery blocked when the new device already holds a synced passkey.
+- A second **bug audit** of the transaction and recovery paths (11 October), fixed and re-tested on regtest: funds no longer move to a wallet that is not yet backed up; a failed recovery sweep can be retried; addresses beyond index 19 are found (gap limit); a payment whose funds were spent elsewhere no longer blocks the app; cancelling a recovery also stops the partner's release; a freeze survives a cancelled recovery.
 
 ## 10. From prototype to production
 
@@ -166,23 +175,24 @@ The architecture targets production; the implementation does not. Required befor
 
 | Tool | What for |
 |---|---|
-| Claude Code (Claude Opus) | Design discussions, documentation, writing the code (reviewed by the team), tests and demo scripts, project-specific skills (custody invariants, Bitcoin multisig, SLIP-39, mock services, demo, docs) |
-| Claude — Exa connector | Research: libraries (bitcoinjs-lib, SLIP-39 implementations, SimpleWebAuthn), signet APIs and faucets, prior art (Bitkey, Ledger Recover, Nigiri) |
-| Claude — Figma connector | Architecture diagram (FigJam) |
-| Claude in Chrome | End-to-end testing of the web app in the browser |
+| Claude Code (Claude Opus) | Design discussions, writing the code (reviewed by the team), tests and demo scripts, bug audit of the transaction and recovery paths, documentation; project-specific skills (custody invariants, Bitcoin multisig, SLIP-39, mock services, demo, docs) |
+| Claude — Exa connector | Research: libraries (bitcoinjs-lib, SLIP-39 implementations, SimpleWebAuthn), signet APIs and faucets, prior art (Bitkey, Casa, Ledger Recover, Nigiri) |
+| Claude — Figma connector | Architecture diagram (FigJam) and the app mockups |
+| Claude in Chrome | End-to-end testing of the web app and its animations in the browser |
+| Claude Code `premium-ui` skill | Choosing animated components from Rare UI (MIT), then porting them to our styles |
 
 ## 12. Run it
 
 ```bash
 cd swissquote-wallet
-npm install && cp .env.example .env
-npm run regtest:up        # local Bitcoin (Docker)
+npm install && cp .env.example .env   # BTC_NETWORK=regtest or signet
+npm run regtest:up        # local Bitcoin (Docker), not needed on signet
 npm run dev:all           # Swissquote + partner (mocked) + web app → http://localhost:5173
-npm test                  # 74 tests
+npm test                  # 79 tests
 ```
 
 Step-by-step guide (French): `docs/00-demarrage.md`. Design document (French): `swissquote-wallet-projet.md`.
 
 ## Team
 
-*(to complete)*
+Team of three for the BSA hackathon *(names and roles: see the DoraHacks page)*.

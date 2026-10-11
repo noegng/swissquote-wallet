@@ -13,7 +13,8 @@ description: Garder la documentation du Swissquote Wallet cohérente après une 
 4. `README.md` : tableau réel / mocké.
 5. `docs/06-prototype-vers-production.md` : tout nouveau mock.
 6. `docs/09-plan-de-build.md` : tâches ajoutées, retirées ou cochées.
-7. Si un invariant change : la skill `custody-invariants` et les tests `packages/core/test/invariants.test.ts`.
+7. Si un invariant change : la skill `custody-invariants` et les tests de `packages/core/test/` (`multisig.test.ts`, `backup.test.ts`, `onboarding.test.ts`).
+8. La présentation pour le jury : `../README.md` (racine du dépôt, anglais) et `docs/10-soumission-dorahacks.md`.
 
 Puis relire les fichiers modifiés pour vérifier qu'aucun ne contredit `03-decisions.md` (rechercher les anciens termes : « Safe », « ERC-4337 », « Base Sepolia », « Candide », « gardien »).
 

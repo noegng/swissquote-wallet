@@ -128,16 +128,16 @@ Clé de secours = groupe CLIENT  ET  groupe TIERS        (seuil de groupes = 2)
    - **Adresse sanctionnée** : refus.
 4. Transaction finalisée et diffusée ; lien vers l'explorateur.
 
-**Perte du téléphone** (implémenté : `npm run demo:recover`, écran « Récupérer votre wallet »)
+**Perte du téléphone** (implémenté : `npm run demo:recover`, écran « Recover your wallet »)
 1. Nouvel appareil : connexion Swissquote, puis **passkey de ce nouvel appareil**.
 2. Le client ouvre une récupération chez Swissquote (vérification d'identité renforcée, mockée) : le wallet est **gelé** (plus aucun paiement, même petit ; un gros paiement en attente est abandonné), alertes, **délai**. En parallèle, il demande la part TIERS au partenaire, qui applique **son propre** contrôle d'identité et **son propre** délai (il ne dépend pas de Swissquote).
 3. Pendant le délai, le vrai client peut **annuler depuis son ancien téléphone** (passkey de l'ancien appareil).
 4. Après le délai, la part du partenaire arrive **scellée pour une clé non exportable du nouvel appareil**. Le client saisit sa part papier C1 (ou ouvre sa copie C2 avec sa phrase de passe). La clé de secours est reconstituée **sur l'appareil uniquement**, en mémoire.
-5. Swissquote crée le nouveau wallet (nouvelle clé SQ), puis cosigne **une seule** transaction de transfert, à trois conditions : elle est **déjà signée par la clé de secours** (la clé du téléphone perdu ne suffit pas), elle ne paie **que** le nouveau wallet, et rien ne revient à l'ancien.
+5. Le **nouveau wallet est préparé d'abord** : nouvelles clés, nouvelle clé SQ, nouvelle part TIERS chez le partenaire, nouvelle sauvegarde C1 / C2 ; il n'est enregistré sur l'appareil qu'ensuite. **Aucun fonds ne bouge avant que le nouveau wallet soit sauvegardé.** Swissquote cosigne alors le transfert, à trois conditions : il est **déjà signé par la clé de secours** (la clé du téléphone perdu ne suffit pas), il ne paie **que** le nouveau wallet, et rien ne revient à l'ancien. Il peut être recosigné aux mêmes conditions (diffusion échouée, fonds arrivés plus tard).
 6. Toutes les anciennes passkeys sont **révoquées** (seule celle du nouvel appareil, déclarée à l'ouverture, est conservée). Nouvelle part TIERS chez le partenaire, nouvelle cérémonie C1 / C2.
 7. **Continuité bancaire** (mockée) : pendant le délai, le client garde un accès plafonné via son compte Swissquote.
 
-**Swissquote a disparu** (implémenté : `npm run demo:exit`, bouton « Swissquote est indisponible ? Sortir mes fonds » sur l'écran de connexion ; démontré avec le service Swissquote réellement arrêté)
+**Swissquote a disparu** (implémenté : `npm run demo:exit`, bouton « Swissquote unavailable? Use your exit kit » sur l'écran de connexion ; démontré avec le service Swissquote réellement arrêté)
 1. Accessible **sans session** : l'app liste les wallets présents sur le téléphone (coffre local).
 2. Le client demande la part TIERS au partenaire, qui applique son propre délai et ne dépend pas de Swissquote ; la part arrive scellée pour une clé non exportable de l'appareil.
 3. Il saisit sa part papier C1 (ou ouvre C2) et l'adresse d'un autre wallet à lui ; la clé de secours est reconstituée en mémoire.
@@ -219,7 +219,7 @@ Clé de secours = groupe CLIENT  ET  groupe TIERS        (seuil de groupes = 2)
 - **Solution :** comme Bitkey, la récupération transfère les fonds vers un **nouveau** descripteur ; l'ancienne clé ne contrôle plus rien.
 
 ### 5.5 Un délai de 7 jours est impossible à démontrer
-- **Solution :** délai configurable par variable d'environnement (2 à 3 min en démo), valeur de production affichée.
+- **Solution :** délai configurable par variable d'environnement (30 s pour la récupération et 20 s pour un gros paiement en démo), valeur de production affichée.
 
 ### 5.6 Bibliothèque SLIP-39 en JavaScript
 - **Difficulté :** les bibliothèques JS sont moins éprouvées que la référence Python de Trezor.
@@ -276,7 +276,7 @@ Clé de secours = groupe CLIENT  ET  groupe TIERS        (seuil de groupes = 2)
 | Règles de cosignature | Paliers, délai, sanctions | Liste de sanctions partielle | Fournisseur de conformité, analyse de chaîne |
 | Partenaire | Service mocké | Contrôle d'identité simulé | Contrat, deux partenaires indépendants, SLA, réversibilité |
 | Contrôle d'identité | Écran simulé | Pas de vrai KYC | KYC renforcé, détection de deepfakes, formation du support |
-| Délais | 2 à 3 minutes | Raccourcis | 7 jours pour la récupération, notifications multicanal |
+| Délais | 30 s (récupération), 20 s (gros paiement) | Raccourcis | 7 jours pour la récupération, notifications multicanal |
 | Passkey | WebAuthn de la plateforme (Secure Enclave, TPM via Windows Hello), défi lié à chaque transaction | Démo sur ordinateur ; passkeys synchronisées acceptées | App native ; politique différente pour les passkeys synchronisées |
 | Clé téléphone | Navigateur, chiffrée par une clé WebCrypto non exportable | Web app | App native, clé chiffrée par la Secure Enclave ou dérivée par PRF |
 | C2 (cloud) | Fichier simulé | Pas de vrai cloud | iCloud / Google Drive, chiffrement par passkey (PRF) |
@@ -392,7 +392,7 @@ Règles : P0 et P1 terminés avant toute P3 ; points d'étape à H10, H20, H26 ;
 ## 16. Références techniques
 
 - **Bibliothèques** : `bitcoinjs-lib` (PSBT, p2wsh/p2ms), `bip32`, `ecpair`, `@bitcoinerlab/secp256k1` ; SLIP-39 : `shamir-mnemonic-ts` ou `slip39` (ilap), à valider par les vecteurs officiels ; référence Python `shamir-mnemonic` (Trezor) ; `@simplewebauthn/browser` et `/server` ; WebCrypto (ECDH P-256 + AES-GCM).
-- **Signet** : API `https://mempool.space/signet/api` (`GET /address/:a/utxo`, `POST /tx` en `text/plain`, `GET /tx/:id/status`, `GET /v1/fees/recommended`) ; faucet `https://bitcoinsignetfaucet.com` (1 000 à 10 000 sats, 5 demandes par 24 h).
+- **Signet** : API `https://blockstream.info/signet/api` (mempool.space expose la même API, injoignable depuis certains réseaux) (`GET /address/:a/utxo`, `POST /tx` en `text/plain`, `GET /tx/:id/status`, `GET /v1/fees/recommended`) ; faucet `https://bitcoinsignetfaucet.com` (1 000 à 10 000 sats, 5 demandes par 24 h).
 - **Regtest** : Nigiri (Docker : bitcoind + esplora), même API que mempool.space.
 - **SLIP-39** : spec `https://github.com/satoshilabs/slips/blob/master/slip-0039.md` ; groupes à deux niveaux ; un groupe de seuil 1 doit avoir une seule part.
 - Détails dans `swissquote-wallet/docs/08-references-techniques.md`.
